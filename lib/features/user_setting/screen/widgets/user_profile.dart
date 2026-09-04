@@ -36,7 +36,7 @@ class UserProfile extends StatelessWidget {
                         Text(LoginController.loginUser.uid),
                         const SizedBox(height: 5),
                         Text(
-                          LoginController.loginUser.name,
+                          LoginController.loginUser.fullname,
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 5),

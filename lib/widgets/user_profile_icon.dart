@@ -20,7 +20,7 @@ class _UserProfileIconState extends State<UserProfileIcon> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final userName = _userModel?.name ?? user?.displayName ?? 'Anonymous';
+    final userName = _userModel?.fullname ?? user?.displayName ?? 'Anonymous';
     final userId = _userModel?.uid;
 
     return PopupMenuButton<String>(

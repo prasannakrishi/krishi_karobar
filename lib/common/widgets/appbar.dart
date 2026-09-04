@@ -44,7 +44,7 @@ class UAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             if (showUserName) ...[
               const Spacer(),
-              Text(LoginController.loginUser?.name ?? '',
+              Text(LoginController.loginUser.fullname,
                 style: TextStyle(color: dark ? UColors.white : UColors.dark)
               ),
             ],

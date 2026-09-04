@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class UColors {
   // App theme colors
   //static const Color primary = Color(0xFF4b68ff);
-  static const Color primary = Color(0xff12fc60);
+  static const Color primary = Color(0xFF1A8221);
   static const Color secondary = Color(0xFFFFE24B);
   static const Color accent = Color(0xFFb0c7ff);
 
@@ -15,7 +15,7 @@ class UColors {
   // Background colors
   static const Color light = Color(0xFFF6F6F6);
   static const Color dark = Color(0xFF272727);
-  static const Color primaryBackground = Color(0xFF29F66D);
+  static const Color primaryBackground = Color(0xFF0B983C);
 
   // Background Container colors
   static const Color lightContainer = Color(0xFFF6F6F6);

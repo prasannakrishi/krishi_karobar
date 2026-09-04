@@ -8,6 +8,7 @@ import 'package:krishi_karobar/features/user_setting/screen/widgets/vehicle_reg_
 import '../controller/setting_controller.dart';
 import '../controller/vehicle_controller.dart';
 
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -17,11 +18,14 @@ class SettingsScreen extends StatelessWidget {
     final vController = Get.put(VehicleController());
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: UAppBar(title: 'Settings'),
       body: SingleChildScrollView(
+
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+
             /// -- User Profile Card
             const UserProfile(),
             const SizedBox(height: 10),

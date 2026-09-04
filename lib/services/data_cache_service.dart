@@ -119,7 +119,7 @@ class DataCacheService extends GetxController {
   
   String getUserName(String? guid) {
     if (guid == null || guid.isEmpty) return '';
-    return users[guid]?.name ?? 'Unknown User';
+    return users[guid]?.fullname ?? 'Unknown User';
   }
 
   String getCustomerName(String? guid) {

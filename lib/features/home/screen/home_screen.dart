@@ -5,6 +5,7 @@ import '../../../common/widgets/appbar.dart';
 import '../controller/home_controller.dart';
 
 
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -13,21 +14,24 @@ class HomeScreen extends StatelessWidget {
     final controller = Get.put(HomeController());
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: UAppBar(
         title: 'Dashboard',
       ),
       body: SingleChildScrollView(
+
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
             /// Welcome Message
             Obx(() {
               if (controller.isLoading.value) {
                 return const Text('Loading user...');
               }
               return Text(
-                'Welcome, ${controller.user.value?.name ?? 'User'}!',
+                'Welcome, ${controller.user.value?.fullname ?? 'User'}!',
                 style: Theme.of(context).textTheme.headlineSmall,
               );
             }),

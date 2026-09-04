@@ -37,6 +37,15 @@ class UTexts {
 
   // -- Authentication Headings
   static const String loginTitle = "Krishi Karobar";
+  static const String loginSubTitle = "Smart Agriculture · Better Farming · Better Business";
+  static const String welcomeLoginTitle = "Welcome Back! 👋";
+  static const String welcomeLoginSubTitle = "Sign in to continue to your account";
+  static const String welcomeRegTitle = "Welcome To Krishi Karobar";
+  static const String welcomeRegSubTitle = "Sign Up to continue with us.";
+  static const String footerCreateText = "Don't have an account?";
+  static const String footerCreateTextBtn = "Create Account";
+  static const String footerRegText = "Have an account.";
+  static const String footerRegTextBtn = "Sign In";
   static const String forgetPasswordTitle = "Forget password";
   static const String forgetPasswordSubTitle = "Don’t worry sometimes people can forget too, enter your email and we will send you a password reset link.";
   static const String changeYourPasswordTitle = "Password Reset Email Sent";

@@ -37,7 +37,7 @@ class ActivityController extends GetxController {
   final availableServices = <String>['All'].obs;
   
   final vehicles = <VehicleModel>[].obs;
-  final staffMembers = <UserModel>[].obs;
+  final users = <UserModel>[].obs;
   final customers = <CustomerModel>[].obs;
   
   final selectedVehicleGuids = <String>[].obs;
@@ -265,7 +265,7 @@ class ActivityController extends GetxController {
       vehicles.assignAll(vList);
       
       final uList = await firebaseService.getAllUsers();
-      staffMembers.assignAll(uList.where((u) => u.usertype == 'Staff').toList());
+      users.assignAll(uList.toList());
 
       final cList = await firebaseService.getAllCustomers();
       customers.assignAll(cList);

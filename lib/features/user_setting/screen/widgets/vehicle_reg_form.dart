@@ -113,7 +113,7 @@ class VehiclesForm extends StatelessWidget {
             top: 135, // Adjust based on layout
             items: controller.filteredOwners,
             onClose: () => controller.filteredOwners.clear(),
-            titleBuilder: (u) => Text(u.name),
+            titleBuilder: (u) => Text(u.fullname),
             subtitleBuilder: (u) => Text(u.phone),
             onTap: (u) => controller.selectOwner(u),
           );

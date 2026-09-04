@@ -1,55 +1,56 @@
-import 'package:uuid/uuid.dart';
+import 'package:krishi_karobar/models/models.dart';
 
 class UserModel {
   static const String systemGuid = '00000000-0000-0000-0000-000000000000';
 
   final String guid;
   final String uid;
-  String name;
+
+  String fullname;
   String? email;
   String phone;
-  String address;
-  String usertype;
-  String roll;
-  String password;
-  bool isCustomer;
-  DateTime? updatedAt;
-  String? updatedBy; // GUID String
+  String? permanentAddress;
+  String? temporaryAddress;
+
+  List<UserRole> roles;
+  UserType? userType;
+  UserStatus status;
+
   final DateTime createdAt;
-  String? createdBy; // GUID String
+  String? createdBy;
+
+  DateTime? updatedAt;
+  String? updatedBy;
 
   UserModel({
     required this.guid,
     required this.uid,
-    required this.name,
+    required this.fullname,
     this.email,
     required this.phone,
-    required this.address,
-    required this.usertype,
-    required this.roll,
-    required this.password,
-    required this.isCustomer,
-    this.updatedAt,
-    this.updatedBy,
+    this.permanentAddress,
+    this.temporaryAddress,
+    this.roles = const [],
+    this.userType,
+    this.status = UserStatus.active,
     required this.createdAt,
     this.createdBy,
+    this.updatedAt,
+    this.updatedBy,
   });
 
   static UserModel _systemUser = UserModel(
     guid: systemGuid,
     uid: 'SU-01',
-    name: 'Prasanna Aadhunik Krishi Kendra',
+    fullname: 'Prasanna Aadhunik Krishi Kendra Pvt. Ltd.',
     email: 'prasannakrishi@hotmail.com',
     phone: '9858028096',
-    address: 'Ghorahi-15, Dang',
-    usertype: 'System User',
-    roll: 'Admin',
-    password: '',
-    isCustomer: false,
-    updatedAt: null,
-    updatedBy: null,
+    permanentAddress: 'Ghorahi-15, Dang',
+    temporaryAddress: 'Ghorahi-15, Dang',
+    userType: UserType.system,
+    roles: [UserRole.admin],
+    status: UserStatus.active,
     createdAt: DateTime.parse('2026-01-01T00:00:00.000Z'),
-    createdBy: null,
   );
 
   static UserModel get systemUser => _systemUser;
@@ -61,22 +62,52 @@ class UserModel {
     _systemUser = user;
   }
 
+  static T? _enumFromName<T extends Enum>(
+      Iterable<T> values,
+      String? name,
+    ) {
+    if (name == null) return null;
+
+    for (final value in values) {
+      if (value.name == name) return value;
+    }
+    return null;
+  }
+
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    final rawRoles = map['roles'];
+
+    final roleItems = rawRoles is List
+        ? rawRoles
+        : rawRoles == null
+        ? <dynamic>[]
+        : <dynamic>[rawRoles];
+
     return UserModel(
       guid: (map['guid'] ?? map['id'] ?? '').toString(),
       uid: (map['uid'] ?? '').toString(),
-      name: map['name'] ?? '',
-      email: map['email'],
-      phone: map['phone'] ?? '',
-      address: map['address'] ?? '',
-      usertype: map['usertype'] ?? '',
-      roll: map['roll'] ?? '',
-      password: map['password'] ?? '',
-      isCustomer: map['isCustomer'] ?? true,
-      updatedAt: map['updatedAt'] != null ? DateTime.tryParse(map['updatedAt']) : null,
-      updatedBy: map['updatedBy']?.toString(),
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      fullname: (map['fullname'] ?? map['name'] ?? '').toString(),
+      email: map['email']?.toString(),
+      phone: (map['phone'] ?? '').toString(),
+      permanentAddress:
+      (map['permanentAddress'] ?? map['address'] ?? '').toString(),
+      temporaryAddress:
+      (map['temporaryAddress'] ?? map['address'] ?? '').toString(),
+      roles: roleItems.map((role) => _enumFromName
+          (
+            UserRole.values,
+            role?.toString(),
+          ),
+        ).whereType<UserRole>().toList(),
+      userType: _enumFromName(
+        UserType.values,
+        (map['userType'] ?? map['usertype'])?.toString(),
+      ),
+      status: _enumFromName(UserStatus.values,map['status']?.toString(),) ??UserStatus.active,
+      createdAt: map['createdAt'] != null? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
       createdBy: map['createdBy']?.toString(),
+      updatedAt: map['updatedAt'] != null? DateTime.tryParse(map['updatedAt'].toString()): null,
+      updatedBy: map['updatedBy']?.toString(),
     );
   }
 
@@ -84,18 +115,20 @@ class UserModel {
     return {
       'guid': guid,
       'uid': uid,
-      'name': name,
+      'fullname': fullname,
+      'name': fullname,
       'email': email,
       'phone': phone,
-      'address': address,
-      'usertype': usertype,
-      'roll': roll,
-      'password': password,
-      'isCustomer': isCustomer,
-      'updatedAt': updatedAt?.toIso8601String(),
-      'updatedBy': updatedBy,
+      'permanentAddress': permanentAddress,
+      'temporaryAddress': temporaryAddress,
+      'address': permanentAddress,
+      'roles': roles.map((role) => role.name).toList(),
+      'userType': userType?.name,
+      'status': status.name,
       'createdAt': createdAt.toIso8601String(),
       'createdBy': createdBy,
+      'updatedAt': updatedAt?.toIso8601String(),
+      'updatedBy': updatedBy,
     };
   }
 
@@ -103,18 +136,14 @@ class UserModel {
     return UserModel(
       guid: '',
       uid: '',
-      name: '',
-      email: null,
+      fullname: '',
       phone: '',
-      address: '',
-      usertype: '',
-      roll: '',
-      password: '',
-      isCustomer: false,
-      updatedAt: null,
-      updatedBy: null,
+      permanentAddress: '',
+      temporaryAddress: '',
+      roles: [],
+      userType: null,
+      status: UserStatus.active,
       createdAt: DateTime.now(),
-      createdBy: null,
     );
   }
 }

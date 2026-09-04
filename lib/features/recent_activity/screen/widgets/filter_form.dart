@@ -25,9 +25,6 @@ class FilterForm extends StatelessWidget {
               _buildSectionTitle('Date Range'),
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(prefixIcon: Icon(Icons.date_range)),
-                value: controller.filterOptions.contains(controller.selectedFilter.value) 
-                    ? controller.selectedFilter.value 
-                    : controller.filterOptions.first,
                 items: controller.filterOptions.map((String option) {
                   return DropdownMenuItem<String>(value: option, child: Text(option));
                 }).toList(),
@@ -66,7 +63,7 @@ class FilterForm extends StatelessWidget {
               _buildMultiSelectSection(
                 title: 'User Created By (Staff)',
                 icon: Icons.person,
-                items: controller.staffMembers.map((s) => _MultiSelectItem(id: s.guid, label: s.name)).toList(),
+                items: controller.users.map((s) => _MultiSelectItem(id: s.guid, label: s.fullname)).toList(),
                 selectedIds: controller.selectedStaffGuids,
               ),
 

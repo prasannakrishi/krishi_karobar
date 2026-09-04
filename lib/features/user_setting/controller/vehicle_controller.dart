@@ -57,9 +57,9 @@ class VehicleController extends GetxController{
       final users = await firebaseService.getAllUsers();
       allUsers.assignAll(users);
       
-      vehicleOwners.assignAll(users.where((u) => u.usertype == 'Vehicle Owner').toList());
-      drivers.assignAll(users.where((u) => u.usertype == 'Driver').toList());
-      supervisors.assignAll(users.where((u) => u.usertype == 'Supervisor').toList());
+      vehicleOwners.assignAll(users.where((u) => u.userType == 'Vehicle Owner').toList());
+      drivers.assignAll(users.where((u) => u.roles == 'Driver').toList());
+      supervisors.assignAll(users.where((u) => u.roles == 'Supervisor').toList());
     } catch (e) {
       debugPrint("Error fetching users: $e");
     }
@@ -69,7 +69,7 @@ class VehicleController extends GetxController{
     if (query.length >= 2) {
       filteredOwners.assignAll(
         vehicleOwners.where((u) => 
-          u.name.toLowerCase().contains(query.toLowerCase()) || 
+          u.fullname.toLowerCase().contains(query.toLowerCase()) ||
           u.phone.contains(query)
         ).toList()
       );
@@ -80,7 +80,7 @@ class VehicleController extends GetxController{
 
   void selectOwner(UserModel user) {
     selectedOwner.value = user;
-    vOwnerController.text = user.name;
+    vOwnerController.text = user.fullname;
     filteredOwners.clear();
   }
 

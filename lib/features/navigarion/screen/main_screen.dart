@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
 import '../controller/navigation_controller.dart';
 
 class MainScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class MainScreen extends StatelessWidget {
         ? Get.find<NavigationController>()
         : Get.put(NavigationController());
 
-    return Scaffold(
+    return UAppScaffold(
       body: PageView(
         controller: controller.pageController,
         onPageChanged: controller.onPageChanged,
@@ -30,8 +31,11 @@ class MainScreen extends StatelessWidget {
             BottomNavigationBarItem(icon: Icon(Iconsax.user), label: 'User'),
           ],
           type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white.withAlpha(200), // Slightly transparent
         ),
       ),
     );
   }
 }
+
+

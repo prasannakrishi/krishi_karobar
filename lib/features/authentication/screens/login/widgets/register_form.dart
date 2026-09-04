@@ -17,73 +17,53 @@ class URegisterForm extends StatelessWidget {
         color: Colors.transparent,
         child: Form(
             key: controller.registerFormKey,
-            child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    vertical: USizes.spaceBtwInputFields),
-                child: Column(
-                  children: [
-                    // Conform Password
-                    Obx(() => TextFormField(
-                      controller: controller.confirmpassword,
-                      obscureText: controller.hidePassword.value,
-                      decoration: CustomDecoration.uInputDecoration(
-                        prefixIcon: const Icon(Iconsax.password_check),
-                        labelText: UTexts.conformpassword,
-                        suffixIcon: IconButton(
-                          icon: Icon(controller.hidePassword.value ? Iconsax.eye_slash : Iconsax.eye),
-                          onPressed: () => controller.hideConfirmPassword.value = !controller.hideConfirmPassword.value)
-                      )
-                    )),
-                    const SizedBox(height: USizes.spaceBtwInputFields),
-                    TextFormField(
-                        controller: controller.name,
-                        decoration: CustomDecoration.uInputDecoration(labelText: 'Name')
-                    ),
-                    const SizedBox(height: USizes.spaceBtwInputFields),
-                    /*Row(
-                      children: [
-                        Expanded(
-                            child: TextFormField(
-                                controller: controller.address,
-                                decoration: CustomDecoration.uInputDecoration( labelText: 'Full Address')
-                            )
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 100,
-                            child: TextFormField(
-                                controller: controller.wadaNo,
-                                decoration: CustomDecoration.uInputDecoration( labelText: 'Wada No',),
-                                keyboardType: TextInputType.number)
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: USizes.spaceBtwInputFields),
-                    TextFormField(
-                        controller: controller.email,
-                        decoration: CustomDecoration.uInputDecoration( labelText: 'Email'),
-                        keyboardType: TextInputType.emailAddress
-                    ),
-                     */
-                    TextFormField(
-                        controller: controller.address,
-                        decoration: CustomDecoration.uInputDecoration( labelText: 'Full Address')
-                    ),
-                    const SizedBox(height: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Conform Password
+                const SizedBox(height: USizes.spaceBtwInputFields),
+                Obx(() => TextFormField(
+                  controller: controller.confirmpassword,
+                  obscureText: controller.hidePassword.value,
+                  decoration: CustomDecoration.uInputDecoration(
+                    prefixIcon: const Icon(Iconsax.password_check),
+                    labelText: UTexts.conformpassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(controller.hidePassword.value ? Iconsax.eye_slash : Iconsax.eye),
+                      onPressed: () => controller.hideConfirmPassword.value = !controller.hideConfirmPassword.value)
+                  )
+                )),
+                const SizedBox(height: USizes.spaceBtwInputFields),
+                
+                TextFormField(
+                    controller: controller.name,
+                    decoration: CustomDecoration.uInputDecoration(labelText: 'Full Name', prefixIcon: const Icon(Iconsax.user))
+                ),
+                const SizedBox(height: USizes.spaceBtwInputFields),
 
-                    Obx(() => DropdownButtonFormField<String>(
-                      initialValue: controller.selectedUserType.value,
-                      decoration: CustomDecoration.uInputDecoration(labelText: 'User Type'),
-                      items: ['Driver', 'Supervisor', 'Staff', 'Admin'].map((String value) {
-                        return DropdownMenuItem<String>(
-                            value: value, child: Text(value));
-                      }).toList(),
-                      onChanged: (newValue) => controller.selectedUserType.value = newValue!,
-                    )),
-                  ],
-                )
+                TextFormField(
+                    controller: controller.address,
+                    decoration: CustomDecoration.uInputDecoration(labelText: 'Full Address', prefixIcon: const Icon(Iconsax.location))
+                ),
+                const SizedBox(height: USizes.spaceBtwInputFields),
+                Obx(() {
+                  final items = ['Driver', 'Supervisor', 'Staff', 'Admin'];
+                  final current = controller.selectedUserType.value;
+                  final value = items.contains(current) ? current : items.first;
+                  
+                  return DropdownButtonFormField<String>(
+                    decoration: CustomDecoration.uInputDecoration(labelText: 'User Type', prefixIcon: const Icon(Iconsax.category)),
+                    items: items.map((String val) {
+                      return DropdownMenuItem<String>(
+                          value: val, child: Text(val));
+                    }).toList(),
+                    onChanged: (newValue) => controller.selectedUserType.value = newValue!,
+                  );
+                }),
+              ],
             )
         )
     );
+
   }
 }

@@ -10,6 +10,7 @@ import '../controllers/activity_controller.dart';
 import 'widgets/details_card_form.dart';
 import 'widgets/summary_footer.dart';
 
+
 class ActivityScreen extends StatelessWidget {
   const ActivityScreen({super.key});
 
@@ -19,11 +20,14 @@ class ActivityScreen extends StatelessWidget {
     final controller = Get.put(ActivityController());
     
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: UAppBar(
         title: 'Activities',
       ),
       body: Column(
+
         children: [
+
           // Status Tabs (Paid, Due, Partial)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 2),
