@@ -146,4 +146,6 @@ class UserModel {
       createdAt: DateTime.now(),
     );
   }
+
+  String get name => fullname;
 }

@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../../../services/firebase_service.dart';
-import '../../../utils/helper/helper_functions.dart';
+import '../../../utils/helper/helper_widgets.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
 import '../../navigarion/screen/main_screen.dart';
@@ -91,7 +91,7 @@ class LoginController extends GetxController{
 
         } else {
           UFullScreenLoader.stopLoading();
-          UHelperFunctions.errorSnackBar(
+          errorSnackBar(
             title: 'Login Failed',
             message: 'No saved user found. Please connect to internet.',
           );
@@ -113,7 +113,7 @@ class LoginController extends GetxController{
         if (e.code == 'user-not-found') {msg = 'User not found.';}
         else if (e.code == 'wrong-password') {msg = 'Incorrect password.';}
         
-        UHelperFunctions.errorSnackBar(title: 'Login Failed', message: msg);
+        errorSnackBar(title: 'Login Failed', message: msg);
         return;
       }
 
@@ -145,14 +145,14 @@ class LoginController extends GetxController{
 
       } else {
         UFullScreenLoader.stopLoading();
-        UHelperFunctions.errorSnackBar(
+        errorSnackBar(
           title: 'Error',
           message: 'User authenticated but profile not found in database.',
         );
       }
     } catch (e) {
       UFullScreenLoader.stopLoading();
-      UHelperFunctions.errorSnackBar(
+      errorSnackBar(
         title: 'Oh Snap!',
         message: e.toString(),
       );
@@ -167,7 +167,7 @@ class LoginController extends GetxController{
       final isConnected = await NetworkManager.instance.isConnected();
       if (!isConnected) {
         UFullScreenLoader.stopLoading();
-        UHelperFunctions.errorSnackBar(title: 'No Internet', message: 'Please connect to the internet to register.');
+        errorSnackBar(title: 'No Internet', message: 'Please connect to the internet to register.');
         return;
       }
 
@@ -184,7 +184,7 @@ class LoginController extends GetxController{
         if (e.code == 'email-already-in-use') {msg = 'This phone number is already registered.';}
         else if (e.code == 'weak-password') {msg = 'The password is too weak.';}
         
-        UHelperFunctions.errorSnackBar(title: 'Registration Failed', message: msg);
+        errorSnackBar(title: 'Registration Failed', message: msg);
         return;
       }
 
@@ -220,14 +220,14 @@ class LoginController extends GetxController{
         Get.offAll(() => const MainScreen());
       } else {
         UFullScreenLoader.stopLoading();
-        UHelperFunctions.errorSnackBar(
+        errorSnackBar(
           title: 'Database Error',
           message: 'Account created but profile could not be saved. Please contact support.',
         );
       }
     } catch (e){
       UFullScreenLoader.stopLoading();
-      UHelperFunctions.errorSnackBar(title: 'Oh Snap!', message: e.toString());
+      errorSnackBar(title: 'Oh Snap!', message: e.toString());
     }
   }
 

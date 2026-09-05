@@ -4,7 +4,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
 import '../../utils/constants/colors.dart';
 import '../../utils/constants/sizes.dart';
-import '../../utils/helper/helper_functions.dart';
+import '../../utils/helper/helper_widgets.dart';
 
 class UAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
@@ -27,7 +27,7 @@ class UAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = UHelperFunctions.isDarkMode(context);
+    final dark = isDarkMode(context);
     return Padding(padding: const EdgeInsets.symmetric(),
       child: AppBar(
         toolbarHeight: USizes.appBarHeight,

@@ -93,3 +93,17 @@ extension ServiceExtension on Service {
     }
   }
 }
+enum ServiceUnit {
+  hour,
+  kattha,
+}
+extension ServiceUnitExtension on ServiceUnit {
+  String get displayName {
+    switch (this) {
+      case ServiceUnit.hour:
+        return 'Per Hour';
+      case ServiceUnit.kattha:
+        return 'Per Kattha';
+    }
+  }
+}

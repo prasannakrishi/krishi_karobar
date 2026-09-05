@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-import 'helper_functions.dart';
+import 'helper_widgets.dart';
 
 class NetworkManager extends GetxController {
   static NetworkManager get instance => Get.find();
@@ -28,7 +28,7 @@ class NetworkManager extends GetxController {
       _connectionStatus.value = result.firstWhere((status) => status != ConnectivityResult.none, orElse: () => ConnectivityResult.none);
     } else{
       _connectionStatus.value = ConnectivityResult.none;
-      UHelperFunctions.warningSnackBar(title: 'No Internet Connection');
+      warningSnackBar(title: 'No Internet Connection');
     }
   }
 

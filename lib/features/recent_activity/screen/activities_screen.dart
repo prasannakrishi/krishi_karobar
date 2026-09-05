@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishi_karobar/features/navigarion/controller/navigation_controller.dart';
 import 'package:krishi_karobar/services/data_cache_service.dart';
-import 'package:krishi_karobar/utils/helper/helper_functions.dart';
+import 'package:krishi_karobar/utils/helper/helper_widgets.dart';
 import 'package:krishi_karobar/features/recent_activity/screen/widgets/filter_header.dart';
 import '../../../common/widgets/appbar.dart';
 import '../../../utils/constants/enums.dart';
@@ -35,7 +35,7 @@ class ActivityScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(controller.sections.length, (index) {
                 return Expanded(
-                  child: UHelperFunctions.selectedTab(
+                  child: selectedTab(
                     label: controller.sections[index],
                     isSelected: controller.currentPageIndex.value == index,
                     onTap: () => controller.changePageIndex(index),
@@ -94,7 +94,7 @@ class ActivityScreen extends StatelessWidget {
                       Expanded(
                         child: Stack(
                           children:[
-                            UHelperFunctions.UDataTable(
+                            UDataTable(
                               columns: [
                                   _buildCell(FilterHeader(title: 'ActivityId', isActive: controller.selectedVehicleGuids.isNotEmpty || controller.selectedServiceFilter.value != 'All', onTap: controller.showAIdFilters), 80),
                                   _buildCell(FilterHeader(title: 'Customer', isActive: controller.nameSearchQuery.value.isNotEmpty, onTap: controller.showNameSearch), 90),

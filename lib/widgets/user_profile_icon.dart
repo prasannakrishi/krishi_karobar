@@ -28,10 +28,12 @@ class _UserProfileIconState extends State<UserProfileIcon> {
       onSelected: (value) async {
         if (value == 'logout') {
           await FirebaseAuth.instance.signOut();
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => LoginScreen()),
-            (route) => false,
-          );
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+          }
         }
       },
       itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[

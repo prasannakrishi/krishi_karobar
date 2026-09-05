@@ -5,7 +5,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
 
-import '../../../utils/helper/helper_functions.dart';
+import '../../../utils/helper/helper_widgets.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
 
@@ -39,7 +39,7 @@ class ForgetPasswordController extends GetxController{
     }catch(e){
       // Remove Loader
       UFullScreenLoader.stopLoading();
-      UHelperFunctions.errorSnackBar(title: 'Oh Snap!', message: e.toString());
+      errorSnackBar(title: 'Oh Snap!', message: e.toString());
     }
   }
 
@@ -58,12 +58,12 @@ class ForgetPasswordController extends GetxController{
       UFullScreenLoader.stopLoading();
 
       // Show Success Message
-      UHelperFunctions.successSnackBar(title: 'Email Sent',message: 'Email Link Sent to Reset your Password'.tr);
+      successSnackBar(title: 'Email Sent',message: 'Email Link Sent to Reset your Password'.tr);
 
     }catch(e){
       // Remove Loader
       UFullScreenLoader.stopLoading();
-      UHelperFunctions.errorSnackBar(title: 'Oh Snap!', message: e.toString());
+      errorSnackBar(title: 'Oh Snap!', message: e.toString());
     }
   }
 }

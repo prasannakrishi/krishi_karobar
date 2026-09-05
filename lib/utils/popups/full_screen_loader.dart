@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../constants/colors.dart';
-import '../helper/helper_functions.dart';
+import '../helper/helper_widgets.dart';
 
 class UFullScreenLoader {
   static bool _isLoaderShowing = false;
@@ -19,7 +19,7 @@ class UFullScreenLoader {
       builder: (_) => PopScope(
         canPop: false,
         child: Container(
-          color: UHelperFunctions.isDarkMode(Get.context!)
+          color: isDarkMode(Get.context!)
               ? UColors.dark
               : UColors.white,
           width: double.infinity,

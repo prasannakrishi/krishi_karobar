@@ -7,8 +7,8 @@ import 'package:krishi_karobar/services/data_cache_service.dart';
 
 import '../constants/colors.dart';
 
-class UHelperFunctions {
-  static Color? getColor(String value) {
+
+  Color? getColor(String value) {
     /// Define your product specific colors here and it will match the attribute colors and show specific 🟠🟡🟢🔵🟣🟤
 
     if (value == 'Green') {
@@ -44,7 +44,7 @@ class UHelperFunctions {
     }
   }
 
-  static void customToast({required String message}){
+  void customToast({required String message}){
     ScaffoldMessenger.of(Get.context!).showSnackBar(
       SnackBar(
         elevation: 0,
@@ -55,7 +55,7 @@ class UHelperFunctions {
           margin: const EdgeInsets.symmetric(horizontal: 30.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
-            color: UHelperFunctions.isDarkMode(Get.context!) ? UColors.darkerGrey : UColors.grey
+            color: isDarkMode(Get.context!) ? UColors.darkerGrey : UColors.grey
           ),
           child: Center(child: Text(message,style: Theme.of(Get.context!).textTheme.labelLarge,),),
         ),
@@ -63,13 +63,13 @@ class UHelperFunctions {
     );
   }
 
-  static void showSnackBar(String message) {
+  void showSnackBar(String message) {
     ScaffoldMessenger.of(Get.context!).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
 
-  static void showAlert(String title, String message) {
+  void showAlert(String title, String message) {
     showDialog(
       context: Get.context!,
       builder: (BuildContext context) {
@@ -87,7 +87,7 @@ class UHelperFunctions {
     );
   }
 
-  static void warningSnackBar({required String title, String message = ''}){
+  void warningSnackBar({required String title, String message = ''}){
     Get.snackbar(
         title,
         message,
@@ -102,7 +102,7 @@ class UHelperFunctions {
     );
   }
 
-  static void successSnackBar({required String title, String message = '', int duration = 10}){
+  void successSnackBar({required String title, String message = '', int duration = 10}){
     Get.snackbar(
         title,
         message,
@@ -117,7 +117,7 @@ class UHelperFunctions {
     );
   }
 
-  static void errorSnackBar({required String title, String message = ''}){
+  void errorSnackBar({required String title, String message = ''}){
     Get.snackbar(
         title,
         message,
@@ -132,14 +132,14 @@ class UHelperFunctions {
     );
   }
 
-  static void navigateToScreen(BuildContext context, Widget screen) {
+  void navigateToScreen(BuildContext context, Widget screen) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => screen),
     );
   }
 
-  static String truncateText(String text, int maxLength) {
+  String truncateText(String text, int maxLength) {
     if (text.length <= maxLength) {
       return text;
     } else {
@@ -147,31 +147,23 @@ class UHelperFunctions {
     }
   }
 
-  static bool isDarkMode(BuildContext context) {
+  bool isDarkMode(BuildContext context) {
     return Theme.of(context).brightness == Brightness.dark;
   }
 
-  static Size screenSize() {
+  Size screenSize() {
     return MediaQuery.of(Get.context!).size;
   }
 
-  static double screenHeight() {
+  double screenHeight() {
     return MediaQuery.of(Get.context!).size.height;
   }
 
-  static double screenWidth() {
+  double screenWidth() {
     return MediaQuery.of(Get.context!).size.width;
   }
 
-  static String getFormattedDate(DateTime date, {String format = 'dd MMM yyyy'}) {
-    return DateFormat(format).format(date);
-  }
-
-  static List<T> removeDuplicates<T>(List<T> list) {
-    return list.toSet().toList();
-  }
-
-  static List<Widget> wrapWidgets(List<Widget> widgets, int rowSize) {
+  List<Widget> wrapWidgets(List<Widget> widgets, int rowSize) {
     final wrappedList = <Widget>[];
     for (var i = 0; i < widgets.length; i += rowSize) {
       final rowChildren = widgets.sublist(i, i + rowSize > widgets.length ? widgets.length : i + rowSize);
@@ -180,53 +172,7 @@ class UHelperFunctions {
     return wrappedList;
   }
 
-  static T? lookup<T>(dynamic value) {
-    if (value == null) return null;
-
-    final cache = Get.isRegistered<DataCacheService>() ? DataCacheService.instance : null;
-
-    switch (T) {
-      case UserModel:
-        if (value is Map<String, dynamic>) {
-          return UserModel.fromMap(value) as T;
-        }
-        else if (value is String && value.isNotEmpty) {
-          return (cache?.getUser(value) ?? UserModel.empty()) as T;
-        }
-        break;
-
-      case CustomerModel:
-        if (value is Map<String, dynamic>) {
-          return CustomerModel.fromMap(value) as T;
-        }
-        else if (value is String && value.isNotEmpty) {
-          return (cache?.getCustomer(value) ?? CustomerModel.empty()) as T;
-        }
-        break;
-
-      case VehicleModel:
-        if (value is Map<String, dynamic>) {
-          return VehicleModel.fromMap(value) as T;
-        }
-        else if (value is String && value.isNotEmpty) {
-          return (cache?.getVehicle(value) ?? VehicleModel.empty()) as T;
-        }
-        break;
-
-      case ServiceModel:
-        if (value is Map<String, dynamic>) {
-          return ServiceModel.fromMap(value) as T;
-        }
-        else if (value is String && value.isNotEmpty) {
-          return (cache?.getService(value) ?? ServiceModel.empty(value)) as T;
-        }
-        break;
-    }
-
-    return null;
-  }
-
-  static Widget datePicker({
+  Widget datePicker({
     required String label,
     required BuildContext context,
     required TextEditingController controller,
@@ -275,7 +221,7 @@ class UHelperFunctions {
     );
   }
 
-  static Widget floatingDropdown<T>({
+  Widget floatingDropdown<T>({
     required List<T> items,
     Widget Function(T item)? leadingBuilder,
     required Widget Function(T item) titleBuilder,
@@ -331,7 +277,7 @@ class UHelperFunctions {
     );
   }
 
-  static Widget selectedTab({
+  Widget selectedTab({
     required String label,
     required bool isSelected,
     VoidCallback? onTap,
@@ -358,7 +304,7 @@ class UHelperFunctions {
     );
   }
 
-  static Widget UDataTable({
+  Widget UDataTable({
     required List<Widget> columns,
     required List<List<Widget>> rowValues,
     int? selectedIndex,
@@ -396,7 +342,6 @@ class UHelperFunctions {
     );
   }
 
-}
 
 class MarqueeWidget extends StatefulWidget {
   final Widget child;

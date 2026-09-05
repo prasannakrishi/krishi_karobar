@@ -9,7 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/vehicle_model.dart';
 import '../models/user_model.dart';
-import '../utils/helper/helper_functions.dart';
+import '../utils/helper/helper_widgets.dart';
 
 class FirebaseService {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
@@ -43,12 +43,8 @@ class FirebaseService {
       default:
         return false;
     }
-    if (!isUpdate) {
-      model.createdBy ??= LoginController.loginUser.guid;
-    }
-    else if (isUpdate) {
-      return await updateRecord(model, path, guid);
-    }
+
+    if (isUpdate) { return await updateRecord(model, path, guid);}
 
     final data = Map<String, dynamic>.from(model.toMap());
     final success = await addNewRecord(data, path, guid);
@@ -319,7 +315,7 @@ class FirebaseService {
         return ActivityModel.fromMap(data);
       }).toList();
     } catch (ex, stackTrace) {
-      UHelperFunctions.errorSnackBar(
+      errorSnackBar(
         title: 'Failed to Load Activities',
         message: 'Something went wrong while loading activities.',
       );
@@ -343,7 +339,3 @@ class FirebaseService {
   }
 }
 
-extension DateTimeExtensions on DateTime {
-  DateTime get dayStartTime => DateTime(year, month, day, 0, 0, 0);
-  DateTime get dayEndTime => DateTime(year, month, day, 23, 59, 59);
-}
