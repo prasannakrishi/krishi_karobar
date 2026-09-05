@@ -1,39 +1,44 @@
 import 'package:flutter/material.dart';
+
 import '../../constants/colors.dart';
 import '../../constants/sizes.dart';
 
-/* -- Light & Dark Elevated Button Themes -- */
 class UElevatedButtonTheme {
-  UElevatedButtonTheme._(); //To avoid creating instances
+  UElevatedButtonTheme._();
 
-
-  /* -- Light Theme -- */
-  static final lightElevatedButtonTheme  = ElevatedButtonThemeData(
+  static final lightElevatedButtonTheme = ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      elevation: 0,
-      foregroundColor: UColors.light,
+      elevation: 1,
       backgroundColor: UColors.primary,
+      foregroundColor: UColors.white,
+      disabledBackgroundColor: UColors.grey,
       disabledForegroundColor: UColors.darkGrey,
-      disabledBackgroundColor: UColors.buttonDisabled,
-      side: const BorderSide(color: UColors.lightContainer),
       padding: const EdgeInsets.symmetric(vertical: USizes.buttonHeight),
-      textStyle: const TextStyle(fontSize: 16, color: UColors.textWhite, fontWeight: FontWeight.w600),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(USizes.buttonRadius)),
+      textStyle: const TextStyle(
+        fontSize: USizes.fontSizeMd,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(USizes.buttonRadius),
+      ),
     ),
   );
 
-  /* -- Dark Theme -- */
   static final darkElevatedButtonTheme = ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      elevation: 0,
-      foregroundColor: UColors.light,
+      elevation: 1,
       backgroundColor: UColors.primary,
-      disabledForegroundColor: UColors.darkGrey,
+      foregroundColor: UColors.white,
       disabledBackgroundColor: UColors.darkerGrey,
-      side: const BorderSide(color: UColors.primary),
+      disabledForegroundColor: UColors.grey,
       padding: const EdgeInsets.symmetric(vertical: USizes.buttonHeight),
-      textStyle: const TextStyle(fontSize: 16, color: UColors.textWhite, fontWeight: FontWeight.w600),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(USizes.buttonRadius)),
+      textStyle: const TextStyle(
+        fontSize: USizes.fontSizeMd,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(USizes.buttonRadius),
+      ),
     ),
   );
 }

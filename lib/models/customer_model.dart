@@ -1,59 +1,67 @@
-import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
-import 'package:uuid/uuid.dart';
+import '../utils/helper/helper_method.dart';
 
 class CustomerModel {
-  final String guid;
+  final String id;
+  final String uId;
+
   String name;
   String phone;
   String address;
-  DateTime createdAt;
-  String? createdBy; // GUID String
+
+  final DateTime createdAt;
+  String? createdBy;
+
+  DateTime? updatedAt;
+  String? updatedBy;
 
   CustomerModel({
-    required this.guid,
+    required this.id,
+    required this.uId,
     required this.name,
     required this.phone,
     required this.address,
     required this.createdAt,
     this.createdBy,
+    this.updatedAt,
+    this.updatedBy,
   });
+
+  factory CustomerModel.fromMap(Map<String, dynamic> map) {
+    return CustomerModel(
+      id: toStringValue(map['id'] ?? map['guid']),
+      uId: toStringValue(map['uId'] ?? map['uid']),
+      name: toStringValue(map['name']),
+      phone: toStringValue(map['phone']),
+      address: toStringValue(map['address']),
+      createdAt: toDateTime(map['createdAt']) ?? DateTime.now(),
+      createdBy: map['createdBy']?.toString(),
+      updatedAt: toDateTime(map['updatedAt']),
+      updatedBy: map['updatedBy']?.toString(),
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
-      'guid': guid,
+      'id': id,
+      'uId': uId,
       'name': name,
       'phone': phone,
       'address': address,
       'createdAt': createdAt.toIso8601String(),
       'createdBy': createdBy,
+      'updatedAt': updatedAt?.toIso8601String(),
+      'updatedBy': updatedBy,
     };
-  }
-
-  factory CustomerModel.fromMap(Map<String, dynamic> map) {
-    DateTime parseDate(dynamic v) {
-      if (v == null) return DateTime.now();
-      if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
-      return DateTime.now();
-    }
-
-    return CustomerModel(
-      guid: (map['guid'] ?? const Uuid().v4()).toString(),
-      name: map['name'] ?? '',
-      phone: map['phone'] ?? '',
-      address: map['address'] ?? '',
-      createdAt: parseDate(map['createdAt']),
-      createdBy: map['createdBy']?.toString(),
-    );
   }
 
   factory CustomerModel.empty() {
     return CustomerModel(
-      guid: Uuid().v4(),
+      id: '',
+      uId: '',
       name: '',
       phone: '',
       address: '',
       createdAt: DateTime.now(),
-      createdBy: LoginController.loginUser.guid,
     );
   }
 }

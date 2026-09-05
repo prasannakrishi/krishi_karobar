@@ -1,62 +1,72 @@
-
-/// This class contains all the App Text in String formats.
 class UTexts {
+  UTexts._();
 
-  // -- GLOBAL Texts
-  static const String and = "and";
-  static const String skip = "Skip";
-  static const String done = "Done";
-  static const String submit = "Submit";
-  static const String appName = "U-Store";
-  static const String uContinue = "Continue";
+  // App
+  static const appName = 'Krishi Karobar';
+  static const appTagline =
+      'Smart Agriculture · Better Farming · Better Business';
 
-  // -- Authentication Forms
-  static const String firstName = "First Name";
-  static const String lastName = "Last Name";
-  static const String email = "E-Mail";
-  static const String password = "Password";
-  static const String conformpassword = "Re-Enter Password";
-  static const String newPassword = "New Password";
-  static const String username = "Username";
-  static const String phoneNo = "Phone Number";
-  static const String rememberMe = "Remember Me";
-  static const String forgetPassword = "Forget Password?";
-  static const String signIn = "Sign In";
-  static const String sendOTP = "Send OTP";
-  static const String registerAccount = "Register Account";
-  static const String createAccount = "Create Account";
-  static const String orSignInWith = "or sign in with";
-  static const String orSignUpWith = "or sign up with";
-  static const String iAgreeTo = "I agree to";
-  static const String privacyPolicy = "Privacy Policy";
-  static const String termsOfUse = "Terms of use";
-  static const String verificationCode = "verificationCode";
-  static const String resendEmail = "Resend Email";
-  static const String resendEmailIn = "Resend email in";
+  // Common
+  static const and = 'and';
+  static const skip = 'Skip';
+  static const done = 'Done';
+  static const submit = 'Submit';
+  static const save = 'Save';
+  static const update = 'Update';
+  static const delete = 'Delete';
+  static const cancel = 'Cancel';
+  static const close = 'Close';
+  static const search = 'Search';
+  static const retry = 'Retry';
+  static const confirm = 'Confirm';
+  static const continueText = 'Continue';
+  static const noData = 'No data available';
 
+  // Authentication
+  static const firstName = 'First Name';
+  static const lastName = 'Last Name';
+  static const fullName = 'Full Name';
+  static const email = 'E-Mail';
+  static const password = 'Password';
+  static const confirmPassword = 'Re-Enter Password';
+  static const newPassword = 'New Password';
+  static const username = 'Username';
+  static const phoneNo = 'Phone Number';
+  static const address = 'Address';
+  static const rememberMe = 'Remember Me';
+  static const forgetPassword = 'Forgot Password?';
+  static const signIn = 'Sign In';
+  static const registerAccount = 'Register Account';
+  static const createAccount = 'Create Account';
+  static const resendEmail = 'Resend Email';
 
-  // -- Authentication Headings
-  static const String loginTitle = "Krishi Karobar";
-  static const String loginSubTitle = "Smart Agriculture · Better Farming · Better Business";
-  static const String welcomeLoginTitle = "Welcome Back! 👋";
-  static const String welcomeLoginSubTitle = "Sign in to continue to your account";
-  static const String welcomeRegTitle = "Welcome To Krishi Karobar";
-  static const String welcomeRegSubTitle = "Sign Up to continue with us.";
-  static const String footerCreateText = "Don't have an account?";
-  static const String footerCreateTextBtn = "Create Account";
-  static const String footerRegText = "Have an account.";
-  static const String footerRegTextBtn = "Sign In";
-  static const String forgetPasswordTitle = "Forget password";
-  static const String forgetPasswordSubTitle = "Don’t worry sometimes people can forget too, enter your email and we will send you a password reset link.";
-  static const String changeYourPasswordTitle = "Password Reset Email Sent";
-  static const String changeYourPasswordSubTitle = "Your Account Security is Our Priority! We've Sent You a Secure Link to Safely Change Your Password and Keep Your Account Protected.";
-  static const String confirmEmail = "Verify your email address!";
-  static const String confirmPhone = "Verify your Phone Number!";
-  static const String confirmEmailSubTitle = "Congratulations! Your Account Awaits: Verify Your Email to Start Shopping and Experience a World of Unrivaled Deals and Personalized Offers.";
-  static const String emailNotReceivedMessage = "Didn’t get the email? Check your junk/spam or resend it.";
-  static const String yourAccountRegisterTitle = "Your account successfully registered!";
-  static const String yourAccountCreatedSubTitle = "Welcome to Your Digital Krishi Karobar! Your Account is Ready, Unleash the Joy of Smart Agriculture Solution!";
+  // Login
+  static const loginTitle = appName;
+  static const loginSubTitle = appTagline;
+  static const welcomeLoginTitle = 'Welcome Back! 👋';
+  static const welcomeLoginSubTitle = 'Sign in to continue to your account';
+  static const welcomeRegTitle = 'Welcome to Krishi Karobar';
+  static const welcomeRegSubTitle = 'Create your account to continue.';
+  static const footerCreateText = "Don't have an account?";
+  static const footerCreateTextBtn = 'Create Account';
+  static const footerRegText = 'Already have an account?';
+  static const footerRegTextBtn = 'Sign In';
 
+  // Password
+  static const forgetPasswordTitle = 'Forgot Password';
+  static const forgetPasswordSubTitle =
+      'Enter your registered phone number and we will send you a password reset link.';
+  static const changeYourPasswordTitle = 'Password Reset Email Sent';
+  static const changeYourPasswordSubTitle =
+      'We have sent a secure password reset link to your registered email address.';
+  static const resendEmailIn = 'Resend email in';
 
+  // Navigation
+  static const dashboard = 'Dashboard';
+  static const customers = 'Customers';
+  static const vehicles = 'Vehicles';
+  static const services = 'Services';
+  static const activities = 'Activities';
+  static const profile = 'Profile';
+  static const settings = 'Settings';
 }
-

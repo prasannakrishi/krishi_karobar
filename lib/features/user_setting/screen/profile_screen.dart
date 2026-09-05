@@ -30,7 +30,7 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Column(
               children: [
-                UDetailRow(value: LoginController.loginUser.uid, icon: Iconsax.profile_2user2),
+                UDetailRow(value: LoginController.loginUser.uId, icon: Iconsax.profile_2user2),
                 const SizedBox(height: 16),
                 UDetailRow(value: LoginController.loginUser.fullname, icon: Iconsax.user),
               ],

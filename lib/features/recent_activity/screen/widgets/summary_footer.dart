@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:krishi_karobar/features/recent_activity/controllers/activity_controller.dart';
+
+import '../../controllers/activity_controller.dart';
 
 class SummaryFooter extends StatelessWidget {
   const SummaryFooter({
@@ -8,63 +9,121 @@ class SummaryFooter extends StatelessWidget {
     required this.totalAmount,
     required this.totalPaid,
     required this.totalDue,
-    required this.controller,
   });
 
   final int totalSeconds;
-  final int totalAmount;
-  final int totalPaid;
-  final int totalDue;
-  final ActivityController controller;
+  final double totalAmount;
+  final double totalPaid;
+  final double totalDue;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       color: const Color(0xFFE8F5E9),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 10.0),
+        padding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 10,
+        ),
         child: Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('Duration', style: TextStyle(color: Colors.teal, fontSize: 16, fontWeight: FontWeight.w600)),
-                Text('Amount', style: TextStyle(color: Colors.teal, fontSize: 16, fontWeight: FontWeight.w600)),
-                Text('Paid', style: TextStyle(color: Colors.teal, fontSize: 16, fontWeight: FontWeight.w600)),
-                Text('Due', style: TextStyle(color: Colors.teal, fontSize: 16, fontWeight: FontWeight.w600)),
+            const Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Duration',
+                    style: TextStyle(
+                      color: Colors.teal,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Amount',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.teal,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Paid',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.teal,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Due',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: Colors.teal,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const Divider(height: 20, thickness: 1),
+            const Divider(
+              height: 20,
+              thickness: 1,
+            ),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    controller.secondsToHHMMSS(totalSeconds),
+                    ActivityController.instance
+                        .secondsToHHMMSS(totalSeconds),
                     textAlign: TextAlign.left,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Text(
-                    'रु $totalAmount',
+                    'रु ${totalAmount.toStringAsFixed(2)}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Text(
-                    'रु $totalPaid',
+                    'रु ${totalPaid.toStringAsFixed(2)}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Text(
-                    'रु $totalDue',
+                    'रु ${totalDue.toStringAsFixed(2)}',
                     textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
                   ),
                 ),
               ],

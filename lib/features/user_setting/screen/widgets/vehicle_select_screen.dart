@@ -31,7 +31,7 @@ class VehicleSelectScreen extends StatelessWidget {
           itemCount: controller.vehiclesList.length,
           itemBuilder: (context, index) {
             final vehicle = controller.vehiclesList[index];
-            final isSelected = controller.selectedVehicle.value?.guid == vehicle.guid;
+            final isSelected = controller.selectedVehicle.value?.id == vehicle.id;
 
             return Card(
               margin: const EdgeInsets.only(bottom: 8),

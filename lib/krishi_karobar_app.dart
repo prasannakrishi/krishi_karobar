@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:krishi_karobar/utils/theme/theme.dart';
 
 import 'features/authentication/screens/login/login_screen.dart';
+import 'utils/constants/text_strings.dart';
+import 'utils/theme/theme.dart';
 
-class krishi_karobar_app extends StatelessWidget {
+class KrishiKarobarApp extends StatelessWidget {
 
-  const krishi_karobar_app({super.key});
+  const KrishiKarobarApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Krishi Karobar',
-      //themeMode: ThemeMode.system,
+      title: UTexts.appName,
+      themeMode: ThemeMode.light,
       theme: UAppTheme.lightTheme,
-      //darkTheme: UAppTheme.darkTheme,
-      home: LoginScreen(),
+      darkTheme: UAppTheme.darkTheme,
+      home: const LoginScreen(),
     );
   }
 }

@@ -1,54 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
 
+import '../../../../common/widgets/app_scaffold.dart';
+import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/constants/text_strings.dart';
 import '../../controllers/forget_password_controller.dart';
+import 'widgets/forget_password_form.dart';
 
 class ForgetPassScreen extends StatelessWidget {
   const ForgetPassScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.put(ForgetPasswordController());
-    return Scaffold(
-      appBar: AppBar(),
+    Get.put(ForgetPasswordController());
+
+    return UAppScaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: UColors.primary,
+      ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(USizes.defaultSpace),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-
-              /// Heading
-              Text(UTexts.forgetPasswordTitle, style: Theme
-                  .of(context)
-                  .textTheme
-                  .headlineMedium,),
-              const SizedBox(height: USizes.spaceBtwItems,),
-              Text(UTexts.forgetPasswordSubTitle, style: Theme
-                  .of(context)
-                  .textTheme
-                  .labelMedium,),
-              const SizedBox(height: USizes.spaceBtwSections * 2,),
-
-              /// Text Field
-              Form(
-                key: controller.forgetPasswordFormKey,
-                child: TextFormField(
-                  controller: controller.email,
-                  decoration: const InputDecoration(
-                      labelText: UTexts.email, prefixIcon: Icon(Iconsax.direct_right)),),
+        padding: const EdgeInsets.fromLTRB(
+          USizes.defaultSpace,
+          30,
+          USizes.defaultSpace,
+          USizes.defaultSpace,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              UTexts.forgetPasswordTitle,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: UColors.primary,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: USizes.spaceBtwSections,),
-
-              /// Submit Button
-              SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => controller.sendPasswordResetOTP(),
-                child: const Text(UTexts.submit),),)
-
-            ],
-          ),
+            ),
+            const SizedBox(height: USizes.spaceBtwItems),
+            Text(
+              UTexts.forgetPasswordSubTitle,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: USizes.spaceBtwSections * 2),
+            const UForgetPasswordForm(),
+          ],
         ),
       ),
     );

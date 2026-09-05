@@ -1,129 +1,132 @@
-import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
-import 'package:uuid/uuid.dart';
+
+import '../utils/helper/helper_method.dart';
 
 class ActivityModel {
-  final String guid;
-  final String uid;
-  String customer; // GUID String
-  String vehicle; // GUID String
-  final String startTime;
-  final String endTime;
-  final String duration;
-  String serviceType; // GUID String
-  String? receivedBy; // GUID String
-  String? monitorBy; // GUID String
-  final int rate;
-  int amount;
-  int dueAmount;
-  int paidAmount;
-  DateTime? paidAt;
-  String? description;
-  final String createdBy; // GUID String
-  final DateTime createdAt;
-  DateTime updatedAt;
+final String id;
+final String uId;
+String customerId;
+String vehicleId;
+String serviceId;
+DateTime startTime;
+DateTime endTime;
+int duration; // seconds
+double rate;
+double amount;
+double paidAmount;
+double dueAmount;
+String? receivedBy;
+String? monitorBy;
+DateTime? paidAt;
+String? description;
+String status;
+String? cancelledBy;
+DateTime? cancelledAt;
+String? cancellationReason;
+final String createdBy;
+final DateTime createdAt;
+DateTime updatedAt;
 
-  ActivityModel({
-    required this.guid,
-    required this.uid,
-    required this.customer,
-    required this.vehicle,
-    required this.startTime,
-    required this.endTime,
-    required this.duration,
-    required this.serviceType,
-    required this.rate,
-    required this.amount,
-    this.paidAmount = 0,
-    this.dueAmount = 0,
-    this.receivedBy,
-    this.monitorBy,
-    this.paidAt,
-    this.description,
-    required this.createdBy,
-    required this.createdAt,
-    required this.updatedAt,
-  });
+ActivityModel({
+required this.id,
+required this.uId,
+required this.customerId,
+required this.vehicleId,
+required this.serviceId,
+required this.startTime,
+required this.endTime,
+required this.duration,
+required this.rate,
+required this.amount,
+this.paidAmount = 0,
+this.dueAmount = 0,
+this.receivedBy,
+this.monitorBy,
+this.paidAt,
+this.description,
+this.status = 'pending',
+this.cancelledBy,
+this.cancelledAt,
+this.cancellationReason,
+required this.createdBy,
+required this.createdAt,
+required this.updatedAt,
+});
 
-  factory ActivityModel.fromMap(Map<String, dynamic> map) {
-    DateTime parseDate(dynamic v) {
-      if (v == null) return DateTime.now();
-      if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
-      return DateTime.now();
-    }
+factory ActivityModel.fromMap(Map<String, dynamic> map) {
+final start = toDateTime(map['startTime']) ?? DateTime.now();
 
-    int toInt(dynamic v) {
-      if (v is int) return v;
-      if (v is num) return v.toInt();
-      return 0;
-    }
+return ActivityModel(
+id: toStringValue(map['id'] ?? map['guid']),
+uId: toStringValue(map['uId'] ?? map['uid']),
+customerId: toStringValue(map['customerId'] ?? map['customer']),
+vehicleId: toStringValue(map['vehicleId'] ?? map['vehicle']),
+serviceId: toStringValue(map['serviceId'] ?? map['serviceType']),
+startTime: start,
+endTime: toDateTime(map['endTime']) ?? start,
+duration: toInt(map['duration']),
+rate: toDouble(map['rate']),
+amount: toDouble(map['amount']),
+paidAmount: toDouble(map['paidAmount']),
+dueAmount: toDouble(map['dueAmount']),
+receivedBy: map['receivedBy']?.toString(),
+monitorBy: map['monitorBy']?.toString(),
+paidAt: toDateTime(map['paidAt']),
+description: map['description']?.toString(),
+status: toStringValue(map['status'], defaultValue: 'pending'),
+cancelledBy: map['cancelledBy']?.toString(),
+cancelledAt: toDateTime(map['cancelledAt']),
+cancellationReason: map['cancellationReason']?.toString(),
+createdBy: toStringValue(map['createdBy']),
+createdAt: toDateTime(map['createdAt']) ?? DateTime.now(),
+updatedAt: toDateTime(map['updatedAt']) ?? DateTime.now(),
+);
+}
 
-    return ActivityModel(
-      guid: (map['guid'] ?? const Uuid().v4()).toString(),
-      uid: (map['uid'] ?? '').toString(),
-      customer: (map['customer'] ?? '').toString(),
-      vehicle: (map['vehicle'] ?? '').toString(),
-      startTime: map['startTime'] ?? '',
-      endTime: map['endTime'] ?? '',
-      duration: map['duration'] ?? '',
-      serviceType: (map['serviceType'] ?? '').toString(),
-      rate: toInt(map['rate']),
-      amount: toInt(map['amount']),
-      paidAmount: toInt(map['paidAmount']),
-      dueAmount: toInt(map['dueAmount']),
-      receivedBy: map['receivedBy']?.toString(),
-      monitorBy: map['monitorBy']?.toString(),
-      paidAt: map['paidAt'] != null ? DateTime.tryParse(map['paidAt']) : null,
-      description: map['description'] as String?,
-      createdBy: (map['createdBy'] ?? '').toString(),
-      createdAt: parseDate(map['createdAt']),
-      updatedAt: parseDate(map['updatedAt']),
-    );
-  }
+factory ActivityModel.empty() {
+final now = DateTime.now();
 
-  factory ActivityModel.empty() {
-    return ActivityModel(
-      guid: Uuid().v4(),
-      uid: '',
-      customer: '',
-      vehicle: '',
-      startTime: '',
-      endTime: '',
-      duration: '',
-      serviceType: '',
-      rate: 0,
-      amount: 0,
-      paidAmount: 0,
-      dueAmount: 0,
-      receivedBy: null,
-      monitorBy: null,
-      paidAt: null,
-      description: null,
-      createdBy: LoginController.loginUser.guid,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
+return ActivityModel(
+id: '',
+uId: '',
+customerId: '',
+vehicleId: '',
+serviceId: '',
+startTime: now,
+endTime: now,
+duration: 0,
+rate: 0,
+amount: 0,
+createdBy: '',
+createdAt: now,
+updatedAt: now,
+);
+}
 
-  Map<String, dynamic> toMap() {
-    return {
-      'guid': guid,
-      'uid': uid,
-      'customer': customer,
-      'vehicle': vehicle,
-      'startTime': startTime,
-      'endTime': endTime,
-      'duration': duration,
-      'serviceType': serviceType,
-      'receivedBy': receivedBy,
-      'monitorBy': monitorBy,
-      'rate': rate,
-      'amount': amount,
-      'paidAmount': paidAmount,
-      'dueAmount': dueAmount,
-      'paidAt': paidAt?.toIso8601String(),
-      'description': description,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String()
-    };
-  }
+Map<String, dynamic> toMap() {
+return {
+'id': id,
+'uId': uId,
+'customerId': customerId,
+'vehicleId': vehicleId,
+'serviceId': serviceId,
+'startTime': startTime.toUtc().toIso8601String(),
+'endTime': endTime.toUtc().toIso8601String(),
+'duration': duration,
+'rate': rate,
+'amount': amount,
+'paidAmount': paidAmount,
+'dueAmount': dueAmount,
+'receivedBy': receivedBy,
+'monitorBy': monitorBy,
+'paidAt': paidAt?.toUtc().toIso8601String(),
+'description': description,
+'status': status,
+'cancelledBy': cancelledBy,
+'cancelledAt': cancelledAt?.toUtc().toIso8601String(),
+'cancellationReason': cancellationReason,
+'createdBy': createdBy,
+'createdAt': createdAt.toUtc().toIso8601String(),
+'updatedAt': updatedAt.toUtc().toIso8601String(),
+};
+}
 }

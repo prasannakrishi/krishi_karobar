@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:krishi_karobar/models/models.dart';
-import 'package:krishi_karobar/services/data_cache_service.dart';
-import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
-import 'package:krishi_karobar/features/recent_activity/controllers/activity_controller.dart';
+import 'package:get/get.dart';
 
+import '../../../../models/models.dart';
+import '../../../../services/data_cache_service.dart';
+import '../../../../utils/theme/widget_themes/custom_decoration.dart';
+import '../../../payment/screen/widgets/payment_dialog.dart';
+import '../../controllers/activity_controller.dart';
 
 class DetailsCardForm extends StatefulWidget {
   const DetailsCardForm({
@@ -17,194 +18,276 @@ class DetailsCardForm extends StatefulWidget {
   final ActivityController controller;
 
   @override
-  State<DetailsCardForm> createState() => _DetailsCardFormState();
+  State<DetailsCardForm> createState() =>
+      _DetailsCardFormState();
 }
 
-class _DetailsCardFormState extends State<DetailsCardForm> {
-  late TextEditingController paidController;
-  late TextEditingController dueController;
+class _DetailsCardFormState
+    extends State<DetailsCardForm> {
   late TextEditingController descriptionController;
-  
-  final FocusNode _paidFocusNode = FocusNode();
-  final FocusNode _descFocusNode = FocusNode();
+
+  final FocusNode _descriptionFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    _initControllers();
-    
-    _paidFocusNode.addListener(() {
-      if (!_paidFocusNode.hasFocus) {
-        _handlePaidSubmitted(paidController.text);
-      }
-    });
 
-    _descFocusNode.addListener(() {
-      if (!_descFocusNode.hasFocus) {
-        _handleDescriptionSubmitted(descriptionController.text);
+    descriptionController = TextEditingController(
+      text: widget.entry.description ?? '',
+    );
+
+    _descriptionFocusNode.addListener(() {
+      if (!_descriptionFocusNode.hasFocus) {
+        _saveDescription();
       }
     });
   }
 
   @override
-  void didUpdateWidget(DetailsCardForm oldWidget) {
+  void didUpdateWidget(
+      DetailsCardForm oldWidget,
+      ) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.entry.guid != widget.entry.guid) {
-      _initControllers();
+
+    if (oldWidget.entry.id != widget.entry.id) {
+      descriptionController.text =
+          widget.entry.description ?? '';
     }
   }
 
-  void _initControllers() {
-    paidController = TextEditingController(
-      text: widget.entry.paidAmount > 0 ? widget.entry.paidAmount.toString() : '',
-    );
-    dueController = TextEditingController(
-      text: widget.entry.dueAmount.toString(),
-    );
-    descriptionController = TextEditingController(
-      text: widget.entry.description ?? '',
+  Future<void> _saveDescription() async {
+    final value = descriptionController.text.trim();
+
+    if (value == (widget.entry.description ?? '')) {
+      return;
+    }
+
+    await widget.controller.updateDescription(
+      widget.entry,
+      value,
     );
   }
 
-  Future<void> _handlePaidSubmitted(String value) async {
-    final newPaidTotal = int.tryParse(value) ?? 0;
-    
-    if (newPaidTotal != widget.entry.paidAmount) {
-      // १. Firebase मा अपडेट गर्ने
-      await widget.controller.updatePaidStatus(widget.entry, newPaidTotal);
-      
-      // २. अपडेट भइसकेपछि Details Card लाई Hide गर्ने (selectedIndex = null)
-      widget.controller.selectIndex(null);
-    }
-  }
-
-  Future<void> _handleDescriptionSubmitted(String value) async {
-    if (value != widget.entry.description) {
-      widget.entry.description = value;
-      widget.entry.updatedAt = DateTime.now();
-      await widget.controller.firebaseService.updateRecord(
-        {
-          'description': value, 
-          'updatedAt': widget.entry.updatedAt.toIso8601String()
-        },
-        'activities',
-        widget.entry.guid,
-      );
-    }
+  void _openPayment() {
+    Get.dialog(
+      PaymentDialog(
+        customerId: widget.entry.customerId,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    paidController.dispose();
-    dueController.dispose();
     descriptionController.dispose();
-    _paidFocusNode.dispose();
-    _descFocusNode.dispose();
+    _descriptionFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cache = DataCacheService.instance;
+
+    final vehicle =
+    cache.vehicles[widget.entry.vehicleId];
+
+    final customer =
+    cache.customers[widget.entry.customerId];
+
+    final service =
+    cache.services[widget.entry.serviceId];
+
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: const Color.fromARGB(255, 228, 247, 248),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: const Color.fromARGB(
+        255,
+        228,
+        247,
+        248,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment:
+          CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(child: CustomDecoration.uTextField('Vehicle Number', DataCacheService.instance.getVehicleNumber(widget.entry.vehicle))),
-                const SizedBox(width: 10),
-                Expanded(child: CustomDecoration.uTextField('Customer Name', DataCacheService.instance.getCustomerName(widget.entry.customer))),
-              ],
+            _buildBasicInfo(
+              vehicle?.number ?? '-',
+              customer?.name ?? '-',
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: CustomDecoration.uTextField('Service Type', DataCacheService.instance.getServiceName(widget.entry.serviceType))),
-                const SizedBox(width: 10),
-                Expanded(child: CustomDecoration.uTextField('Rate/hr', widget.entry.rate.toString())),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: CustomDecoration.uTextField('Start Time', _formatEntryTime(widget.entry.createdAt, widget.entry.startTime))),
-                const SizedBox(width: 10),
-                Expanded(child: CustomDecoration.uTextField('End Time', _formatEntryTime(widget.entry.createdAt, widget.entry.endTime))),
-                const SizedBox(width: 10),
-                Expanded(child: CustomDecoration.uTextField('Duration', widget.entry.duration)),
-              ],
+            _buildServiceInfo(
+              service?.name ?? '-',
+              widget.entry.rate,
             ),
             const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: TextFormField(
-                      controller: paidController,
-                      focusNode: _paidFocusNode,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.done,
-                      textAlign: TextAlign.right,
-                      decoration: CustomDecoration.uInputDecoration(
-                        labelText: 'Paid Amount',
-                        prefixText: 'रु ',
-                        fillColor: const Color.fromARGB(197, 78, 251, 139),
-                      ),
-                      onFieldSubmitted: _handlePaidSubmitted,
-                      onTapOutside: (event) => _paidFocusNode.unfocus(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: TextFormField(
-                      controller: dueController,
-                      textAlign: TextAlign.right,
-                      readOnly: true,
-                      decoration: CustomDecoration.uInputDecoration(
-                        labelText: 'Due Amount',
-                        prefixText: 'रु ',
-                        fillColor: const Color.fromARGB(255, 247, 191, 191),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            _buildTimeInfo(),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: descriptionController,
-              focusNode: _descFocusNode,
-              keyboardType: TextInputType.multiline,
-              decoration: CustomDecoration.uInputDecoration(
-                labelText: 'Description',
-                fillColor: const Color.fromARGB(73, 249, 251, 250),
-              ),
-              onFieldSubmitted: _handleDescriptionSubmitted,
-              onTapOutside: (event) => _descFocusNode.unfocus(),
-            )
+            _buildPaymentInfo(),
+            const SizedBox(height: 10),
+            _buildPaymentButton(),
+            const SizedBox(height: 8),
+            _buildDescription(),
           ],
         ),
       ),
     );
   }
 
-  String _formatEntryTime(DateTime createdAt, String time) {
-    try {
-      final combined = DateTime.parse('${DateFormat('yyyy-MM-dd').format(createdAt)} $time');
-      return DateFormat.jm().format(combined);
-    } catch (e) {
-      return time;
-    }
+  Widget _buildBasicInfo(
+      String vehicleNumber,
+      String customerName,
+      ) {
+    return Row(
+      children: [
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Vehicle Number',
+            vehicleNumber,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Customer Name',
+            customerName,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServiceInfo(
+      String serviceName,
+      double rate,
+      ) {
+    return Row(
+      children: [
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Service Type',
+            serviceName,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Rate / Hour',
+            'रु ${rate.toStringAsFixed(2)}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeInfo() {
+    return Row(
+      children: [
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Start Time',
+            _formatTime(widget.entry.startTime),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'End Time',
+            _formatTime(widget.entry.endTime),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Duration',
+            widget.controller.secondsToHHMMSS(
+              widget.entry.duration,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentInfo() {
+    return Row(
+      children: [
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Amount',
+            'रु ${widget.entry.amount.toStringAsFixed(2)}',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Paid',
+            'रु ${widget.entry.paidAmount.toStringAsFixed(2)}',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: CustomDecoration.uTextField(
+            'Due',
+            'रु ${widget.entry.dueAmount.toStringAsFixed(2)}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentButton() {
+    final hasDue = widget.entry.dueAmount > 0;
+
+    return SizedBox(
+      height: 42,
+      child: ElevatedButton.icon(
+        onPressed: hasDue ? _openPayment : null,
+        icon: const Icon(Icons.payments),
+        label: Text(
+          hasDue
+              ? 'Collect Customer Payment'
+              : 'Fully Paid',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDescription() {
+    return TextFormField(
+      controller: descriptionController,
+      focusNode: _descriptionFocusNode,
+      keyboardType: TextInputType.multiline,
+      maxLines: 2,
+      decoration: CustomDecoration.uInputDecoration(
+        labelText: 'Description',
+        fillColor: const Color.fromARGB(
+          73,
+          249,
+          251,
+          250,
+        ),
+      ),
+      onFieldSubmitted: (_) => _saveDescription(),
+      onTapOutside: (_) =>
+          _descriptionFocusNode.unfocus(),
+    );
+  }
+
+  String _formatTime(DateTime value) {
+    final local = value.toLocal();
+
+    final hour = local.hour % 12 == 0
+        ? 12
+        : local.hour % 12;
+
+    final minute =
+    local.minute.toString().padLeft(2, '0');
+
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+
+    return '$hour:$minute $period';
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../constants/colors.dart';
 import 'widget_themes/appbar_theme.dart';
 import 'widget_themes/bottom_sheet_theme.dart';
@@ -15,13 +16,17 @@ class UAppTheme {
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     fontFamily: 'Poppins',
-    disabledColor: UColors.grey,
     brightness: Brightness.light,
     primaryColor: UColors.primary,
+    scaffoldBackgroundColor: Colors.transparent,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: UColors.primary,
+      brightness: Brightness.light,
+    ),
+    disabledColor: UColors.darkGrey,
     textTheme: UTextTheme.lightTextTheme,
-    chipTheme: UChipTheme.lightChipTheme,
-    scaffoldBackgroundColor: UColors.white,
     appBarTheme: UAppBarTheme.lightAppBarTheme,
+    chipTheme: UChipTheme.lightChipTheme,
     checkboxTheme: UCheckboxTheme.lightCheckboxTheme,
     bottomSheetTheme: UBottomSheetTheme.lightBottomSheetTheme,
     elevatedButtonTheme: UElevatedButtonTheme.lightElevatedButtonTheme,
@@ -32,13 +37,17 @@ class UAppTheme {
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     fontFamily: 'Poppins',
-    disabledColor: UColors.grey,
     brightness: Brightness.dark,
     primaryColor: UColors.primary,
+    scaffoldBackgroundColor: Colors.transparent,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: UColors.primary,
+      brightness: Brightness.dark,
+    ),
+    disabledColor: UColors.darkGrey,
     textTheme: UTextTheme.darkTextTheme,
-    chipTheme: UChipTheme.darkChipTheme,
-    scaffoldBackgroundColor: UColors.black,
     appBarTheme: UAppBarTheme.darkAppBarTheme,
+    chipTheme: UChipTheme.darkChipTheme,
     checkboxTheme: UCheckboxTheme.darkCheckboxTheme,
     bottomSheetTheme: UBottomSheetTheme.darkBottomSheetTheme,
     elevatedButtonTheme: UElevatedButtonTheme.darkElevatedButtonTheme,

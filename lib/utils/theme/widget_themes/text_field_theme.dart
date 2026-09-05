@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../constants/colors.dart';
 import '../../constants/sizes.dart';
 
@@ -6,63 +7,61 @@ class UTextFormFieldTheme {
   UTextFormFieldTheme._();
 
   static InputDecorationTheme lightInputDecorationTheme = InputDecorationTheme(
-    errorMaxLines: 3,
-    prefixIconColor: UColors.darkGrey,
-    suffixIconColor: UColors.darkGrey,
-    // constraints: const BoxConstraints.expand(height: TSizes.inputFieldHeight),
-    labelStyle: const TextStyle().copyWith(fontSize: USizes.fontSizeMd, color: UColors.black),
-    hintStyle: const TextStyle().copyWith(fontSize: USizes.fontSizeSm, color: UColors.black),
-    errorStyle: const TextStyle().copyWith(fontStyle: FontStyle.normal),
-    floatingLabelStyle: const TextStyle().copyWith(color: UColors.black),
-    border: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.grey),
+    filled: true,
+    fillColor: UColors.white.withValues(alpha: 0.72),
+    errorMaxLines: 2,
+    prefixIconColor: UColors.textSecondary,
+    suffixIconColor: UColors.textSecondary,
+    labelStyle: const TextStyle(
+      fontSize: USizes.fontSizeSm,
+      color: UColors.textSecondary,
     ),
-    enabledBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.grey),
+    hintStyle: const TextStyle(
+      fontSize: USizes.fontSizeSm,
+      color: UColors.textSecondary,
     ),
-    focusedBorder:const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.dark),
+    floatingLabelStyle: const TextStyle(
+      color: UColors.primary,
+      fontWeight: FontWeight.w500,
     ),
-    errorBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.warning),
-    ),
-    focusedErrorBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 2, color: UColors.warning),
-    ),
+    border: _border(UColors.borderLight),
+    enabledBorder: _border(UColors.borderLight),
+    focusedBorder: _border(UColors.primary, 1.5),
+    errorBorder: _border(UColors.error),
+    focusedErrorBorder: _border(UColors.error, 1.5),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   );
 
   static InputDecorationTheme darkInputDecorationTheme = InputDecorationTheme(
+    filled: true,
+    fillColor: UColors.darkSurface.withValues(alpha: 0.78),
     errorMaxLines: 2,
-    prefixIconColor: UColors.darkGrey,
-    suffixIconColor: UColors.darkGrey,
-    // constraints: const BoxConstraints.expand(height: TSizes.inputFieldHeight),
-    labelStyle: const TextStyle().copyWith(fontSize: USizes.fontSizeMd, color: UColors.white),
-    hintStyle: const TextStyle().copyWith(fontSize: USizes.fontSizeSm, color: UColors.white),
-    floatingLabelStyle: const TextStyle().copyWith(color: UColors.white),
-    border: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.darkGrey),
+    prefixIconColor: UColors.grey,
+    suffixIconColor: UColors.grey,
+    labelStyle: const TextStyle(
+      fontSize: USizes.fontSizeSm,
+      color: UColors.grey,
     ),
-    enabledBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.darkGrey),
+    hintStyle: const TextStyle(
+      fontSize: USizes.fontSizeSm,
+      color: UColors.grey,
     ),
-    focusedBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.white),
+    floatingLabelStyle: const TextStyle(
+      color: UColors.primary,
+      fontWeight: FontWeight.w500,
     ),
-    errorBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 1, color: UColors.warning),
-    ),
-    focusedErrorBorder: const OutlineInputBorder().copyWith(
-      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
-      borderSide: const BorderSide(width: 2, color: UColors.warning),
-    ),
+    border: _border(UColors.borderDark),
+    enabledBorder: _border(UColors.borderDark),
+    focusedBorder: _border(UColors.primary, 1.5),
+    errorBorder: _border(UColors.error),
+    focusedErrorBorder: _border(UColors.error, 1.5),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   );
+
+  static OutlineInputBorder _border(Color color, [double width = 1]) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(USizes.inputFieldRadius),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
 }

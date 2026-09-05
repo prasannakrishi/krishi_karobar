@@ -33,7 +33,7 @@ class UserProfile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(LoginController.loginUser.uid),
+                        Text(LoginController.loginUser.uId),
                         const SizedBox(height: 5),
                         Text(
                           LoginController.loginUser.fullname,

@@ -1,84 +1,100 @@
-import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
-import 'package:krishi_karobar/models/enums.dart';
-import 'package:krishi_karobar/utils/helper/helper_method.dart';
-import 'package:uuid/uuid.dart';
+
+import '../utils/helper/helper_method.dart';
 
 class ServiceModel {
-  final String guid;
-  final Service service;
-  final String name;
-  final String description;
+final String id;
+final String uId;
 
-  double rate;
-  ServiceUnit unit;
-  bool isActive;
+String name;
+String description;
+double rate;
+String unit;
+bool isActive;
 
-  String? imageUrl;
+final DateTime createdAt;
+String? createdBy;
 
-  final DateTime? createdAt;
-  DateTime? updatedAt;
+DateTime? updatedAt;
+String? updatedBy;
 
-  final String createdBy;
+ServiceModel({
+required this.id,
+required this.uId,
+required this.name,
+required this.description,
+required this.rate,
+required this.unit,
+this.isActive = true,
+required this.createdAt,
+this.createdBy,
+this.updatedAt,
+this.updatedBy,
+});
 
-  ServiceModel({
-    required this.guid,
-    required this.service,
-    required this.name,
-    required this.description,
-    required this.rate,
-    required this.unit,
-    this.isActive = true,
-    this.imageUrl,
-    this.createdAt,
-    this.updatedAt,
-    required this.createdBy,
-  });
+factory ServiceModel.fromMap(
+Map<String, dynamic> map,
+) {
+return ServiceModel(
+id: toStringValue(
+map['id'] ?? map['guid'],
+),
+uId: toStringValue(
+map['uId'] ?? map['uid'],
+),
+name: toStringValue(
+map['name'],
+),
+description: toStringValue(
+map['description'],
+),
+rate: toDouble(
+map['rate'],
+),
+unit: toStringValue(
+map['unit'],
+),
+isActive: toBool(
+map['isActive'],
+defaultValue: true,
+),
+createdAt: toDateTime(
+map['createdAt'],
+) ??
+DateTime.now(),
+createdBy: map['createdBy']?.toString(),
+updatedAt: toDateTime(
+map['updatedAt'],
+),
+updatedBy: map['updatedBy']?.toString(),
+);
+}
 
-  factory ServiceModel.fromMap(Map<String, dynamic> map) {
-    return ServiceModel(
-      guid: toStringValue(map['guid'] ?? map['id']),
-      service: enumFromString(Service.values, map['service']?.toString()),
-      name: toStringValue(map['name']),
-      description: toStringValue(map['description']),
-      rate: toDouble(map['rate']),
-      unit: enumFromString(ServiceUnit.values, map['unit']?.toString()),
-      isActive: toBool(map['isActive'], defaultValue: true),
-      imageUrl: map['imageUrl']?.toString(),
-      createdAt: toDateTime(map['createdAt']),
-      updatedAt: toDateTime(map['updatedAt']),
-      createdBy: toStringValue(map['createdBy']),
-    );
-  }
+Map<String, dynamic> toMap() {
+return {
+'id': id,
+'uId': uId,
+'name': name,
+'description': description,
+'rate': rate,
+'unit': unit,
+'isActive': isActive,
+'createdAt': createdAt.toIso8601String(),
+'createdBy': createdBy,
+'updatedAt': updatedAt?.toIso8601String(),
+'updatedBy': updatedBy,
+};
+}
 
-  factory ServiceModel.empty([String name = '']) {
-    return ServiceModel(
-      guid: const Uuid().v4(),
-      service: Service.rotavator,
-      name: name,
-      description: '',
-      rate: 0.0,
-      unit: ServiceUnit.hour,
-      isActive: true,
-      imageUrl: null,
-      createdAt: DateTime.now(),
-      updatedAt: null,
-      createdBy: LoginController.loginUser.guid,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'guid': guid,
-      'service': service.name,
-      'name': name,
-      'description': description,
-      'rate': rate,
-      'unit': unit.name,
-      'isActive': isActive,
-      'imageUrl': imageUrl,
-      'createdAt': createdAt?.toIso8601String(),
-      'updatedAt': updatedAt?.toIso8601String(),
-      'createdBy': createdBy,
-    };
-  }
+factory ServiceModel.empty() {
+return ServiceModel(
+id: '',
+uId: '',
+name: '',
+description: '',
+rate: 0,
+unit: 'hour',
+isActive: true,
+createdAt: DateTime.now(),
+);
+}
 }

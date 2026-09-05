@@ -78,7 +78,7 @@ class SettingsScreen extends StatelessWidget {
                             itemCount: vController.vehiclesList.length,
                             itemBuilder: (context, index) {
                               final vehicle = vController.vehiclesList[index];
-                              final isSelected = vController.selectedVehicle.value?.guid == vehicle.guid;
+                              final isSelected = vController.selectedVehicle.value?.id == vehicle.id;
                               return Container(
 
                                 margin: const EdgeInsets.only(bottom: 4),

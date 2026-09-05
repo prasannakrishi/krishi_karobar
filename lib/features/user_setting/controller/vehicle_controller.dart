@@ -54,12 +54,12 @@ class VehicleController extends GetxController{
 
   Future<void> fetchUsers() async {
     try {
-      final users = await firebaseService.getAllUsers();
+      final users = DataCacheService.instance.getCachedRecords<UserModel>('user');
       allUsers.assignAll(users);
       
       vehicleOwners.assignAll(users.where((u) => u.userType == 'Vehicle Owner').toList());
-      drivers.assignAll(users.where((u) => u.roles == 'Driver').toList());
-      supervisors.assignAll(users.where((u) => u.roles == 'Supervisor').toList());
+      drivers.assignAll(users.where((u) => u.roles.contains('Driver')).toList());
+      supervisors.assignAll(users.where((u) => u.roles.contains('Supervisor')).toList());
     } catch (e) {
       debugPrint("Error fetching users: $e");
     }
@@ -86,7 +86,7 @@ class VehicleController extends GetxController{
 
   Future<void> loadVehicles() async {
     isLoading.value = true;
-    final list = await firebaseService.getAllVehicles();
+    final list = DataCacheService.instance.getCachedRecords<VehicleModel>('vehicle');
     vehiclesList.assignAll(list);
     isLoading.value = false;
   }
@@ -112,7 +112,6 @@ class VehicleController extends GetxController{
     // Update ActivityController if it exists to reflect changes in Activity list
     if (Get.isRegistered<ActivityController>()) {
       final activityController = Get.find<ActivityController>();
-      activityController.loadDefaultVehicleFromSettings();
       activityController.applyLocalFilters();
     }
 
@@ -124,11 +123,11 @@ class VehicleController extends GetxController{
     vNumberController.text = v.number;
     vNameController.text = v.name;
     vTypeController.text = v.vehicleType;
-    vOwnerController.text = DataCacheService.instance.getUserName(v.ownerId);
+    vOwnerController.text = DataCacheService.instance.getCachedRecord<UserModel>('users',v.ownerId)?.name ?? '';
     vModelController.text = v.model ?? '';
-    selectedOwner.value = allUsers.firstWhereOrNull((u) => u.guid == v.ownerId);
-    selectedDriver.value = allUsers.firstWhereOrNull((u) => u.guid == v.driverId);
-    selectedSupervisor.value = allUsers.firstWhereOrNull((u) => u.guid == v.supervisorId);
+    selectedOwner.value = allUsers.firstWhereOrNull((u) => u.id == v.ownerId);
+    selectedDriver.value = allUsers.firstWhereOrNull((u) => u.id == v.driverId);
+    selectedSupervisor.value = allUsers.firstWhereOrNull((u) => u.id == v.supervisorId);
   }
 
   void clearVehicle() {
@@ -154,21 +153,21 @@ class VehicleController extends GetxController{
   }
 
   void saveVehicle() async {
-    final guid = uuid.v4();
+    final id = uuid.v4();
     final newVehicle = VehicleModel(
-      guid: guid,
+      id: id,
       name: vNameController.text,
       number: vNumberController.text,
       vehicleType: vTypeController.text,
-      ownerId: selectedOwner.value?.guid ?? '',
+      ownerId: selectedOwner.value?.id ?? '',
       model: vModelController.text,
-      driverId: selectedDriver.value?.guid,
-      supervisorId: selectedSupervisor.value?.guid,
+      driverId: selectedDriver.value?.id,
+      supervisorId: selectedSupervisor.value?.id,
       createdAt: DateTime.now(),
-      createdBy: LoginController.loginUser.guid,
+      createdBy: LoginController.loginUser.id, uId: '',
     );
 
-    final success = await firebaseService.save(newVehicle);
+    final success = await firebaseService.saveRecord('vehicles',newVehicle.id, newVehicle.toMap());
     if (success) {
       loadVehicles(); // Refresh list
       setDefaultVehicle(newVehicle);

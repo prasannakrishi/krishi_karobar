@@ -2,68 +2,92 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../../../utils/constants/sizes.dart';
-import '../../../../../utils/constants/text_strings.dart';
-import '../../../../../utils/theme/widget_themes/custom_decoration.dart';
+import 'package:krishi_karobar/utils/constants/colors.dart';
+import 'package:krishi_karobar/utils/constants/sizes.dart';
+import 'package:krishi_karobar/utils/constants/text_strings.dart';
+import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
+
 import '../../../controllers/login_controllers.dart';
 
 class URegisterForm extends StatelessWidget {
   const URegisterForm({super.key});
 
+  static const _userTypes = ['Driver', 'Supervisor', 'Staff', 'Admin'];
+
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<LoginController>();
-    return Material(
-        color: Colors.transparent,
-        child: Form(
-            key: controller.registerFormKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Conform Password
-                const SizedBox(height: USizes.spaceBtwInputFields),
-                Obx(() => TextFormField(
-                  controller: controller.confirmpassword,
-                  obscureText: controller.hidePassword.value,
-                  decoration: CustomDecoration.uInputDecoration(
-                    prefixIcon: const Icon(Iconsax.password_check),
-                    labelText: UTexts.conformpassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(controller.hidePassword.value ? Iconsax.eye_slash : Iconsax.eye),
-                      onPressed: () => controller.hideConfirmPassword.value = !controller.hideConfirmPassword.value)
-                  )
-                )),
-                const SizedBox(height: USizes.spaceBtwInputFields),
-                
-                TextFormField(
-                    controller: controller.name,
-                    decoration: CustomDecoration.uInputDecoration(labelText: 'Full Name', prefixIcon: const Icon(Iconsax.user))
-                ),
-                const SizedBox(height: USizes.spaceBtwInputFields),
 
-                TextFormField(
-                    controller: controller.address,
-                    decoration: CustomDecoration.uInputDecoration(labelText: 'Full Address', prefixIcon: const Icon(Iconsax.location))
-                ),
-                const SizedBox(height: USizes.spaceBtwInputFields),
-                Obx(() {
-                  final items = ['Driver', 'Supervisor', 'Staff', 'Admin'];
-                  final current = controller.selectedUserType.value;
-                  final value = items.contains(current) ? current : items.first;
-                  
-                  return DropdownButtonFormField<String>(
-                    decoration: CustomDecoration.uInputDecoration(labelText: 'User Type', prefixIcon: const Icon(Iconsax.category)),
-                    items: items.map((String val) {
-                      return DropdownMenuItem<String>(
-                          value: val, child: Text(val));
-                    }).toList(),
-                    onChanged: (newValue) => controller.selectedUserType.value = newValue!,
-                  );
-                }),
-              ],
-            )
-        )
+    return Form(
+      key: controller.registerFormKey,
+      child: Column(
+        children: [
+          const SizedBox(height: USizes.md),
+          _confirmPassword(controller),
+          _field(controller.name, 'Full Name', Iconsax.user),
+          _field(controller.address, 'Full Address', Iconsax.location),
+          _userType(controller),
+        ],
+      ),
     );
+  }
 
+  Widget _confirmPassword(LoginController controller) {
+    return Obx(
+      () => TextFormField(
+        controller: controller.confirmpassword,
+        obscureText: controller.hideConfirmPassword.value,
+        decoration: CustomDecoration.uInputDecoration(
+          prefixIcon: const Icon(Iconsax.password_check),
+          labelText: 'conformpassword',
+          suffixIcon: IconButton(
+            icon: Icon(
+              controller.hideConfirmPassword.value
+                  ? Iconsax.eye_slash
+                  : Iconsax.eye,
+            ),
+            onPressed: controller.hideConfirmPassword.toggle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(top: USizes.md),
+      child: TextFormField(
+        controller: controller,
+        decoration: CustomDecoration.uInputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+        ),
+      ),
+    );
+  }
+
+  Widget _userType(LoginController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(top: USizes.md),
+      child: Obx(
+        () => DropdownButtonFormField<String>(
+          value: _userTypes.contains(controller.selectedUserType.value)
+              ? controller.selectedUserType.value
+              : _userTypes.first,
+          decoration: CustomDecoration.uInputDecoration(
+            labelText: 'User Type',
+            prefixIcon: const Icon(Iconsax.category),
+          ),
+          items: _userTypes
+              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              controller.selectedUserType.value = value;
+            }
+          },
+        ),
+      ),
+    );
   }
 }

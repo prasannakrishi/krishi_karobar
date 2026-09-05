@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:krishi_karobar/utils/constants/image_strings.dart';
+import '../../utils/constants/background_config.dart';
+import '../../utils/constants/colors.dart';
 
 class UAppScaffold extends StatelessWidget {
   const UAppScaffold({
@@ -10,8 +11,6 @@ class UAppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.floatingActionButton,
     this.extendBodyBehindAppBar = true,
-    this.blur = 10.0,
-    this.overlayOpacity = 0.1,
   });
 
   final Widget body;
@@ -19,31 +18,17 @@ class UAppScaffold extends StatelessWidget {
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final bool extendBodyBehindAppBar;
-  final double blur;
-  final double overlayOpacity;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Background Image
-        Positioned.fill(
-          child: Image.asset(
-            UImages.loginBackground,
-            fit: BoxFit.cover,
-          ),
-        ),
-        // Blur Effect
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-            child: Container(
-              color: Colors.black,
-            ),
-          ),
-        ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        // Main Content
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _background(),
+        if (UBackgroundConfig.blur > 0) _blur(),
+        _overlay(isDark),
         Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: extendBodyBehindAppBar,
@@ -53,6 +38,49 @@ class UAppScaffold extends StatelessWidget {
           floatingActionButton: floatingActionButton,
         ),
       ],
+    );
+  }
+
+  Widget _background() {
+    if (!UBackgroundConfig.useImage) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              UColors.primaryLight,
+              UColors.light,
+              UColors.secondaryLight,
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Opacity(
+      opacity: UBackgroundConfig.imageOpacity,
+      child: Image.asset(UBackgroundConfig.image, fit: BoxFit.cover),
+    );
+  }
+
+  Widget _blur() {
+    return BackdropFilter(
+      filter: ImageFilter.blur(
+        sigmaX: UBackgroundConfig.blur,
+        sigmaY: UBackgroundConfig.blur,
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+
+  Widget _overlay(bool isDark) {
+    return Container(
+      color:
+          (isDark
+                  ? UBackgroundConfig.darkOverlay
+                  : UBackgroundConfig.lightOverlay)
+              .withValues(alpha: UBackgroundConfig.overlayOpacity),
     );
   }
 }

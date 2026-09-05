@@ -1,139 +1,273 @@
+import 'dart:async';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+
 import '../models/models.dart';
+import 'firebase_service.dart';
 
 class DataCacheService extends GetxController {
-  static DataCacheService get instance => Get.find();
+  static DataCacheService get instance => Get.find<DataCacheService>();
 
-  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  DataCacheService({
+    FirebaseService? firebaseService,
+  }) : _firebaseService = firebaseService ?? FirebaseService();
 
-  // Maps to store data by GUID for fast lookup
+  final FirebaseService _firebaseService;
+
   final users = <String, UserModel>{}.obs;
   final customers = <String, CustomerModel>{}.obs;
   final vehicles = <String, VehicleModel>{}.obs;
   final services = <String, ServiceModel>{}.obs;
   final activities = <String, ActivityModel>{}.obs;
+  final payments = <String, PaymentModel>{}.obs;
+
+  final List<StreamSubscription<DatabaseEvent>> _listeners = [];
 
   @override
   void onInit() {
     super.onInit();
-    // System User is always in cache
-    users[UserModel.systemGuid] = UserModel.systemUser;
+    initCache();
   }
 
-  /// Initial load of top 50 records and setup real-time listeners
   Future<void> initCache() async {
     await Future.wait([
-      _setupListener('users', (data) => UserModel.fromMap(data), users),
-      _setupListener('customers', (data) => CustomerModel.fromMap(data), customers),
-      _setupListener('vehicles', (data) => VehicleModel.fromMap(data), vehicles),
-      _setupListener('services', (data) => ServiceModel.fromMap(data), services),
-      _setupListener('activities', (data) => ActivityModel.fromMap(data), activities, limit: 50),
+      _setupCache(
+        path: 'users',
+        cache: users,
+        fromMap: UserModel.fromMap,
+      ),
+      _setupCache(
+        path: 'customers',
+        cache: customers,
+        fromMap: CustomerModel.fromMap,
+      ),
+      _setupCache(
+        path: 'vehicles',
+        cache: vehicles,
+        fromMap: VehicleModel.fromMap,
+      ),
+      _setupCache(
+        path: 'services',
+        cache: services,
+        fromMap: ServiceModel.fromMap,
+      ),
+      _setupCache(
+        path: 'activities',
+        cache: activities,
+        fromMap: ActivityModel.fromMap,
+        limitToLast: 50,
+      ),
+      _setupCache(
+        path: 'payments',
+        cache: payments,
+        fromMap: PaymentModel.fromMap,
+      ),
     ]);
   }
 
-  Future<void> _setupListener<T>(
-    String path,
-    T Function(Map<String, dynamic>) fromMap,
-    RxMap<String, T> cache, {
-    int? limit,
+  Future<void> _setupCache<T>({
+    required String path,
+    required RxMap<String, T> cache,
+    required T Function(Map<String, dynamic>) fromMap,
+    int? limitToLast,
   }) async {
-    Query query = _db.child(path);
-    if (limit != null) {
-      query = query.limitToLast(limit);
-    }
-
-    // 1. Initial Fetch
-    final snapshot = await query.get();
-    if (snapshot.exists) {
-      final rawData = snapshot.value as Map;
-      rawData.forEach((key, value) {
-        try {
-          final data = Map<String, dynamic>.from(value as Map);
-          final model = fromMap(data);
-          final guid = (data['guid'] ?? key).toString();
-          cache[guid] = model;
-        } catch (e) {
-          debugPrint('Error parsing $path ($key): $e');
-        }
-      });
-    }
-
-    // 2. Listen for Changes
-    query.onChildAdded.listen((event) {
-      _updateCache(event.snapshot, fromMap, cache);
-    });
-
-    query.onChildChanged.listen((event) {
-      _updateCache(event.snapshot, fromMap, cache);
-    });
-
-    query.onChildRemoved.listen((event) {
-      final key = event.snapshot.key;
-      if (key != null) {
-        // Find by key if guid is not available, but usually we use GUID
-        // Realistically we'd need to search the map if key != guid
-        cache.remove(key);
-      }
-    });
-  }
-
-  void _updateCache<T>(
-    DataSnapshot snapshot,
-    T Function(Map<String, dynamic>) fromMap,
-    RxMap<String, T> cache,
-  ) {
     try {
-      if (snapshot.value == null) return;
-      final data = Map<String, dynamic>.from(snapshot.value as Map);
-      final model = fromMap(data);
-      final guid = (data['guid'] ?? snapshot.key).toString();
-      cache[guid] = model;
-    } catch (e) {
-      debugPrint('Error updating cache for ${snapshot.key}: $e');
+      final records = await _firebaseService.getRecords(path);
+
+      for (final data in records) {
+        _addToCache(
+          cache: cache,
+          data: data,
+          fromMap: fromMap,
+        );
+      }
+
+      final query = _firebaseService.getQuery(
+        path,
+        limitToLast: limitToLast,
+      );
+
+      _listeners.add(
+        query.onChildAdded.listen(
+              (event) => _handleChildAdded(
+            cache: cache,
+            snapshot: event.snapshot,
+            fromMap: fromMap,
+          ),
+        ),
+      );
+
+      _listeners.add(
+        query.onChildChanged.listen(
+              (event) => _handleChildChanged(
+            cache: cache,
+            snapshot: event.snapshot,
+            fromMap: fromMap,
+          ),
+        ),
+      );
+
+      _listeners.add(
+        query.onChildRemoved.listen(
+              (event) => _handleChildRemoved(
+            cache: cache,
+            snapshot: event.snapshot,
+          ),
+        ),
+      );
+    } catch (error) {
+      _logError('initializing', path, error);
     }
   }
 
-  // --- Lookup Methods ---
+  void _handleChildAdded<T>({
+    required RxMap<String, T> cache,
+    required DataSnapshot snapshot,
+    required T Function(Map<String, dynamic>) fromMap,
+  }) {
+    final data = _snapshotToMap(snapshot);
 
-  UserModel getUser(String? guid) {
-    if (guid == null || guid.isEmpty) return UserModel.empty();
-    return users[guid] ?? UserModel.empty();
+    _addToCache(
+      cache: cache,
+      data: data,
+      fromMap: fromMap,
+    );
   }
 
-  CustomerModel getCustomer(String? guid) {
-    if (guid == null || guid.isEmpty) return CustomerModel.empty();
-    return customers[guid] ?? CustomerModel.empty();
+  void _handleChildChanged<T>({
+    required RxMap<String, T> cache,
+    required DataSnapshot snapshot,
+    required T Function(Map<String, dynamic>) fromMap,
+  }) {
+    final data = _snapshotToMap(snapshot);
+
+    _addToCache(
+      cache: cache,
+      data: data,
+      fromMap: fromMap,
+    );
   }
 
-  VehicleModel getVehicle(String? guid) {
-    if (guid == null || guid.isEmpty) return VehicleModel.empty();
-    return vehicles[guid] ?? VehicleModel.empty();
+  void _handleChildRemoved<T>({
+    required RxMap<String, T> cache,
+    required DataSnapshot snapshot,
+  }) {
+    final id = snapshot.key;
+
+    if (id == null || id.isEmpty) return;
+
+    cache.remove(id);
   }
 
-  ServiceModel getService(String? guid) {
-    if (guid == null || guid.isEmpty) return ServiceModel.empty();
-    return services[guid] ?? ServiceModel.empty();
-  }
-  
-  String getUserName(String? guid) {
-    if (guid == null || guid.isEmpty) return '';
-    return users[guid]?.fullname ?? 'Unknown User';
+  void _addToCache<T>({
+    required RxMap<String, T> cache,
+    required Map<String, dynamic> data,
+    required T Function(Map<String, dynamic>) fromMap,
+  }) {
+    try {
+      final id = data['id']?.toString();
+
+      if (id == null || id.isEmpty) return;
+
+      if (T == UserModel && id == UserModel.systemUser.id) {
+        return;
+      }
+
+      cache[id] = fromMap(data);
+    } catch (error) {
+      _logError('adding record to cache', null, error);
+    }
   }
 
-  String getCustomerName(String? guid) {
-    if (guid == null || guid.isEmpty) return '';
-    return customers[guid]?.name ?? 'Unknown Customer';
+  Map<String, dynamic> _snapshotToMap(
+      DataSnapshot snapshot,
+      ) {
+    final value = snapshot.value;
+
+    if (value is! Map) {
+      return {};
+    }
+
+    final data = Map<String, dynamic>.from(value);
+
+    data['id'] ??= snapshot.key;
+
+    return data;
   }
 
-  String getVehicleNumber(String? guid) {
-    if (guid == null || guid.isEmpty) return '';
-    return vehicles[guid]?.number ?? 'Unknown';
+  RxMap<String, T> getCache<T>(String path) {
+    switch (path.toLowerCase()) {
+      case 'users':
+        return users as RxMap<String, T>;
+
+      case 'customers':
+        return customers as RxMap<String, T>;
+
+      case 'vehicles':
+        return vehicles as RxMap<String, T>;
+
+      case 'services':
+        return services as RxMap<String, T>;
+
+      case 'activities':
+        return activities as RxMap<String, T>;
+
+      case 'payments':
+        return payments as RxMap<String, T>;
+
+      default:
+        throw UnsupportedError(
+          'Unsupported cache path: $path',
+        );
+    }
   }
 
-  String getServiceName(String? guid) {
-    if (guid == null || guid.isEmpty) return '';
-    return services[guid]?.name ?? 'Unknown Service';
+  List<T> getCachedRecords<T>(String path) {
+    return getCache<T>(path).values.toList();
+  }
+
+  T? getCachedRecord<T>(
+      String path,
+      String id,
+      ) {
+    return getCache<T>(path)[id];
+  }
+
+  T? getRecordByValue<T>(
+      String path,
+      bool Function(T item) test,
+      ) {
+    for (final item in getCache<T>(path).values) {
+      if (test(item)) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  void _logError(
+      String operation,
+      String? path,
+      Object error,
+      ) {
+    final location = path == null ? '' : ' [$path]';
+
+    debugPrint(
+      'DataCacheService: Error $operation$location: $error',
+    );
+  }
+
+  @override
+  void onClose() {
+    for (final listener in _listeners) {
+      listener.cancel();
+    }
+
+    _listeners.clear();
+
+    super.onClose();
   }
 }
