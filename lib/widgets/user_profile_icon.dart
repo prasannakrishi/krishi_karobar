@@ -1,51 +1,37 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:krishi_karobar/features/activity_monitor/controllers/monitor_controller.dart';
+import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
 
-import '../models/user_model.dart';
-import '../features/authentication/screens/login/login_screen.dart';
-
-class UserProfileIcon extends StatefulWidget {
+class UserProfileIcon extends StatelessWidget {
   final MonitorController activityController;
-  const UserProfileIcon({super.key, required this.activityController});
 
-  @override
-  _UserProfileIconState createState() => _UserProfileIconState();
-}
-
-class _UserProfileIconState extends State<UserProfileIcon> {
-  UserModel? _userModel;
-
+  const UserProfileIcon({
+    super.key,
+    required this.activityController,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = _userModel?.fullname ?? user?.displayName ?? 'Anonymous';
-    final userId = _userModel?.uId;
+    final user = LoginController.loginUser;
 
     return PopupMenuButton<String>(
       icon: const Icon(Icons.person),
       onSelected: (value) async {
         if (value == 'logout') {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
-            );
-          }
+          await Get.find<LoginController>().logout();
         }
       },
-      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+      itemBuilder: (context) => [
         PopupMenuItem<String>(
-          value: 'username',
           enabled: false,
-          child: Text('Signed in as: $userName'),
+          value: 'username',
+          child: Text('Signed in as: ${user.fullname}'),
         ),
         PopupMenuItem<String>(
-          value: 'userid',
           enabled: false,
-          child: Text('User ID: $userId'),
+          value: 'userid',
+          child: Text('User ID: ${user.uId}'),
         ),
         const PopupMenuDivider(),
         const PopupMenuItem<String>(

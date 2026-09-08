@@ -54,19 +54,18 @@ class UTexts {
 
   // Password
   static const forgetPasswordTitle = 'Forgot Password';
-  static const forgetPasswordSubTitle =
-      'Enter your registered phone number and we will send you a password reset link.';
+  static const forgetPasswordSubTitle ='Enter your registered phone number and we will send you a password reset link.';
   static const changeYourPasswordTitle = 'Password Reset Email Sent';
-  static const changeYourPasswordSubTitle =
-      'We have sent a secure password reset link to your registered email address.';
+  static const changeYourPasswordSubTitle ='We have sent a secure password reset link to your registered email address.';
   static const resendEmailIn = 'Resend email in';
 
   // Navigation
   static const dashboard = 'Dashboard';
+  static const monitor = 'Acivity Monitor';
+  static const activities = 'Activities Records';
+  static const settings = 'User Settings';
   static const customers = 'Customers';
   static const vehicles = 'Vehicles';
   static const services = 'Services';
-  static const activities = 'Activities';
   static const profile = 'Profile';
-  static const settings = 'Settings';
 }

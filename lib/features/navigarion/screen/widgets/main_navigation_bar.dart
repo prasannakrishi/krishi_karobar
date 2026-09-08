@@ -15,19 +15,10 @@ class MainNavigationBar extends GetView<NavigationController> {
         selectedIndex: controller.selectedIndex.value,
         onDestinationSelected: controller.onTabSelected,
         destinations: const [
-          NavigationDestination(icon: Icon(Iconsax.home_2), label: UTexts.dashboard),
-          NavigationDestination(
-            icon: Icon(Iconsax.monitor),
-            label: UTexts.dashboard,
-          ),
-          NavigationDestination(
-            icon: Icon(Iconsax.document_text),
-            label: UTexts.activities,
-          ),
-          NavigationDestination(
-            icon: Icon(Iconsax.user),
-            label: UTexts.settings,
-          ),
+          NavigationDestination(icon: Icon(Iconsax.music_dashboard), label: UTexts.dashboard),
+          NavigationDestination(icon: Icon(Iconsax.monitor), label: UTexts.monitor),
+          NavigationDestination(icon: Icon(Iconsax.document_text), label: UTexts.activities),
+          NavigationDestination(icon: Icon(Iconsax.user),label: UTexts.settings),
         ],
       ),
     );

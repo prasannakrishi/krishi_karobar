@@ -15,30 +15,44 @@ class ActivityForm extends StatelessWidget {
 
     return Column(
       children: [
-        _ServiceSelector(controller: controller),
-        const SizedBox(height: 10),
-        TextFormField(
-          controller: controller.rate,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+        // Service and Rate
+        Row(
+          children: [
+            Expanded(
+              child: _ServiceSelector(controller: controller),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextFormField(
+                controller: controller.rate,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'),),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Rate / Hour',
+                  prefixText: 'Rs. ',
+                ),
+              ),
+            ),
+
           ],
-          decoration: const InputDecoration(
-            labelText: 'Rate / Hour',
-            prefixText: 'Rs. ',
-          ),
         ),
         const SizedBox(height: 10),
+
         TextFormField(
           controller: controller.description,
-          maxLines: 2,
+          maxLines: 1,
           decoration: const InputDecoration(labelText: 'Description'),
         ),
         const SizedBox(height: 10),
+        // Start and End Time
         Obx(
           () => Row(
             children: [
-              Expanded(
+              /*Expanded(
                 child: _InfoCard(
                   title: 'START TIME',
                   value: timer.startTimeText.value,
@@ -50,6 +64,30 @@ class ActivityForm extends StatelessWidget {
                   title: 'END TIME',
                   value: timer.endTimeText.value,
                 ),
+              ),*/
+
+              Expanded(
+                child: TextFormField(
+                  initialValue: timer.endTimeText.value,
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16),
+                  decoration: const InputDecoration(
+                    labelText: 'Start Time',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: timer.endTimeText.value,
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 20),
+                  decoration: const InputDecoration(
+                    labelText: 'End Time',
+                  ),
+                ),
               ),
             ],
           ),
@@ -57,19 +95,17 @@ class ActivityForm extends StatelessWidget {
         const SizedBox(height: 8),
         Obx(
           () => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: _InfoCard(
-                  title: 'DURATION',
-                  value: timer.duration.value,
-                ),
+              _InfoCard(
+                title: 'DURATION',
+                value: timer.duration.value,
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: _InfoCard(
-                  title: 'AMOUNT',
-                  value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
-                ),
+              _InfoCard(
+                title: 'AMOUNT',
+                value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+
               ),
             ],
           ),
@@ -131,7 +167,7 @@ class _ServiceSelector extends StatelessWidget {
                           leading: const Icon(Icons.build_outlined),
                           title: Text(service.name),
                           subtitle: Text(
-                            'Rs. ${service.rate.toStringAsFixed(0)} / hour',
+                            'रु ${service.rate.toStringAsFixed(0)} / hour',
                           ),
                           onTap: () => controller.selectService(service),
                         );
@@ -146,23 +182,34 @@ class _ServiceSelector extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.value});
 
   final String title;
   final String value;
+  final double? maxWidth;
+  final double titleFontSize;
+  final double valueFontSize;
+
+  const _InfoCard({
+    required this.title,
+    required this.value,
+    this.maxWidth,
+    this.titleFontSize = 20,
+    this.valueFontSize = 28,
+  });
+
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
-            Text(title, style: Theme.of(context).textTheme.labelSmall),
+            Text(title, style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
             Text(
               value.isEmpty ? '-' : value,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.headlineLarge,
               textAlign: TextAlign.center,
             ),
           ],

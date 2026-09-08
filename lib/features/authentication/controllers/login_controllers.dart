@@ -2,12 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../utils/helper/helper_widgets.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
+import '../screens/login/login_screen.dart';
 import '../../navigarion/screen/main_screen.dart';
 
 class LoginController extends GetxController {
@@ -17,6 +19,7 @@ class LoginController extends GetxController {
   final FirebaseService firebaseService = FirebaseService();
   final GetStorage localStorage = GetStorage();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final Uuid _uuid = const Uuid();
 
   static UserModel loginUser = UserModel.empty();
 
@@ -27,7 +30,6 @@ class LoginController extends GetxController {
   final hidePassword = true.obs;
   final hideConfirmPassword = true.obs;
   final isNewUser = false.obs;
-  final selectedUserType = 'Staff'.obs;
 
   final phone = TextEditingController();
   final password = TextEditingController();
@@ -40,12 +42,15 @@ class LoginController extends GetxController {
   @override
   void onInit() {
     phone.text = localStorage.read('REMEMBER_ME_PHONE') ?? '';
-    password.text = localStorage.read('REMEMBER_ME_PASSWORD') ?? '';
     super.onInit();
   }
 
-  String _getFirebaseEmail(String phoneNumber) {
-    return '${phoneNumber.replaceAll('+', '').trim()}@kkarobar.com';
+  String get firebaseEmail =>
+      '${phone.text.replaceAll('+', '').trim()}@kkarobar.com';
+
+  String get phoneNumber {
+    final value = phone.text.trim();
+    return value.startsWith('+977') ? value : '+977$value';
   }
 
   Future<void> phoneAndPasswordSignIn() async {
@@ -53,35 +58,30 @@ class LoginController extends GetxController {
 
     await _runAuth(() async {
       if (!await NetworkManager.instance.isConnected()) {
-        return _offlineLogin();
+        throw Exception('Please connect to the internet to sign in.');
       }
 
-      try {
-        await _auth.signInWithEmailAndPassword(
-          email: _getFirebaseEmail(phone.text),
-          password: password.text.trim(),
-        );
-      } on FirebaseAuthException catch (e) {
-        throw _authError(e);
+      final credential = await _signInWithPassword();
+
+      final firebaseUser = credential.user;
+
+      if (firebaseUser == null) {
+        throw Exception('Authentication failed.');
       }
 
-      final user = DataCacheService.instance.getRecordByValue<UserModel>(
-        'users',
-        (item) => item.phone == '+977${phone.text.trim()}',
-      );
-
-      if (user == null) {
-        throw Exception(
-          'User authenticated but profile not found in database.',
-        );
-      }
-
-      loginUser = user;
-      _saveLoginData();
-      _savePhoneHistory();
-
-      Get.offAll(() => const MainScreen());
+      await _completeAuthentication(firebaseUser);
     });
+  }
+
+  Future<UserCredential> _signInWithPassword() async {
+    try {
+      return await _auth.signInWithEmailAndPassword(
+        email: firebaseEmail,
+        password: password.text.trim(),
+      );
+    } on FirebaseAuthException catch (e) {
+      throw Exception(_authError(e));
+    }
   }
 
   Future<void> registerUser() async {
@@ -96,104 +96,175 @@ class LoginController extends GetxController {
 
       try {
         credential = await _auth.createUserWithEmailAndPassword(
-          email: _getFirebaseEmail(phone.text),
+          email: firebaseEmail,
           password: password.text.trim(),
         );
       } on FirebaseAuthException catch (e) {
-        throw _authError(e);
+        throw Exception(_authError(e));
       }
 
+      final firebaseUser = credential.user;
+
+      if (firebaseUser == null) {
+        throw Exception('Unable to create authentication account.');
+      }
+
+      final databaseId = _uuid.v4();
+      final userUid = await sequenceService.generateSequence('U');
       final now = DateTime.now().toUtc();
 
       final newUser = UserModel(
-        id: credential.user?.uid ?? '',
-        uId: await sequenceService.generateSequence('U'),
+        id: databaseId,
+        uId: userUid,
         fullname: name.text.trim(),
         email: email.text.trim().isEmpty ? null : email.text.trim(),
-        phone: '+977${phone.text.trim()}',
+        phone: phoneNumber,
         permanentAddress: address.text.trim(),
         temporaryAddress: address.text.trim(),
-        userType: selectedUserType.value,
-        roles: [],
+        userType: UserTypes.organization,
+        roles: const [],
         status: 'active',
         createdAt: now,
       );
 
-      if (newUser.id.isEmpty) {
-        throw Exception('Unable to create user record ID.');
-      }
-
-      final success = await firebaseService.saveRecord(
+      final profileSaved = await firebaseService.saveRecord(
         'users',
-        newUser.id,
+        databaseId,
         newUser.toMap(),
       );
 
-      if (!success) {
-        throw Exception('Account created but profile could not be saved.');
+      if (!profileSaved) {
+        await _auth.currentUser?.delete();
+        throw Exception(
+          'Account created but user profile could not be saved.',
+        );
       }
 
-      loginUser = newUser;
-      _saveLoginData();
-      _savePhoneHistory();
+      final authMappingSaved = await firebaseService.saveRecord(
+        'authUsers',
+        firebaseUser.uid,
+        {
+          'recordId': databaseId,
+          'status': 'active',
+          'roles': {
+            for (final role in UserRoles.values) role: false,
+          },
+        },
+      );
 
-      Get.offAll(() => const MainScreen());
+      if (!authMappingSaved) {
+        await firebaseService.deleteRecord('users', databaseId);
+        await _auth.currentUser?.delete();
+        throw Exception(
+          'Account mapping could not be created.',
+        );
+      }
+
+      await _completeAuthentication(firebaseUser);
     });
   }
 
-  Future<void> _offlineLogin() async {
-    final savedPhone = localStorage.read('REMEMBER_ME_PHONE');
-    final savedPassword = localStorage.read('REMEMBER_ME_PASSWORD');
+  Future<void> completePhoneAuthentication(
+      User firebaseUser,
+      ) async {
+    await _completeAuthentication(firebaseUser);
+  }
 
-    if (savedPhone != phone.text.trim() ||
-        savedPassword != password.text.trim()) {
-      throw Exception('No saved user found. Please connect to internet.');
+  Future<void> _completeAuthentication(
+      User firebaseUser,
+      ) async {
+    final profile = await UserProfileResolver().resolve(firebaseUser);
+
+    if (profile == null) {
+      await _auth.signOut();
+      throw Exception( 'User profile not found or account is inactive.');
     }
 
-    final userData = localStorage.read('login_user_data');
+    loginUser = profile;
 
-    if (userData == null) {
-      throw Exception('No saved user data found. Please connect to internet.');
+    if (!profile.isGuest) {
+      if (!Get.isRegistered<DataCacheService>()) {
+        Get.put(DataCacheService());
+      }
+
+      await DataCacheService.instance.initializeForUser(profile);
     }
 
-    loginUser = UserModel.fromMap(Map<String, dynamic>.from(userData));
+    _saveSession();
+    _savePhoneHistory();
 
     Get.offAll(() => const MainScreen());
   }
 
-  void _saveLoginData() {
+  void _saveSession() {
+    localStorage.write('loggedIn', true);
+    localStorage.write('userId', loginUser.id);
+
     if (!rememberMe.value) {
       localStorage.remove('REMEMBER_ME_PHONE');
-      localStorage.remove('REMEMBER_ME_PASSWORD');
-      localStorage.remove('login_user_data');
       return;
     }
 
-    localStorage.write('REMEMBER_ME_PHONE', phone.text.trim());
-    localStorage.write('REMEMBER_ME_PASSWORD', password.text.trim());
-    localStorage.write('login_user_data', loginUser.toMap());
+    localStorage.write(
+      'REMEMBER_ME_PHONE',
+      phone.text.trim(),
+    );
   }
 
   void _savePhoneHistory() {
     final history = <String>{
       phone.text.trim(),
-      ...List<String>.from(localStorage.read<List>('PHONE_HISTORY') ?? []),
+      ...List<String>.from(
+        localStorage.read<List>('PHONE_HISTORY') ?? [],
+      ),
     }.toList();
 
     localStorage.write('PHONE_HISTORY', history);
-    localStorage.write('login_user', loginUser.fullname);
   }
 
   List<String> get phoneHistory =>
-      List<String>.from(localStorage.read<List>('PHONE_HISTORY') ?? []);
+      List<String>.from(
+        localStorage.read<List>('PHONE_HISTORY') ?? [],
+      );
 
-  Future<void> _runAuth(Future<void> Function() action) async {
+  Future<void> logout() async {
+    try {
+      UFullScreenLoader.startLoading();
+
+      if (Get.isRegistered<DataCacheService>()) {
+        await DataCacheService.instance.clearCache();
+        Get.delete<DataCacheService>();
+      }
+
+      loginUser = UserModel.empty();
+
+      localStorage.remove('loggedIn');
+      localStorage.remove('userId');
+      localStorage.remove('selectedOrganization');
+      localStorage.remove('selectedVehicle');
+
+      await _auth.signOut();
+
+      Get.offAll(() => const LoginScreen());
+    } catch (e) {
+      errorSnackBar(
+        title: 'Logout Failed',
+        message: e.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      UFullScreenLoader.stopLoading();
+    }
+  }
+
+  Future<void> _runAuth(
+      Future<void> Function() action,
+      ) async {
     try {
       UFullScreenLoader.startLoading();
       await action();
     } catch (e) {
       errorSnackBar(
-        title: 'Login Failed',
+        title: 'Authentication Failed',
         message: e.toString().replaceFirst('Exception: ', ''),
       );
     } finally {
@@ -212,6 +283,10 @@ class LoginController extends GetxController {
         return 'This phone number is already registered.';
       case 'weak-password':
         return 'The password is too weak.';
+      case 'invalid-email':
+        return 'Invalid phone number.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
       default:
         return 'Authentication failed.';
     }

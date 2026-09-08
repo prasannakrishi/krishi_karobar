@@ -3,5 +3,5 @@ class UImages {
   static const String appLogo = "assets/logos/App_logo.png";
 
   // -- Login Background
-  static const String loginBackground = "assets/logos/App background.png";
+  static const String loginBackground = "assets/images/App background.png";
 }

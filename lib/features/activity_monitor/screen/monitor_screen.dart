@@ -17,17 +17,16 @@ class MonitorScreen extends GetView<MonitorController> {
       Get.put(MonitorController());
     }
     return UAppScaffold(
+      extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Activity Monitor'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 50),
         child: Column(
           children: [
             Obx(
               () => _Section(
-                title: 'Vehicle Information',
-                summary:
-                    controller.selectedVehicle.value?.number ??
-                    'Select vehicle',
+                title: 'VEHICLE INFO',
+                summary:controller.selectedVehicle.value?.number ??'Select vehicle',
                 collapsed: controller.vehicleCollapsed.value,
                 onTap: controller.vehicleCollapsed.toggle,
                 child: VehicleInfo(controller: controller),
@@ -36,7 +35,7 @@ class MonitorScreen extends GetView<MonitorController> {
             const SizedBox(height: 12),
             Obx(
               () => _Section(
-                title: 'Customer Information',
+                title: 'CUSTOMER INFO',
                 summary:
                     controller.selectedCustomer.value?.name ??
                     (controller.customerName.text.isEmpty
@@ -76,24 +75,25 @@ class _Section extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(10),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(title, style: theme.textTheme.titleMedium),
                   ),
-                  if (collapsed)
-                    Flexible(
-                      child: Text(
+                  if (collapsed) ...[
+                      const SizedBox(width: 5),
+                      Text(
                         summary,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
+                        textAlign: TextAlign.right,
                       ),
-                    ),
+                  ],
                   const SizedBox(width: 8),
                   Icon(
                     collapsed
@@ -118,6 +118,7 @@ class _Section extends StatelessWidget {
 class _MonitorControls extends StatelessWidget {
   const _MonitorControls({required this.controller});
   final MonitorController controller;
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(

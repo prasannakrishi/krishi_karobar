@@ -20,65 +20,71 @@ class ULoginForm extends StatelessWidget {
     final controller = Get.find<LoginController>();
 
     return Card(
-      elevation: 8,
+      elevation: 5,
       color: Colors.white.withAlpha(240),
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      margin: const EdgeInsets.symmetric(horizontal: 1, vertical: 5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(30),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: controller.loginFormKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _welcomeHeader(controller, context),
-              const SizedBox(height: USizes.lg),
-              _phoneField(controller),
-              const SizedBox(height: USizes.md),
-              _passwordField(controller),
-              Obx(
-                () => controller.isNewUser.value
-                    ? const URegisterForm()
-                    : _loginOptions(controller),
-              ),
-              const SizedBox(height: USizes.md),
-              _submitButton(controller),
-              const SizedBox(height: USizes.sm),
-              _divider(),
-              _switchAccountMode(controller),
-            ],
+        padding: const EdgeInsets.all(10),
+        child: Obx(
+              () => Form(
+            key: controller.isNewUser.value
+                ? controller.registerFormKey
+                : controller.loginFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _welcomeHeader(controller, context),
+                const SizedBox(height: USizes.lg),
+                _phoneField(controller),
+                const SizedBox(height: USizes.md),
+                _passwordField(controller),
+                if (controller.isNewUser.value)
+                  const URegisterForm()
+                else
+                  _loginOptions(controller),
+                const SizedBox(height: USizes.md),
+                _submitButton(controller),
+                const SizedBox(height: USizes.sm),
+                _divider(),
+                _switchAccountMode(controller),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _welcomeHeader(LoginController controller, BuildContext context) {
-    return Obx(
-      () => Column(
-        children: [
-          Text(
-            controller.isNewUser.value
-                ? UTexts.welcomeRegTitle
-                : UTexts.welcomeLoginTitle,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: UColors.primary,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
+  Widget _welcomeHeader(
+      LoginController controller,
+      BuildContext context,
+      ) {
+    return Column(
+      children: [
+        Text(
+          controller.isNewUser.value
+              ? UTexts.welcomeRegTitle
+              : UTexts.welcomeLoginTitle,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: UColors.primary,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: USizes.xs),
-          Text(
-            controller.isNewUser.value
-                ? UTexts.welcomeRegSubTitle
-                : UTexts.welcomeLoginSubTitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-            textAlign: TextAlign.center,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: USizes.xs),
+        Text(
+          controller.isNewUser.value
+              ? UTexts.welcomeRegSubTitle
+              : UTexts.welcomeLoginSubTitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.grey,
           ),
-        ],
-      ),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 
@@ -91,13 +97,26 @@ class ULoginForm extends StatelessWidget {
         prefixText: '+977 ',
         labelText: UTexts.phoneNo,
       ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Phone number is required.';
+        }
+
+        if (value.trim().length < 10) {
+          return 'Enter a valid phone number.';
+        }
+
+        return null;
+      },
       onTap: () {
         if (controller.phoneHistory.isEmpty) return;
 
         Get.dialog(
           UPhoneHistoryDialog(
             phoneHistory: controller.phoneHistory,
-            onSelect: (value) => controller.phone.text = value,
+            onSelect: (value) {
+              controller.phone.text = value;
+            },
           ),
         );
       },
@@ -106,7 +125,7 @@ class ULoginForm extends StatelessWidget {
 
   Widget _passwordField(LoginController controller) {
     return Obx(
-      () => TextFormField(
+          () => TextFormField(
         controller: controller.password,
         obscureText: controller.hidePassword.value,
         decoration: CustomDecoration.uInputDecoration(
@@ -114,11 +133,24 @@ class ULoginForm extends StatelessWidget {
           labelText: UTexts.password,
           suffixIcon: IconButton(
             icon: Icon(
-              controller.hidePassword.value ? Iconsax.eye_slash : Iconsax.eye,
+              controller.hidePassword.value
+                  ? Iconsax.eye_slash
+                  : Iconsax.eye,
             ),
-            onPressed: () => controller.hidePassword.toggle(),
+            onPressed: controller.hidePassword.toggle,
           ),
         ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Password is required.';
+          }
+
+          if (controller.isNewUser.value && value.length < 6) {
+            return 'Password must be at least 6 characters.';
+          }
+
+          return null;
+        },
       ),
     );
   }
@@ -130,18 +162,21 @@ class ULoginForm extends StatelessWidget {
         Row(
           children: [
             Obx(
-              () => Checkbox(
+                  () => Checkbox(
                 value: controller.rememberMe.value,
                 activeColor: UColors.primary,
-                onChanged: (value) =>
-                    controller.rememberMe.value = value ?? false,
+                onChanged: (value) {
+                  controller.rememberMe.value = value ?? false;
+                },
               ),
             ),
             const Text(UTexts.rememberMe),
           ],
         ),
         TextButton(
-          onPressed: () => Get.to(() => const ForgetPassScreen()),
+          onPressed: () => Get.to(
+                () => const ForgetPassScreen(),
+          ),
           child: const Text(
             UTexts.forgetPassword,
             style: TextStyle(
@@ -155,37 +190,39 @@ class ULoginForm extends StatelessWidget {
   }
 
   Widget _submitButton(LoginController controller) {
-    return Obx(
-      () => SizedBox(
-        width: double.infinity,
-        height: 55,
-        child: ElevatedButton(
-          onPressed: controller.isNewUser.value
-              ? controller.registerUser
-              : controller.phoneAndPasswordSignIn,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: UColors.primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
+    return SizedBox(
+      width: double.infinity,
+      height: 55,
+      child: ElevatedButton(
+        onPressed: controller.isNewUser.value
+            ? controller.registerUser
+            : controller.phoneAndPasswordSignIn,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: UColors.primary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                controller.isNewUser.value
-                    ? UTexts.registerAccount
-                    : UTexts.signIn,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: USizes.fontSizeLg,
-                  fontWeight: FontWeight.bold,
-                ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              controller.isNewUser.value
+                  ? UTexts.registerAccount
+                  : UTexts.signIn,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: USizes.fontSizeLg,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(width: USizes.sm),
-              const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-            ],
-          ),
+            ),
+            const SizedBox(width: USizes.sm),
+            const Icon(
+              Icons.arrow_forward,
+              color: Colors.white,
+              size: 20,
+            ),
+          ],
         ),
       ),
     );
@@ -194,41 +231,49 @@ class ULoginForm extends StatelessWidget {
   Widget _divider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: Colors.grey.shade300)),
+        Expanded(
+          child: Divider(color: Colors.grey.shade300),
+        ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: USizes.sm),
-          child: Text('OR', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          child: Text(
+            'OR',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+            ),
+          ),
         ),
-        Expanded(child: Divider(color: Colors.grey.shade300)),
+        Expanded(
+          child: Divider(color: Colors.grey.shade300),
+        ),
       ],
     );
   }
 
   Widget _switchAccountMode(LoginController controller) {
-    return Obx(
-      () => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          controller.isNewUser.value
+              ? UTexts.footerRegText
+              : UTexts.footerCreateText,
+        ),
+        TextButton(
+          onPressed: controller.isNewUser.toggle,
+          child: Text(
             controller.isNewUser.value
-                ? UTexts.footerRegText
-                : UTexts.footerCreateText,
-          ),
-          TextButton(
-            onPressed: controller.isNewUser.toggle,
-            child: Text(
-              controller.isNewUser.value
-                  ? UTexts.footerRegTextBtn
-                  : UTexts.footerCreateTextBtn,
-              style: const TextStyle(
-                color: UColors.primary,
-                fontWeight: FontWeight.bold,
-                decoration: TextDecoration.underline,
-              ),
+                ? UTexts.footerRegTextBtn
+                : UTexts.footerCreateTextBtn,
+            style: const TextStyle(
+              color: UColors.primary,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.underline,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

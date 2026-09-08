@@ -1,4 +1,6 @@
 import '../utils/helper/helper_method.dart';
+import 'user_roles.dart';
+import 'user_types.dart';
 
 class UserModel {
   static const String systemId = '00000000-0000-0000-0000-000000000000';
@@ -11,7 +13,7 @@ class UserModel {
   String? permanentAddress;
   String? temporaryAddress;
   List<String> roles;
-  String? userType;
+  String userType;
   String status;
   final DateTime createdAt;
   String? createdBy;
@@ -26,14 +28,44 @@ class UserModel {
     required this.phone,
     this.permanentAddress,
     this.temporaryAddress,
-    this.roles = const [],
-    this.userType,
+    List<String>? roles,
+    this.userType = UserTypes.organization,
     this.status = 'active',
     required this.createdAt,
     this.createdBy,
     this.updatedAt,
     this.updatedBy,
-  });
+  }) : roles = _normalizeRoles(roles ?? []);
+
+  static List<String> _normalizeRoles(List<String> roles) {
+    return roles
+        .map((role) => role.trim().toLowerCase())
+        .where(UserRoles.isValid)
+        .toSet()
+        .toList();
+  }
+
+  static String _normalizeUserType(String? userType) {
+    final value = userType?.trim().toLowerCase();
+
+    if (value == UserTypes.organization) {
+      return UserTypes.organization;
+    }
+
+    if (value == UserTypes.external) {
+      return UserTypes.external;
+    }
+
+    if (value == UserTypes.guest) {
+      return UserTypes.guest;
+    }
+
+    if (value == UserTypes.system) {
+      return UserTypes.system;
+    }
+
+    return UserTypes.organization;
+  }
 
   static UserModel _systemUser = UserModel(
     id: systemId,
@@ -43,8 +75,8 @@ class UserModel {
     phone: '9858028096',
     permanentAddress: 'Ghorahi-15, Dang',
     temporaryAddress: 'Ghorahi-15, Dang',
-    userType: 'system',
-    roles: ['admin'],
+    userType: UserTypes.system,
+    roles: [UserRoles.admin],
     status: 'active',
     createdAt: DateTime.parse('2026-01-01T00:00:00.000Z'),
   );
@@ -55,16 +87,20 @@ class UserModel {
     if (user.id != systemId) {
       throw ArgumentError('Invalid System User ID');
     }
+
     _systemUser = user;
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     final rawRoles = map['roles'];
+
     final roles = rawRoles is List
         ? rawRoles.map((role) => role.toString()).toList()
         : rawRoles == null
         ? <String>[]
         : [rawRoles.toString()];
+
+    final userType = _normalizeUserType(map['userType']?.toString());
 
     return UserModel(
       id: toStringValue(map['id']),
@@ -74,8 +110,8 @@ class UserModel {
       phone: toStringValue(map['phone']),
       permanentAddress: map['permanentAddress']?.toString(),
       temporaryAddress: map['temporaryAddress']?.toString(),
-      roles: roles,
-      userType: map['userType']?.toString(),
+      roles: userType == UserTypes.guest ? [] : roles,
+      userType: userType,
       status: toStringValue(map['status'], defaultValue: 'active'),
       createdAt: toDateTime(map['createdAt']) ?? DateTime.now(),
       createdBy: map['createdBy']?.toString(),
@@ -93,7 +129,7 @@ class UserModel {
       'phone': phone,
       'permanentAddress': permanentAddress,
       'temporaryAddress': temporaryAddress,
-      'roles': roles,
+      'roles': List<String>.from(roles),
       'userType': userType,
       'status': status,
       'createdAt': createdAt.toIso8601String(),
@@ -110,9 +146,22 @@ class UserModel {
       fullname: '',
       phone: '',
       roles: [],
+      userType: UserTypes.organization,
       status: 'active',
       createdAt: DateTime.now(),
     );
+  }
+
+  bool get isSystem => userType == UserTypes.system;
+
+  bool get isOrganization => userType == UserTypes.organization;
+
+  bool get isExternal => userType == UserTypes.external;
+
+  bool get isGuest => userType == UserTypes.guest;
+
+  bool hasRole(String role) {
+    return roles.contains(role);
   }
 
   String get name => fullname;

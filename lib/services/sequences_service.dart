@@ -7,21 +7,37 @@ class SequenceService extends GetxService {
   static const String _activitySequence = 'activity_id';
 
   Future<String> generateSequence(String prefix) async {
-    final ref = _db.child('$_sequencePath/$prefix');
+    final value = prefix.trim().toUpperCase();
+
+    if (value.isEmpty) {
+      throw ArgumentError('Sequence prefix cannot be empty.');
+    }
+
+    final ref = _db.child('$_sequencePath/$value');
+
     final result = await ref.runTransaction((data) {
-      final oldId = data?.toString() ?? '$prefix-0';
+      if (data == null) return Transaction.abort();
+
+      final oldId = data.toString();
       final match = RegExp(r'^(.*?)(\d+)$').firstMatch(oldId);
-      final text = match?.group(1) ?? '$prefix-';
-      final numberText = match?.group(2) ?? '0';
-      final number = int.tryParse(numberText) ?? 0;
-      final nextNumber = number + 1;
-      final nextId =
-          '$text${nextNumber.toString().padLeft(numberText.length, '0')}';
+
+      if (match == null) return Transaction.abort();
+
+      final text = match.group(1)!;
+      final numberText = match.group(2)!;
+      final number = int.tryParse(numberText);
+
+      if (number == null) return Transaction.abort();
+
+      final nextId ='$text${(number + 1).toString().padLeft(numberText.length, '0')}';
+
       return Transaction.success(nextId);
     });
+
     if (!result.committed || result.snapshot.value == null) {
-      throw StateError('Failed to generate sequence for "$prefix".');
+      throw StateError('Failed to generate sequence for "$value".');
     }
+
     return result.snapshot.value.toString();
   }
 

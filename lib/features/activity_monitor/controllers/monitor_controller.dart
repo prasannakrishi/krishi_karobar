@@ -43,6 +43,7 @@ class MonitorController extends GetxController {
   final filteredCustomers = <CustomerModel>[].obs;
   final filteredVehicles = <VehicleModel>[].obs;
   final filteredServices = <ServiceModel>[].obs;
+  final supportedServices = <ServiceModel>[].obs;
 
   final vehicleSearch = TextEditingController();
   final serviceSearch = TextEditingController();
@@ -67,11 +68,11 @@ class MonitorController extends GetxController {
     super.onInit();
     timerController = Get.put(TimerController());
     loadDefaultVehicle();
+
   }
   String _userName(String? userId) {
-    if (userId == null || userId.isEmpty) return '-';
-
-    return cache.users[userId]?.fullname ?? '-';
+    if (userId == null || userId.isEmpty) return '';
+    return cache.users[userId]?.fullname ?? '';
   }
   void loadDefaultVehicle() {
     final data = storage.read('default_vehicle');
@@ -80,12 +81,8 @@ class MonitorController extends GetxController {
       clearVehicle();
       return;
     }
-
-    final stored = VehicleModel.fromMap(Map<String, dynamic>.from(data));
-
-    final vehicle = cache.getCachedRecord<VehicleModel>('vehicles', stored.id);
-
-    selectVehicle(vehicle ?? stored);
+    final vehicle = VehicleModel.fromMap(Map<String, dynamic>.from(data));
+    selectVehicle(vehicle);
   }
 
   void resetForm() {
@@ -114,7 +111,7 @@ class MonitorController extends GetxController {
     vehicleName.clear();
     vehicleOwner.clear();
     driver.clear();
-    supervisor.clear();
+    //supervisor.clear();
 
     serviceType.clear();
     rate.text = '0';
@@ -221,10 +218,16 @@ class MonitorController extends GetxController {
     vehicleName.text = vehicle.name;
     vehicleOwner.text = _userName(vehicle.ownerId);
     driver.text = _userName(vehicle.driverId);
-    supervisor.text = _userName(vehicle.supervisorId);
+    
     serviceType.clear();
     serviceSearch.clear();
     rate.text = '0';
+
+    // Populate supported services for this vehicle
+    supportedServices.assignAll(
+      services.where((s) => vehicle.supportServiceIds.contains(s.id)).toList(),
+    );
+
     closeVehicleSuggestions();
     closeServiceSuggestions();
     vehicleCollapsed.value = true;
@@ -236,6 +239,8 @@ class MonitorController extends GetxController {
     serviceSearch.text = service.name;
     rate.text = service.rate.toStringAsFixed(0);
     closeServiceSuggestions();
+    // Auto-update timer controller rate if needed
+    timerController.computeAmount(service.rate);
   }
 
   void onCustomerChanged() {
@@ -257,6 +262,7 @@ class MonitorController extends GetxController {
     }
 
     timerController.start();
+    supervisor.text = LoginController.loginUser.fullname;
   }
 
   void pauseActivity() {

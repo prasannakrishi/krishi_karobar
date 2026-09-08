@@ -242,7 +242,7 @@ class _DetailsCardFormState
     final hasDue = widget.entry.dueAmount > 0;
 
     return SizedBox(
-      height: 42,
+      height: 60,
       child: ElevatedButton.icon(
         onPressed: hasDue ? _openPayment : null,
         icon: const Icon(Icons.payments),
@@ -260,7 +260,7 @@ class _DetailsCardFormState
       controller: descriptionController,
       focusNode: _descriptionFocusNode,
       keyboardType: TextInputType.multiline,
-      maxLines: 2,
+      maxLines: 1,
       decoration: CustomDecoration.uInputDecoration(
         labelText: 'Description',
         fillColor: const Color.fromARGB(

@@ -18,6 +18,7 @@ class HomeScreen extends StatelessWidget {
         : Get.put(HomeController());
 
     return UAppScaffold(
+      extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Dashboard'),
       body: Obx(
             () => SingleChildScrollView(

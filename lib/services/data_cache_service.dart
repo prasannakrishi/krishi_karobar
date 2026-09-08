@@ -25,46 +25,75 @@ class DataCacheService extends GetxController {
 
   final List<StreamSubscription<DatabaseEvent>> _listeners = [];
 
-  @override
-  void onInit() {
-    super.onInit();
-    initCache();
+  Future<void>? _initFuture;
+  bool _isInitialized = false;
+  UserModel? _currentUser;
+
+  bool get isInitialized => _isInitialized;
+  bool get hasListeners => _listeners.isNotEmpty;
+  UserModel? get currentUser => _currentUser;
+
+  Future<void> initializeForUser(UserModel user) async {
+    if (user.isGuest) {
+      await clearCache();
+      _currentUser = user;
+      return;
+    }
+
+    if (_isInitialized && _currentUser?.id == user.id) {
+      return;
+    }
+
+    _currentUser = user;
+    return _initFuture ??= _initialize();
   }
 
-  Future<void> initCache() async {
-    await Future.wait([
-      _setupCache(
-        path: 'users',
-        cache: users,
-        fromMap: UserModel.fromMap,
-      ),
-      _setupCache(
-        path: 'customers',
-        cache: customers,
-        fromMap: CustomerModel.fromMap,
-      ),
-      _setupCache(
-        path: 'vehicles',
-        cache: vehicles,
-        fromMap: VehicleModel.fromMap,
-      ),
-      _setupCache(
-        path: 'services',
-        cache: services,
-        fromMap: ServiceModel.fromMap,
-      ),
-      _setupCache(
-        path: 'activities',
-        cache: activities,
-        fromMap: ActivityModel.fromMap,
-        limitToLast: 50,
-      ),
-      _setupCache(
-        path: 'payments',
-        cache: payments,
-        fromMap: PaymentModel.fromMap,
-      ),
-    ]);
+  Future<void> _initialize() async {
+    try {
+      await clearCache();
+
+      await Future.wait([
+        _setupCache(
+          path: 'users',
+          cache: users,
+          fromMap: UserModel.fromMap,
+        ),
+        _setupCache(
+          path: 'customers',
+          cache: customers,
+          fromMap: CustomerModel.fromMap,
+        ),
+        _setupCache(
+          path: 'vehicles',
+          cache: vehicles,
+          fromMap: VehicleModel.fromMap,
+        ),
+        _setupCache(
+          path: 'services',
+          cache: services,
+          fromMap: ServiceModel.fromMap,
+        ),
+        _setupCache(
+          path: 'activities',
+          cache: activities,
+          fromMap: ActivityModel.fromMap,
+          limitToLast: 50,
+        ),
+        _setupCache(
+          path: 'payments',
+          cache: payments,
+          fromMap: PaymentModel.fromMap,
+        ),
+      ]);
+
+      _isInitialized = true;
+    } catch (error) {
+      _isInitialized = false;
+      _logError('initializing cache', null, error);
+      rethrow;
+    } finally {
+      _initFuture = null;
+    }
   }
 
   Future<void> _setupCache<T>({
@@ -118,7 +147,8 @@ class DataCacheService extends GetxController {
         ),
       );
     } catch (error) {
-      _logError('initializing', path, error);
+      _logError('loading', path, error);
+      rethrow;
     }
   }
 
@@ -127,11 +157,9 @@ class DataCacheService extends GetxController {
     required DataSnapshot snapshot,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
-    final data = _snapshotToMap(snapshot);
-
     _addToCache(
       cache: cache,
-      data: data,
+      data: _snapshotToMap(snapshot),
       fromMap: fromMap,
     );
   }
@@ -141,11 +169,9 @@ class DataCacheService extends GetxController {
     required DataSnapshot snapshot,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
-    final data = _snapshotToMap(snapshot);
-
     _addToCache(
       cache: cache,
-      data: data,
+      data: _snapshotToMap(snapshot),
       fromMap: fromMap,
     );
   }
@@ -181,46 +207,62 @@ class DataCacheService extends GetxController {
     }
   }
 
-  Map<String, dynamic> _snapshotToMap(
-      DataSnapshot snapshot,
-      ) {
+  Map<String, dynamic> _snapshotToMap(DataSnapshot snapshot) {
     final value = snapshot.value;
 
-    if (value is! Map) {
-      return {};
-    }
+    if (value is! Map) return {};
 
     final data = Map<String, dynamic>.from(value);
-
     data['id'] ??= snapshot.key;
 
     return data;
+  }
+
+  Future<void> clearCache() async {
+    await _cancelListeners();
+
+    users.clear();
+    customers.clear();
+    vehicles.clear();
+    services.clear();
+    activities.clear();
+    payments.clear();
+
+    _currentUser = null;
+    _isInitialized = false;
+    _initFuture = null;
+  }
+
+  Future<void> _cancelListeners() async {
+    if (_listeners.isEmpty) return;
+
+    final listeners = List<StreamSubscription<DatabaseEvent>>.from(
+      _listeners,
+    );
+
+    _listeners.clear();
+
+    await Future.wait(
+      listeners.map((listener) => listener.cancel()),
+    );
   }
 
   RxMap<String, T> getCache<T>(String path) {
     switch (path.toLowerCase()) {
       case 'users':
         return users as RxMap<String, T>;
-
       case 'customers':
         return customers as RxMap<String, T>;
-
       case 'vehicles':
         return vehicles as RxMap<String, T>;
-
       case 'services':
         return services as RxMap<String, T>;
-
       case 'activities':
         return activities as RxMap<String, T>;
-
       case 'payments':
         return payments as RxMap<String, T>;
-
       default:
-        throw UnsupportedError(
-          'Unsupported cache path: $path',
-        );
+        throw UnsupportedError('Unsupported cache path: $path');
     }
   }
 
@@ -228,10 +270,7 @@ class DataCacheService extends GetxController {
     return getCache<T>(path).values.toList();
   }
 
-  T? getCachedRecord<T>(
-      String path,
-      String id,
-      ) {
+  T? getCachedRecord<T>(String path, String id) {
     return getCache<T>(path)[id];
   }
 
@@ -240,9 +279,7 @@ class DataCacheService extends GetxController {
       bool Function(T item) test,
       ) {
     for (final item in getCache<T>(path).values) {
-      if (test(item)) {
-        return item;
-      }
+      if (test(item)) return item;
     }
 
     return null;
@@ -254,7 +291,6 @@ class DataCacheService extends GetxController {
       Object error,
       ) {
     final location = path == null ? '' : ' [$path]';
-
     debugPrint(
       'DataCacheService: Error $operation$location: $error',
     );
