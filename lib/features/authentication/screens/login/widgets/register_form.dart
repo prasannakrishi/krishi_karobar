@@ -30,11 +30,6 @@ class URegisterForm extends StatelessWidget {
           Iconsax.location,
           required: true,
         ),
-        _field(
-          controller.email,
-          'Email',
-          Iconsax.sms,
-        ),
         _confirmPassword(controller),
       ],
     );
@@ -50,9 +45,7 @@ class URegisterForm extends StatelessWidget {
       padding: const EdgeInsets.only(top: USizes.md),
       child: TextFormField(
         controller: controller,
-        keyboardType: label == 'Email'
-            ? TextInputType.emailAddress
-            : TextInputType.text,
+        keyboardType: TextInputType.text,
         decoration: CustomDecoration.uInputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
@@ -62,10 +55,6 @@ class URegisterForm extends StatelessWidget {
 
           if (required && text.isEmpty) {
             return '$label is required.';
-          }
-
-          if (label == 'Email' && text.isNotEmpty && !GetUtils.isEmail(text)) {
-            return 'Enter a valid email address.';
           }
 
           return null;

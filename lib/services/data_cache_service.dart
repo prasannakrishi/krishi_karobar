@@ -30,7 +30,10 @@ class DataCacheService extends GetxController {
   UserModel? _currentUser;
 
   bool get isInitialized => _isInitialized;
+
+  @override
   bool get hasListeners => _listeners.isNotEmpty;
+
   UserModel? get currentUser => _currentUser;
 
   Future<void> initializeForUser(UserModel user) async {
@@ -44,13 +47,26 @@ class DataCacheService extends GetxController {
       return;
     }
 
+    if (_initFuture != null) {
+      await _initFuture;
+      if (_isInitialized && _currentUser?.id == user.id) {
+        return;
+      }
+    }
+
     _currentUser = user;
-    return _initFuture ??= _initialize();
+    _initFuture = _initialize(user);
+
+    try {
+      await _initFuture;
+    } finally {
+      _initFuture = null;
+    }
   }
 
-  Future<void> _initialize() async {
+  Future<void> _initialize(UserModel user) async {
     try {
-      await clearCache();
+      await _clearData();
 
       await Future.wait([
         _setupCache(
@@ -86,13 +102,13 @@ class DataCacheService extends GetxController {
         ),
       ]);
 
+      _currentUser = user;
       _isInitialized = true;
     } catch (error) {
       _isInitialized = false;
+      _currentUser = null;
       _logError('initializing cache', null, error);
       rethrow;
-    } finally {
-      _initFuture = null;
     }
   }
 
@@ -103,20 +119,35 @@ class DataCacheService extends GetxController {
     int? limitToLast,
   }) async {
     try {
-      final records = await _firebaseService.getRecords(path);
-
-      for (final data in records) {
-        _addToCache(
-          cache: cache,
-          data: data,
-          fromMap: fromMap,
-        );
-      }
-
       final query = _firebaseService.getQuery(
         path,
         limitToLast: limitToLast,
       );
+
+      final snapshot = await query.get();
+
+      if (snapshot.exists && snapshot.value is Map) {
+        final value = Map<Object?, Object?>.from(snapshot.value as Map);
+
+        for (final entry in value.entries) {
+          if (entry.value is! Map) continue;
+
+          final data = Map<String, dynamic>.from(
+            entry.value as Map,
+          );
+
+          final id = entry.key?.toString().trim();
+          if (id == null || id.isEmpty) continue;
+
+          data['id'] ??= id;
+
+          _addToCache(
+            cache: cache,
+            data: data,
+            fromMap: fromMap,
+          );
+        }
+      }
 
       _listeners.add(
         query.onChildAdded.listen(
@@ -180,7 +211,7 @@ class DataCacheService extends GetxController {
     required RxMap<String, T> cache,
     required DataSnapshot snapshot,
   }) {
-    final id = snapshot.key;
+    final id = snapshot.key?.trim();
 
     if (id == null || id.isEmpty) return;
 
@@ -193,7 +224,7 @@ class DataCacheService extends GetxController {
     required T Function(Map<String, dynamic>) fromMap,
   }) {
     try {
-      final id = data['id']?.toString();
+      final id = data['id']?.toString().trim();
 
       if (id == null || id.isEmpty) return;
 
@@ -220,17 +251,20 @@ class DataCacheService extends GetxController {
 
   Future<void> clearCache() async {
     await _cancelListeners();
+    await _clearData();
 
+    _currentUser = null;
+    _isInitialized = false;
+    _initFuture = null;
+  }
+
+  Future<void> _clearData() async {
     users.clear();
     customers.clear();
     vehicles.clear();
     services.clear();
     activities.clear();
     payments.clear();
-
-    _currentUser = null;
-    _isInitialized = false;
-    _initFuture = null;
   }
 
   Future<void> _cancelListeners() async {
@@ -248,7 +282,7 @@ class DataCacheService extends GetxController {
   }
 
   RxMap<String, T> getCache<T>(String path) {
-    switch (path.toLowerCase()) {
+    switch (path.trim().toLowerCase()) {
       case 'users':
         return users as RxMap<String, T>;
       case 'customers':
@@ -271,7 +305,7 @@ class DataCacheService extends GetxController {
   }
 
   T? getCachedRecord<T>(String path, String id) {
-    return getCache<T>(path)[id];
+    return getCache<T>(path)[id.trim()];
   }
 
   T? getRecordByValue<T>(
@@ -291,6 +325,7 @@ class DataCacheService extends GetxController {
       Object error,
       ) {
     final location = path == null ? '' : ' [$path]';
+
     debugPrint(
       'DataCacheService: Error $operation$location: $error',
     );

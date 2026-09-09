@@ -15,7 +15,7 @@ class UAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget>? actions;
   final VoidCallback? leadingOnPressed;
 
-  UAppBar(
+  const UAppBar(
       {super.key,
         this.title,
         this.titleWidget,

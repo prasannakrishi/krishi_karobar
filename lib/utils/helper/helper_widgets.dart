@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:krishi_karobar/models/models.dart';
 import 'package:intl/intl.dart';
-import 'package:krishi_karobar/services/data_cache_service.dart';
 
 import '../constants/colors.dart';
 
@@ -267,7 +265,7 @@ import '../constants/colors.dart';
                       onTap: () => onTap(item),
                     );
                   },
-                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 15, endIndent: 15),
+                  separatorBuilder: (_, _) => const Divider(height: 1, indent: 15, endIndent: 15),
                 ),
               ),
             ],
@@ -304,7 +302,7 @@ import '../constants/colors.dart';
     );
   }
 
-  Widget UDataTable({
+  Widget uDataTable({
     required List<Widget> columns,
     required List<List<Widget>> rowValues,
     int? selectedIndex,

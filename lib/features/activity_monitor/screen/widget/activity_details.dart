@@ -185,16 +185,10 @@ class _InfoCard extends StatelessWidget {
 
   final String title;
   final String value;
-  final double? maxWidth;
-  final double titleFontSize;
-  final double valueFontSize;
 
   const _InfoCard({
     required this.title,
     required this.value,
-    this.maxWidth,
-    this.titleFontSize = 20,
-    this.valueFontSize = 28,
   });
 
 

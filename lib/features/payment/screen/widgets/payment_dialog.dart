@@ -168,7 +168,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
   Widget _methodField() {
     return Obx(
       () => DropdownButtonFormField<String>(
-        value: controller.selectedPaymentMethod.value,
         decoration: const InputDecoration(labelText: 'Payment Method'),
         items: const [
           DropdownMenuItem(value: 'cash', child: Text('Cash')),

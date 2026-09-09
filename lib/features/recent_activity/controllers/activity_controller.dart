@@ -8,7 +8,6 @@ import '../../../services/data_cache_service.dart';
 import '../../../services/firebase_service.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/helper_method.dart';
-import '../../authentication/controllers/login_controllers.dart';
 
 class ActivityController extends GetxController {
   static ActivityController get instance => Get.find();

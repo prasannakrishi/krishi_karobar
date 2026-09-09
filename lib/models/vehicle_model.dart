@@ -8,31 +8,14 @@ class VehicleModel {
   String number;
   String vehicleType;
   String? model;
-
-  /// ServiceModel.id values supported by this vehicle.
   List<String> supportServiceIds;
-
-  /// CustomerModel.id of the vehicle owner.
   String ownerId;
-
-  /// UserModel.id of the assigned driver.
   String? driverId;
-
-  /// UserModel.id of the assigned supervisor.
-  String? supervisorId;
-
-  /// Current vehicle status.
   String status;
-
-  /// Whether this vehicle can currently be used for booking.
   bool isActive;
-
-  /// Optional vehicle-specific notes.
   String? notes;
-
   final DateTime createdAt;
   String? createdBy;
-
   DateTime? updatedAt;
   String? updatedBy;
 
@@ -46,7 +29,6 @@ class VehicleModel {
     this.supportServiceIds = const [],
     required this.ownerId,
     this.driverId,
-    this.supervisorId,
     this.status = 'available',
     this.isActive = true,
     this.notes,
@@ -61,9 +43,9 @@ class VehicleModel {
 
     final serviceIds = rawServiceIds is List
         ? rawServiceIds
-              .map((item) => item.toString())
-              .where((id) => id.isNotEmpty)
-              .toList()
+        .map((item) => item.toString())
+        .where((id) => id.isNotEmpty)
+        .toList()
         : <String>[];
 
     return VehicleModel(
@@ -76,7 +58,6 @@ class VehicleModel {
       supportServiceIds: serviceIds,
       ownerId: toStringValue(map['ownerId']),
       driverId: map['driverId']?.toString(),
-      supervisorId: map['supervisorId']?.toString(),
       status: toStringValue(map['status'], defaultValue: 'available'),
       isActive: toBool(map['isActive'], defaultValue: true),
       notes: map['notes']?.toString(),
@@ -98,7 +79,6 @@ class VehicleModel {
       'supportServiceIds': supportServiceIds,
       'ownerId': ownerId,
       'driverId': driverId,
-      'supervisorId': supervisorId,
       'status': status,
       'isActive': isActive,
       'notes': notes,
@@ -120,7 +100,6 @@ class VehicleModel {
       supportServiceIds: [],
       ownerId: '',
       driverId: null,
-      supervisorId: null,
       status: 'available',
       isActive: true,
       notes: null,

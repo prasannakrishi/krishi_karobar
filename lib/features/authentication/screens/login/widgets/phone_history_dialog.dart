@@ -35,7 +35,7 @@ class UPhoneHistoryDialog extends StatelessWidget {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: phoneHistory.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (_, index) {
                   final phone = phoneHistory[index];
 

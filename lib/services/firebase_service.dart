@@ -13,11 +13,14 @@ class FirebaseService {
       String id,
       Map<String, dynamic> data,
       ) async {
+    final recordPath = _recordPath(path, id);
+    if (recordPath == null || data.isEmpty) return false;
+
     try {
-      await _db.child(path).child(id).set(data);
+      await _db.child(recordPath).set(data);
       return true;
     } catch (error) {
-      _logError('saving', path, id, error);
+      _logError('saving', recordPath, error);
       return false;
     }
   }
@@ -27,21 +30,26 @@ class FirebaseService {
       String id,
       Map<String, dynamic> data,
       ) async {
+    final recordPath = _recordPath(path, id);
+    if (recordPath == null || data.isEmpty) return false;
+
     try {
-      await _db.child(path).child(id).update(data);
+      await _db.child(recordPath).update(data);
       return true;
     } catch (error) {
-      _logError('updating', path, id, error);
+      _logError('updating', recordPath, error);
       return false;
     }
   }
 
   Future<bool> updateRecords(Map<String, dynamic> updates) async {
+    if (updates.isEmpty) return false;
+
     try {
       await _db.update(updates);
       return true;
     } catch (error) {
-      debugPrint('FirebaseService: Error updating multiple records: $error');
+      _logError('updating multiple records', null, error);
       return false;
     }
   }
@@ -49,34 +57,38 @@ class FirebaseService {
   Future<List<Map<String, dynamic>>> getRecords(
       String path,
       ) async {
+    final cleanPath = _cleanPath(path);
+    if (cleanPath == null) return [];
+
     try {
-      final snapshot = await _db.child(path).get();
+      final snapshot = await _db.child(cleanPath).get();
 
       if (!snapshot.exists || snapshot.value == null) {
         return [];
       }
 
       final value = snapshot.value;
+      if (value is! Map) return [];
 
-      if (value is! Map) {
-        return [];
-      }
+      final records = <Map<String, dynamic>>[];
 
-      final rawMap = Map<Object?, Object?>.from(value);
+      for (final entry in Map<Object?, Object?>.from(value).entries) {
+        if (entry.value is! Map) continue;
 
-      return rawMap.entries
-          .where((entry) => entry.value is Map)
-          .map((entry) {
         final data = Map<String, dynamic>.from(
           entry.value as Map,
         );
 
-        data['id'] ??= entry.key.toString();
+        final id = entry.key?.toString().trim();
+        if (id == null || id.isEmpty) continue;
 
-        return data;
-      }).toList();
+        data['id'] ??= id;
+        records.add(data);
+      }
+
+      return records;
     } catch (error) {
-      _logError('loading', path, null, error);
+      _logError('loading', cleanPath, error);
       return [];
     }
   }
@@ -85,26 +97,25 @@ class FirebaseService {
       String path,
       String id,
       ) async {
+    final recordPath = _recordPath(path, id);
+    if (recordPath == null) return null;
+
     try {
-      final snapshot = await _db.child(path).child(id).get();
+      final snapshot = await _db.child(recordPath).get();
 
       if (!snapshot.exists || snapshot.value == null) {
         return null;
       }
 
       final value = snapshot.value;
-
-      if (value is! Map) {
-        return null;
-      }
+      if (value is! Map) return null;
 
       final data = Map<String, dynamic>.from(value);
-
-      data['id'] ??= id;
+      data['id'] ??= id.trim();
 
       return data;
     } catch (error) {
-      _logError('loading', path, id, error);
+      _logError('loading', recordPath, error);
       return null;
     }
   }
@@ -113,11 +124,14 @@ class FirebaseService {
       String path,
       String id,
       ) async {
+    final recordPath = _recordPath(path, id);
+    if (recordPath == null) return false;
+
     try {
-      await _db.child(path).child(id).remove();
+      await _db.child(recordPath).remove();
       return true;
     } catch (error) {
-      _logError('deleting', path, id, error);
+      _logError('deleting', recordPath, error);
       return false;
     }
   }
@@ -126,25 +140,44 @@ class FirebaseService {
       String path, {
         int? limitToLast,
       }) {
-    Query query = _db.child(path);
+    final cleanPath = _cleanPath(path) ?? '';
+    Query query = _db.child(cleanPath);
 
-    if (limitToLast != null) {
+    if (limitToLast != null && limitToLast > 0) {
       query = query.limitToLast(limitToLast);
     }
 
     return query;
   }
 
+  String? _cleanPath(String path) {
+    final value = path.trim();
+
+    if (value.isEmpty) return null;
+
+    return value.replaceAll(RegExp(r'^/+|/+$'), '');
+  }
+
+  String? _recordPath(String path, String id) {
+    final cleanPath = _cleanPath(path);
+    final cleanId = id.trim();
+
+    if (cleanPath == null || cleanId.isEmpty) {
+      return null;
+    }
+
+    return '$cleanPath/$cleanId';
+  }
+
   void _logError(
       String operation,
-      String path,
-      String? id,
+      String? path,
       Object error,
       ) {
-    final recordPath = id == null ? path : '$path/$id';
+    final location = path == null ? '' : ' [$path]';
 
     debugPrint(
-      'FirebaseService: Error $operation $recordPath: $error',
+      'FirebaseService: Error $operation$location: $error',
     );
   }
 }

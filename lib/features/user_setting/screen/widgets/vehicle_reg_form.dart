@@ -150,7 +150,7 @@ class _TextField extends StatelessWidget {
 
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
-      builder: (_, value, __) {
+      builder: (_, value, _) {
         return Obx(
               () => TextField(
             controller: controller,

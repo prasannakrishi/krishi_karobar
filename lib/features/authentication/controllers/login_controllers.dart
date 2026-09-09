@@ -36,8 +36,6 @@ class LoginController extends GetxController {
   final confirmpassword = TextEditingController();
   final name = TextEditingController();
   final address = TextEditingController();
-  final wadaNo = TextEditingController();
-  final email = TextEditingController();
 
   @override
   void onInit() {
@@ -117,7 +115,6 @@ class LoginController extends GetxController {
         id: databaseId,
         uId: userUid,
         fullname: name.text.trim(),
-        email: email.text.trim().isEmpty ? null : email.text.trim(),
         phone: phoneNumber,
         permanentAddress: address.text.trim(),
         temporaryAddress: address.text.trim(),
@@ -299,8 +296,6 @@ class LoginController extends GetxController {
     confirmpassword.dispose();
     name.dispose();
     address.dispose();
-    wadaNo.dispose();
-    email.dispose();
     super.onClose();
   }
 }

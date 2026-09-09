@@ -4,7 +4,6 @@ import '../../../../common/widgets/app_scaffold.dart';
 import '../../../../common/widgets/appbar.dart';
 import '../../../utils/constants/enums.dart';
 import '../controllers/monitor_controller.dart';
-import '../controllers/timer_controller.dart';
 import 'widget/activity_details.dart';
 import 'widget/customer_info.dart';
 import 'widget/vehicle_info.dart';

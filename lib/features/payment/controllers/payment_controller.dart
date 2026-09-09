@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
+import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../authentication/controllers/login_controllers.dart';
@@ -182,7 +182,7 @@ class PaymentController extends GetxController {
 
     try {
       final now = DateTime.now();
-      final paymentId = await _createPaymentId();
+      final paymentId = const Uuid().v4();
       final paymentUid = await sequenceService.generateSequence('P');
 
       final payment = PaymentModel(
@@ -266,13 +266,6 @@ class PaymentController extends GetxController {
     } finally {
       isSaving.value = false;
     }
-  }
-
-  Future<String> _createPaymentId() async {
-    final ref = firebaseService.getQuery('payments');
-
-    return ref.ref.push().key ??
-        DateTime.now().microsecondsSinceEpoch.toString();
   }
 
   void _refreshLocalActivities(

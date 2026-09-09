@@ -30,7 +30,6 @@ class VehicleController extends GetxController {
 
   final selectedOwner = Rxn<UserModel>();
   final selectedDriver = Rxn<UserModel>();
-  final selectedSupervisor = Rxn<UserModel>();
 
   final vehicleTypes = <String>[
     'Tractor',
@@ -291,11 +290,6 @@ class VehicleController extends GetxController {
               (user) => user.id == v.driverId,
         );
 
-    selectedSupervisor.value =
-        allUsers.firstWhereOrNull(
-              (user) => user.id == v.supervisorId,
-        );
-
     vOwnerController.text =
         selectedOwner.value?.fullname ?? '';
 
@@ -313,7 +307,6 @@ class VehicleController extends GetxController {
 
     selectedOwner.value = null;
     selectedDriver.value = null;
-    selectedSupervisor.value = null;
 
     selectedServiceIds.clear();
     filteredOwners.clear();
@@ -434,7 +427,6 @@ class VehicleController extends GetxController {
         ),
         ownerId: selectedOwner.value!.id,
         driverId: selectedDriver.value?.id,
-        supervisorId: null,
         status: 'available',
         isActive: true,
         notes: vNotesController.text.trim().isEmpty

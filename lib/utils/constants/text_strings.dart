@@ -61,9 +61,9 @@ class UTexts {
 
   // Navigation
   static const dashboard = 'Dashboard';
-  static const monitor = 'Acivity Monitor';
-  static const activities = 'Activities Records';
-  static const settings = 'User Settings';
+  static const monitor = 'Monitor';
+  static const activities = 'Records';
+  static const settings = 'Settings';
   static const customers = 'Customers';
   static const vehicles = 'Vehicles';
   static const services = 'Services';

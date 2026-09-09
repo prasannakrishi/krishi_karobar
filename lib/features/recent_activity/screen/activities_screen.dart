@@ -155,7 +155,7 @@ class ActivityScreen extends StatelessWidget {
       ) {
     return Stack(
       children: [
-        UDataTable(
+        uDataTable(
           columns: [
             _buildCell(
               FilterHeader(

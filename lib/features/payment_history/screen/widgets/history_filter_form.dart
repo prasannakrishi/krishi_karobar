@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../../models/models.dart';
 import '../../controllers/payment_history_controller.dart';
 
 class HistoryFilterForm extends StatelessWidget {
@@ -19,9 +18,6 @@ class HistoryFilterForm extends StatelessWidget {
       children: [
         Obx(
               () => DropdownButtonFormField<String>(
-            value: controller.selectedCustomerId.value.isEmpty
-                ? null
-                : controller.selectedCustomerId.value,
             decoration: const InputDecoration(
               labelText: 'Customer',
             ),
@@ -45,7 +41,6 @@ class HistoryFilterForm extends StatelessWidget {
         const SizedBox(height: 12),
         Obx(
               () => DropdownButtonFormField<String>(
-            value: controller.selectedPaymentMethod.value,
             decoration: const InputDecoration(
               labelText: 'Payment Method',
             ),

@@ -8,7 +8,6 @@ class UserModel {
   final String id;
   final String uId;
   String fullname;
-  String? email;
   String phone;
   String? permanentAddress;
   String? temporaryAddress;
@@ -24,7 +23,6 @@ class UserModel {
     required this.id,
     required this.uId,
     required this.fullname,
-    this.email,
     required this.phone,
     this.permanentAddress,
     this.temporaryAddress,
@@ -48,21 +46,10 @@ class UserModel {
   static String _normalizeUserType(String? userType) {
     final value = userType?.trim().toLowerCase();
 
-    if (value == UserTypes.organization) {
-      return UserTypes.organization;
-    }
-
-    if (value == UserTypes.external) {
-      return UserTypes.external;
-    }
-
-    if (value == UserTypes.guest) {
-      return UserTypes.guest;
-    }
-
-    if (value == UserTypes.system) {
-      return UserTypes.system;
-    }
+    if (value == UserTypes.organization) return UserTypes.organization;
+    if (value == UserTypes.external) return UserTypes.external;
+    if (value == UserTypes.guest) return UserTypes.guest;
+    if (value == UserTypes.system) return UserTypes.system;
 
     return UserTypes.organization;
   }
@@ -71,7 +58,6 @@ class UserModel {
     id: systemId,
     uId: 'SU-01',
     fullname: 'Prasanna Aadhunik Krishi Kendra Pvt. Ltd.',
-    email: 'prasannakrishi@hotmail.com',
     phone: '9858028096',
     permanentAddress: 'Ghorahi-15, Dang',
     temporaryAddress: 'Ghorahi-15, Dang',
@@ -103,10 +89,9 @@ class UserModel {
     final userType = _normalizeUserType(map['userType']?.toString());
 
     return UserModel(
-      id: toStringValue(map['id']),
-      uId: toStringValue(map['uId']),
+      id: toStringValue(map['id'] ?? map['guid']),
+      uId: toStringValue(map['uId'] ?? map['uid']),
       fullname: toStringValue(map['fullname']),
-      email: map['email']?.toString(),
       phone: toStringValue(map['phone']),
       permanentAddress: map['permanentAddress']?.toString(),
       temporaryAddress: map['temporaryAddress']?.toString(),
@@ -125,7 +110,6 @@ class UserModel {
       'id': id,
       'uId': uId,
       'fullname': fullname,
-      'email': email,
       'phone': phone,
       'permanentAddress': permanentAddress,
       'temporaryAddress': temporaryAddress,
@@ -153,11 +137,8 @@ class UserModel {
   }
 
   bool get isSystem => userType == UserTypes.system;
-
   bool get isOrganization => userType == UserTypes.organization;
-
   bool get isExternal => userType == UserTypes.external;
-
   bool get isGuest => userType == UserTypes.guest;
 
   bool hasRole(String role) {

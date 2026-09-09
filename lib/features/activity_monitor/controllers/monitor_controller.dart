@@ -38,7 +38,7 @@ class MonitorController extends GetxController {
 
   final selectedCustomer = Rxn<CustomerModel>();
   final selectedVehicle = Rxn<VehicleModel>();
-  final selectedService = Rxn<ServiceModel>();
+  late final selectedService = Rxn<ServiceModel>();
 
   final filteredCustomers = <CustomerModel>[].obs;
   final filteredVehicles = <VehicleModel>[].obs;
@@ -311,8 +311,8 @@ class MonitorController extends GetxController {
       final activityId = const Uuid().v4();
 
       final activityUId = await sequenceService.generateActivityUid(
-        selectedVehicle.value!.uId,
-        selectedService.value!.name,
+        serviceType: selectedService.value!.name,
+        vehicleUId: selectedVehicle.value!.uId,
       );
 
       final activity = ActivityModel(
@@ -321,6 +321,7 @@ class MonitorController extends GetxController {
         customerId: customer.id,
         vehicleId: selectedVehicle.value!.id,
         serviceId: selectedService.value!.id,
+        supervisorId: LoginController.loginUser.id,
         startTime: timerController.startTime ?? now,
         endTime: timerController.endTime ?? now,
         duration: timerController.durationSeconds,
