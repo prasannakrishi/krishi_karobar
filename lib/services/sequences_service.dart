@@ -13,18 +13,19 @@ class SequenceService extends GetxService {
   static const String _activitySequencePath = 'activity_id';
 
   Future<String> generateSequence(String prefix) async {
+    final year = DateTime.now().year % 10;
     final key = _validatePrefix(prefix);
     final ref = _db.child('$_sequencePath/$key');
-
     final result = await ref.runTransaction((data) {
-      if (data == null) return Transaction.abort();
+      if (data == null) {
+        return Transaction.success('$prefix$year-0001');
+      }
 
       final current = data.toString().trim();
-      final match = RegExp(r'^(.*?)(\d+)$').firstMatch(current);
+      final match = RegExp(r'^(.*-)(\d+)$').firstMatch(current);
 
       if (match == null) return Transaction.abort();
 
-      final text = match.group(1)!;
       final numberText = match.group(2)!;
       final number = int.tryParse(numberText);
 
@@ -33,7 +34,7 @@ class SequenceService extends GetxService {
       final nextNumber =
       (number + 1).toString().padLeft(numberText.length, '0');
 
-      return Transaction.success('$text$nextNumber');
+      return Transaction.success('$prefix$year-$nextNumber');
     });
 
     if (!result.committed || result.snapshot.value == null) {

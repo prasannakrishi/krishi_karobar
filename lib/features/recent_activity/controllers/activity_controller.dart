@@ -217,9 +217,7 @@ class ActivityController extends GetxController {
     }
   }
 
-  List<ActivityModel> activitiesForSection(
-      PaymentStatus section,
-      ) {
+  List<ActivityModel> activitiesForSection( PaymentStatus section) {
     return activities.where((activity) {
       final amount = activity.amount;
       final paid = activity.paidAmount;
@@ -235,6 +233,9 @@ class ActivityController extends GetxController {
           return amount > 0 && paid > 0 && paid < amount;
       }
     }).toList();
+  }
+  List<ActivityModel> filteredActivities() {
+      return activities.toList();
   }
 
   void selectIndex(int? index) {

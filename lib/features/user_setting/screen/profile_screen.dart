@@ -40,13 +40,12 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 UDetailRow(value: LoginController.loginUser.phone, icon: Iconsax.call),
                 const SizedBox(height: 16),
-               // UDetailRow(value: LoginController.loginUser.email ?? 'N/A', icon: Iconsax.direct),
-                //const SizedBox(height: 16),
-                //UDetailRow(value: '${LoginController.loginUser.address ?? ''}, Wada-${LoginController.loginUser.wadaNo ?? ''}', icon: Iconsax.location),
-                //const SizedBox(height: 16),
-                //UDetailRow(value: LoginController.loginUser.usertype ?? 'N/A', icon: Iconsax.tag_user),
+                UDetailRow(value: LoginController.loginUser.email ?? 'No Email', icon: Iconsax.direct),
+                const SizedBox(height: 16),
+                UDetailRow(value: LoginController.loginUser.permanentAddress ?? 'No Address', icon: Iconsax.location),
               ],
             ),
+
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,

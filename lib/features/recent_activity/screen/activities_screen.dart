@@ -6,8 +6,7 @@ import '../../../common/widgets/app_scaffold.dart';
 import '../../../models/models.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/helper_widgets.dart';
-import '../../navigarion/controller/navigation_controller.dart';
-import '../controllers/activity_controller.dart';
+import 'package:krishi_karobar/features/controllers.dart';
 import 'widgets/details_card_form.dart';
 import 'widgets/filter_header.dart';
 import 'widgets/summary_footer.dart';
@@ -91,23 +90,23 @@ class ActivityScreen extends StatelessWidget {
 
   Widget _buildContent(ActivityController controller) {
     if (controller.isLoading.value) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final section = _currentSection(controller);
-    final entries =
-    controller.activitiesForSection(section);
+    final filterEntries = controller.filteredActivities();
+    final sectionEntries = controller.activitiesForSection(section);
 
-    final totalSeconds =
-    controller.totalSecondsFor(entries);
-    final totalAmount =
-    controller.totalAmountFor(entries);
-    final totalPaid =
-    controller.totalPaidFor(entries);
-    final totalDue =
-    controller.totalDueFor(entries);
+    final totalSeconds = controller.totalSecondsFor(filterEntries);
+    final totalAmount = controller.totalAmountFor(filterEntries);
+    final totalPaid = controller.totalPaidFor(filterEntries);
+    final totalDue = controller.totalDueFor(filterEntries);
+/* allEntries wise summury
+    final totalSeconds = controller.totalSecondsFor(sectionEntries);
+    final totalAmount = controller.totalAmountFor(sectionEntries);
+    final totalPaid = controller.totalPaidFor(sectionEntries);
+    final totalDue = controller.totalDueFor(sectionEntries);
+*/
 
     return Padding(
       padding: const EdgeInsets.all(1),
@@ -117,12 +116,12 @@ class ActivityScreen extends StatelessWidget {
           Expanded(
             child: _buildActivityTable(
               controller,
-              entries,
+              sectionEntries,
             ),
           ),
           _buildDetails(
             controller,
-            entries,
+            sectionEntries,
           ),
           const SizedBox(height: 12),
           SummaryFooter(
@@ -136,9 +135,7 @@ class ActivityScreen extends StatelessWidget {
     );
   }
 
-  PaymentStatus _currentSection(
-      ActivityController controller,
-      ) {
+  PaymentStatus _currentSection(ActivityController controller) {
     switch (controller.currentPageIndex.value) {
       case 1:
         return PaymentStatus.due;
@@ -269,10 +266,7 @@ class ActivityScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetails(
-      ActivityController controller,
-      List<ActivityModel> entries,
-      ) {
+  Widget _buildDetails(ActivityController controller,List<ActivityModel> entries) {
     final index = controller.selectedIndex.value;
 
     if (index == null ||

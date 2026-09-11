@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
 import '../../../../services/data_cache_service.dart';
+import '../../../../utils/helper/helpers.dart';
 
 class PaymentSlip extends StatelessWidget {
   const PaymentSlip({super.key, required this.payment});
@@ -12,45 +13,31 @@ class PaymentSlip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cache = DataCacheService.instance;
-
     final customer = cache.customers[payment.customerId];
-
     final receiver = cache.users[payment.receivedBy];
 
     return AlertDialog(
-      title: const Center(
-        child: Text(
-          'PAYMENT RECEIPT',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 2),
+
       content: SizedBox(
-        width: 420,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(),
-              const SizedBox(height: 12),
               const Divider(),
 
               _row('Receipt No.', payment.uId),
               _row('Date', _formatDate(payment.paidAt)),
-              _row('Customer', customer?.name ?? '-'),
-              _row('Phone', customer?.phone ?? '-'),
-
-              const SizedBox(height: 14),
-
-              _buildAllocationSection(cache),
-
+              _row('Customer Name', customer?.name ?? '-'),
+              _row('Customer Id', customer?.uId ?? '-'),
               const SizedBox(height: 8),
+              _allocationTable(cache),
               const Divider(),
 
               _row('Total Paid', _money(payment.amount), bold: true),
               _row('Payment Method', _paymentMethodName(payment.paymentMethod)),
-
-              if (_hasText(payment.referenceNo))
-                _row('Reference No.', payment.referenceNo!),
 
               _row('Received By', receiver?.fullname ?? '-'),
 
@@ -79,58 +66,89 @@ class PaymentSlip extends StatelessWidget {
     return const Column(
       children: [
         Text(
-          'Krishi Karobar',
+          'Prasanna Aadhunic Kridhi Kendra',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         SizedBox(height: 4),
+        Text('Dang    9858028096', textAlign: TextAlign.center),
         Text('Payment Receipt', textAlign: TextAlign.center),
       ],
     );
   }
 
-  Widget _buildAllocationSection(DataCacheService cache) {
+  Widget _allocationTable(DataCacheService cache) {
+    final rows = payment.allocations.map((allocation) {
+      final activity = cache.activities[allocation.activityId];
+      final service = activity == null ? null : cache.services[activity.serviceId];
+
+      return [
+        _buildCell(Text(activity?.uId ?? '-'), 110),
+        _buildCell(Text(service?.name ?? '-'), 80),
+        _buildCell(Text(_money(allocation.previousDue)), 55),
+        _buildCell(Text(_money(allocation.paidAmount)), 55),
+        _buildCell(Text(_money(allocation.remainingDue),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+          55,
+        ),
+      ];
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Payment Allocation',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 2),
+          child: Text(
+            'Payment Details',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
-        const Divider(),
-
-        ...payment.allocations.map((allocation) {
-          final activity = cache.activities[allocation.activityId];
-
-          final service = activity == null
-              ? null
-              : cache.services[activity.serviceId];
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  service?.name ?? '-',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (activity != null)
-                  Text(
-                    activity.uId,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                const SizedBox(height: 4),
-                _row('Previous Due', _money(allocation.previousDue)),
-                _row('Paid', _money(allocation.paidAmount)),
-                _row('Remaining', _money(allocation.remainingDue)),
-              ],
+        uDataTable(
+          columns: [
+            _buildCell(
+              const Text(
+                'Activity',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              110,
             ),
-          );
-        }),
+            _buildCell(
+              const Text(
+                'Service',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              80,
+            ),
+            _buildCell(
+              const Text(
+                'Due रु ',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              55,
+            ),
+            _buildCell(
+              const Text(
+                'Paid रु ',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              55,
+            ),
+            _buildCell(
+              const Text(
+                'Remain रु ',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              70,
+            ),
+          ],
+          rowValues: rows,
+        ),
       ],
     );
   }
+
 
   Widget _row(String label, String value, {bool bold = false}) {
     final weight = bold ? FontWeight.bold : FontWeight.normal;
@@ -141,7 +159,7 @@ class PaymentSlip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 115,
+            width: 135,
             child: Text(label, style: TextStyle(fontWeight: weight)),
           ),
           Expanded(
@@ -153,7 +171,7 @@ class PaymentSlip extends StatelessWidget {
   }
 
   String _money(double value) {
-    return 'रु ${value.toStringAsFixed(2)}';
+    return '${value.toInt()}';
   }
 
   String _paymentMethodName(String method) {
@@ -165,6 +183,10 @@ class PaymentSlip extends StatelessWidget {
       default:
         return 'Cash';
     }
+  }
+
+  Widget _buildCell(Widget child, double width) {
+    return SizedBox(width: width, child: child);
   }
 
   String _formatDate(DateTime value) {

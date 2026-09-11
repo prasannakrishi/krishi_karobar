@@ -308,14 +308,10 @@ class DataCacheService extends GetxController {
     return getCache<T>(path)[id.trim()];
   }
 
-  T? getRecordByValue<T>(
-      String path,
-      bool Function(T item) test,
-      ) {
+  T? getRecordByValue<T>(String path,bool Function(T item) test,) {
     for (final item in getCache<T>(path).values) {
       if (test(item)) return item;
     }
-
     return null;
   }
 

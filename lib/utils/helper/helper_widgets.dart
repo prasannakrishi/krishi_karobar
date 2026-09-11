@@ -314,7 +314,7 @@ import '../constants/colors.dart';
         child: DataTable(
           showCheckboxColumn: false,
           columnSpacing: 2,
-          horizontalMargin: 5,
+          horizontalMargin: 1,
           headingRowHeight: 25,
 
           columns: columns.map((c) => DataColumn(label: c)).toList(),

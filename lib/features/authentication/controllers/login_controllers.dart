@@ -114,11 +114,12 @@ class LoginController extends GetxController {
       final newUser = UserModel(
         id: databaseId,
         uId: userUid,
+        nId: '',
         fullname: name.text.trim(),
         phone: phoneNumber,
         permanentAddress: address.text.trim(),
-        temporaryAddress: address.text.trim(),
         userType: UserTypes.organization,
+
         roles: const [],
         status: 'active',
         createdAt: now,

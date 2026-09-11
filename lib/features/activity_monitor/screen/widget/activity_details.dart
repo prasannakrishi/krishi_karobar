@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../../models/service_model.dart';
 import '../../controllers/monitor_controller.dart';
 
 class ActivityForm extends StatelessWidget {
@@ -50,42 +51,32 @@ class ActivityForm extends StatelessWidget {
         const SizedBox(height: 10),
         // Start and End Time
         Obx(
-          () => Row(
+              () => Row(
             children: [
-              /*Expanded(
-                child: _InfoCard(
-                  title: 'START TIME',
-                  value: timer.startTimeText.value,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _InfoCard(
-                  title: 'END TIME',
-                  value: timer.endTimeText.value,
-                ),
-              ),*/
-
               Expanded(
                 child: TextFormField(
-                  initialValue: timer.endTimeText.value,
+                  key: ValueKey(timer.startTimeText.value),
+                  initialValue: timer.startTimeText.value,
                   readOnly: true,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
                     labelText: 'Start Time',
+                    contentPadding: EdgeInsets.all(8)
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: TextFormField(
+                  key: ValueKey(timer.endTimeText.value),
                   initialValue: timer.endTimeText.value,
                   readOnly: true,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20),
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
                     labelText: 'End Time',
+                    contentPadding: EdgeInsets.all(8)
                   ),
                 ),
               ),
@@ -95,17 +86,19 @@ class ActivityForm extends StatelessWidget {
         const SizedBox(height: 8),
         Obx(
           () => Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _InfoCard(
-                title: 'DURATION',
-                value: timer.duration.value,
+              Expanded(child:
+                _InfoCard(
+                  title: 'DURATION',
+                  value: timer.duration.value,
+                ),
               ),
               const SizedBox(width: 8),
+              Expanded(child:
               _InfoCard(
-                title: 'AMOUNT',
-                value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
-
+                  title: 'AMOUNT',
+                  value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+                ),
               ),
             ],
           ),
@@ -122,62 +115,22 @@ class _ServiceSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Obx(
-          () => TextFormField(
-            controller: controller.serviceSearch,
-            readOnly: controller.selectedVehicle.value == null,
-            decoration: InputDecoration(
-              labelText: 'Service',
-              hintText: controller.selectedVehicle.value == null
-                  ? 'Select vehicle first'
-                  : 'Search service',
-              suffixIcon: const Icon(Icons.search),
-            ),
-            onTap: controller.openServiceSearch,
-            onChanged: controller.onSearchService,
-          ),
-        ),
-        Obx(() {
-          if (!controller.showServiceSuggestions.value) {
-            return const SizedBox.shrink();
-          }
-
-          return Card(
-            margin: const EdgeInsets.only(top: 4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: controller.filteredServices.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('No supported service found'),
-                      ),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: controller.filteredServices.length,
-                      itemBuilder: (_, index) {
-                        final service = controller.filteredServices[index];
-
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.build_outlined),
-                          title: Text(service.name),
-                          subtitle: Text(
-                            'रु ${service.rate.toStringAsFixed(0)} / hour',
-                          ),
-                          onTap: () => controller.selectService(service),
-                        );
-                      },
-                    ),
-            ),
-          );
-        }),
-      ],
-    );
+    return Obx(() => DropdownButtonFormField<ServiceModel>(
+      initialValue: controller.selectedService.value,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Service'),
+      hint: Text(controller.selectedVehicle.value == null? 'Select vehicle first'
+          : 'Select service'),
+      items: controller.supportedServices
+          .map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
+      onChanged: controller.selectedVehicle.value == null
+          ? null
+          : (service) {
+        if (service != null) {
+          controller.selectService(service);
+        }
+      },
+    ));
   }
 }
 

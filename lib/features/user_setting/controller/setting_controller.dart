@@ -4,26 +4,18 @@ import '../../authentication/screens/login/login_screen.dart';
 class SettingsController extends GetxController {
   static SettingsController get instance => Get.find();
 
-  /// --- State Variables ---
-  var isLoading = false.obs;
-  var toggleVehicleForm = false.obs;
-  var toggleUserForm = false.obs;
+  final isLoading = false.obs;
+  final managementExpanded = false.obs;
+  final preferencesExpanded = false.obs;
 
-  void toggleVehicleFormView() {
-    toggleVehicleForm.value = !toggleVehicleForm.value;
-  }
-  void toggleUserFormView() {
-    toggleUserForm.value = !toggleUserForm.value;
+  void toggleManagement() {
+    managementExpanded.toggle();
   }
 
-  @override
-  void onInit() {
-    super.onInit();
-    toggleVehicleForm.value = false;
-    toggleUserForm.value = false;
+  void togglePreferences() {
+    preferencesExpanded.toggle();
   }
 
-  /// Logs out the user and navigates to the Login screen.
   void logout() {
     Get.offAll(() => const LoginScreen());
   }

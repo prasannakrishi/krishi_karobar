@@ -17,14 +17,15 @@ class VehicleInfo extends StatelessWidget {
                 controller: controller.vehicleNumber,
                 readOnly: true,
                 decoration: const InputDecoration(labelText: 'Vehicle Number'),
+                onTap: () {controller.showMessage('Vehicle required', 'Please select vehicle from Setting.');},
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: TextFormField(
-                controller: controller.vehicleOwner,
+                controller: controller.vehicleType,
                 readOnly: true,
-                decoration: const InputDecoration(labelText: 'Owner'),
+                decoration: const InputDecoration(labelText: 'Vehicle Type'),
               ),
             ),
           ],
@@ -34,17 +35,17 @@ class VehicleInfo extends StatelessWidget {
           children: [
             Expanded(
               child: TextFormField(
-                controller: controller.driver,
+                controller: controller.vehicleOwner,
                 readOnly: true,
-                decoration: const InputDecoration(labelText: 'Driver'),
+                decoration: const InputDecoration(labelText: 'Owner'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: TextFormField(
-                controller: controller.supervisor,
+                controller: controller.driver,
                 readOnly: true,
-                decoration: const InputDecoration(labelText: 'Supervisor'),
+                decoration: const InputDecoration(labelText: 'Driver'),
               ),
             ),
           ],

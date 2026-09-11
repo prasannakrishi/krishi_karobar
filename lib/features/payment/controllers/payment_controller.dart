@@ -14,7 +14,6 @@ class PaymentController extends GetxController {
 
   final selectedCustomerId = ''.obs;
   final selectedPaymentMethod = 'cash'.obs;
-
   final paymentAmountController = TextEditingController();
   final referenceController = TextEditingController();
   final descriptionController = TextEditingController();
@@ -22,12 +21,15 @@ class PaymentController extends GetxController {
   final customerActivities = <ActivityModel>[].obs;
   final selectedCustomer = Rxn<CustomerModel>();
 
+  final isLoadingActivities = false.obs;
   final isSaving = false.obs;
 
   double get totalDue {
-    return customerActivities.fold(
-      0.0,
-      (sum, activity) => sum + activity.dueAmount,
+    return _money(
+      customerActivities.fold(
+        0.0,
+        (sum, activity) => sum + _activityDue(activity),
+      ),
     );
   }
 
@@ -36,37 +38,76 @@ class PaymentController extends GetxController {
   }
 
   List<ActivityModel> get dueActivities {
-    final list = customerActivities
-        .where((activity) => activity.dueAmount > 0)
-        .toList();
+    final list = customerActivities.where((activity) {
+      return _activityDue(activity) > 0;
+    }).toList();
 
     list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return list;
   }
 
-  void selectCustomer(String customerId) {
+  Future<void> selectCustomer(String customerId) async {
     selectedCustomerId.value = customerId;
     selectedCustomer.value = cache.customers[customerId];
-
-    _loadCustomerDues(customerId);
 
     paymentAmountController.clear();
     referenceController.clear();
     descriptionController.clear();
+
+    await _loadCustomerDues(customerId);
   }
 
-  void _loadCustomerDues(String customerId) {
-    final activities = cache.activities.values
-        .where(
-          (activity) =>
-              activity.customerId == customerId && activity.dueAmount > 0,
-        )
-        .toList();
+  Future<void> _loadCustomerDues(String customerId) async {
+    isLoadingActivities.value = true;
 
-    activities.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    try {
+      final query = firebaseService.getQuery(
+        'activities',
+        orderByChild: 'customerId',
+        equalTo: customerId,
+      );
 
-    customerActivities.assignAll(activities);
+      final snapshot = await query.get();
+      final activities = <ActivityModel>[];
+
+      if (snapshot.exists && snapshot.value is Map) {
+        final data = Map<Object?, Object?>.from(snapshot.value as Map);
+
+        for (final entry in data.entries) {
+          if (entry.value is! Map) {
+            continue;
+          }
+
+          final activityData = Map<String, dynamic>.from(entry.value as Map);
+
+          activityData['id'] ??= entry.key?.toString();
+
+          final activity = ActivityModel.fromMap(activityData);
+          final paid = _money(activity.paidAmount);
+          final due = _money(activity.amount - paid);
+
+          if (due <= 0) {
+            continue;
+          }
+
+          activity.paidAmount = paid;
+          activity.dueAmount = due;
+
+          activities.add(activity);
+        }
+      }
+
+      activities.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      customerActivities.assignAll(activities);
+    } catch (error) {
+      debugPrint('PaymentController: Failed to load dues: $error');
+      customerActivities.clear();
+      _showError('Failed to load customer outstanding activities.');
+    } finally {
+      isLoadingActivities.value = false;
+    }
   }
 
   void selectPaymentMethod(String method) {
@@ -78,14 +119,12 @@ class PaymentController extends GetxController {
   }
 
   void fillFullDue() {
-    paymentAmountController.text = _money(totalDue).toStringAsFixed(2);
-
+    paymentAmountController.text = totalDue.toStringAsFixed(2);
     update();
   }
 
   List<PaymentAllocationModel> _buildAllocations(double amount) {
     var remaining = _money(amount);
-
     final allocations = <PaymentAllocationModel>[];
 
     for (final activity in dueActivities) {
@@ -93,7 +132,11 @@ class PaymentController extends GetxController {
         break;
       }
 
-      final previousDue = _money(activity.dueAmount);
+      final previousDue = _activityDue(activity);
+
+      if (previousDue <= 0) {
+        continue;
+      }
 
       final paidNow = _money(
         remaining >= previousDue ? previousDue : remaining,
@@ -130,8 +173,13 @@ class PaymentController extends GetxController {
       return null;
     }
 
+    if (isLoadingActivities.value) {
+      _showError('Please wait while customer dues are loading.');
+      return null;
+    }
+
     final amount = _money(enteredAmount);
-    final customerDue = _money(totalDue);
+    final customerDue = totalDue;
 
     if (amount <= 0) {
       _showError('Payment amount must be greater than zero.');
@@ -204,17 +252,18 @@ class PaymentController extends GetxController {
       final updates = <String, dynamic>{'payments/$paymentId': payment.toMap()};
 
       for (final allocation in allocations) {
-        final activity = cache.activities[allocation.activityId];
+        final activityIndex = customerActivities.indexWhere(
+          (item) => item.id == allocation.activityId,
+        );
 
-        if (activity == null) {
+        if (activityIndex == -1) {
           _showError('An activity in this payment no longer exists.');
           return null;
         }
 
+        final activity = customerActivities[activityIndex];
         final oldPaid = _money(activity.paidAmount);
-
         final activityAmount = _money(activity.amount);
-
         final newPaid = _money(oldPaid + allocation.paidAmount);
 
         if (newPaid > activityAmount) {
@@ -223,21 +272,14 @@ class PaymentController extends GetxController {
         }
 
         final newDue = _money(activityAmount - newPaid);
-
         final status = _paymentStatus(newPaid, activityAmount);
-
         final activityPath = 'activities/${activity.id}';
 
         updates['$activityPath/paidAmount'] = newPaid;
-
         updates['$activityPath/dueAmount'] = newDue;
-
         updates['$activityPath/status'] = status;
-
         updates['$activityPath/paidAt'] = now.toUtc().toIso8601String();
-
         updates['$activityPath/receivedBy'] = LoginController.loginUser.id;
-
         updates['$activityPath/updatedAt'] = now.toUtc().toIso8601String();
       }
 
@@ -259,9 +301,7 @@ class PaymentController extends GetxController {
       return payment;
     } catch (error) {
       debugPrint('PaymentController: $error');
-
       _showError('Payment failed. Please try again.');
-
       return null;
     } finally {
       isSaving.value = false;
@@ -273,11 +313,15 @@ class PaymentController extends GetxController {
     DateTime now,
   ) {
     for (final allocation in allocations) {
-      final activity = cache.activities[allocation.activityId];
+      final index = customerActivities.indexWhere(
+        (item) => item.id == allocation.activityId,
+      );
 
-      if (activity == null) {
+      if (index == -1) {
         continue;
       }
+
+      final activity = customerActivities[index];
 
       activity.paidAmount = _money(activity.paidAmount + allocation.paidAmount);
 
@@ -288,11 +332,27 @@ class PaymentController extends GetxController {
       activity.paidAt = now;
       activity.receivedBy = LoginController.loginUser.id;
       activity.updatedAt = now;
+
+      if (cache.activities.containsKey(activity.id)) {
+        final cachedActivity = cache.activities[activity.id]!;
+
+        cachedActivity.paidAmount = activity.paidAmount;
+        cachedActivity.dueAmount = activity.dueAmount;
+        cachedActivity.status = activity.status;
+        cachedActivity.paidAt = activity.paidAt;
+        cachedActivity.receivedBy = activity.receivedBy;
+        cachedActivity.updatedAt = activity.updatedAt;
+      }
     }
 
+    customerActivities.refresh();
     cache.activities.refresh();
 
-    _loadCustomerDues(selectedCustomerId.value);
+    customerActivities.removeWhere((activity) => _activityDue(activity) <= 0);
+  }
+
+  double _activityDue(ActivityModel activity) {
+    return _money(activity.amount - activity.paidAmount);
   }
 
   String _paymentStatus(double paid, double amount) {
@@ -319,7 +379,6 @@ class PaymentController extends GetxController {
     selectedCustomerId.value = '';
     selectedCustomer.value = null;
     selectedPaymentMethod.value = 'cash';
-
     customerActivities.clear();
 
     paymentAmountController.clear();
@@ -332,7 +391,6 @@ class PaymentController extends GetxController {
     paymentAmountController.dispose();
     referenceController.dispose();
     descriptionController.dispose();
-
     super.onClose();
   }
 }

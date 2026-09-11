@@ -5,7 +5,6 @@ import 'package:iconsax/iconsax.dart';
 import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
 import '../controller/home_controller.dart';
-import '../widgets/home_header.dart';
 import '../widgets/home_summary_card.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -26,10 +25,6 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              HomeHeader(
-                name: controller.user.value?.fullname ?? 'User',
-              ),
-              const SizedBox(height: 24),
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),

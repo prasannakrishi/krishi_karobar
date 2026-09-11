@@ -49,6 +49,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1062624758266',
     projectId: 'krishi-karobar-8a470',
     authDomain: 'krishi-karobar-8a470.firebaseapp.com',
+    databaseURL: 'https://krishi-karobar-8a470-default-rtdb.firebaseio.com',
     storageBucket: 'krishi-karobar-8a470.firebasestorage.app',
     measurementId: 'G-2DBXPKFKDJ',
   );

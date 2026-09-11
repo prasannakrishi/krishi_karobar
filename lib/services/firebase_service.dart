@@ -2,17 +2,16 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
 class FirebaseService {
-  FirebaseService({
-    DatabaseReference? databaseReference,
-  }) : _db = databaseReference ?? FirebaseDatabase.instance.ref();
+  FirebaseService({DatabaseReference? databaseReference})
+    : _db = databaseReference ?? FirebaseDatabase.instance.ref();
 
   final DatabaseReference _db;
 
   Future<bool> saveRecord(
-      String path,
-      String id,
-      Map<String, dynamic> data,
-      ) async {
+    String path,
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final recordPath = _recordPath(path, id);
     if (recordPath == null || data.isEmpty) return false;
 
@@ -26,10 +25,10 @@ class FirebaseService {
   }
 
   Future<bool> updateRecord(
-      String path,
-      String id,
-      Map<String, dynamic> data,
-      ) async {
+    String path,
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final recordPath = _recordPath(path, id);
     if (recordPath == null || data.isEmpty) return false;
 
@@ -54,9 +53,7 @@ class FirebaseService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getRecords(
-      String path,
-      ) async {
+  Future<List<Map<String, dynamic>>> getRecords(String path) async {
     final cleanPath = _cleanPath(path);
     if (cleanPath == null) return [];
 
@@ -75,9 +72,7 @@ class FirebaseService {
       for (final entry in Map<Object?, Object?>.from(value).entries) {
         if (entry.value is! Map) continue;
 
-        final data = Map<String, dynamic>.from(
-          entry.value as Map,
-        );
+        final data = Map<String, dynamic>.from(entry.value as Map);
 
         final id = entry.key?.toString().trim();
         if (id == null || id.isEmpty) continue;
@@ -93,10 +88,7 @@ class FirebaseService {
     }
   }
 
-  Future<Map<String, dynamic>?> getRecordById(
-      String path,
-      String id,
-      ) async {
+  Future<Map<String, dynamic>?> getRecordById(String path, String id) async {
     final recordPath = _recordPath(path, id);
     if (recordPath == null) return null;
 
@@ -120,10 +112,7 @@ class FirebaseService {
     }
   }
 
-  Future<bool> deleteRecord(
-      String path,
-      String id,
-      ) async {
+  Future<bool> deleteRecord(String path, String id) async {
     final recordPath = _recordPath(path, id);
     if (recordPath == null) return false;
 
@@ -137,11 +126,21 @@ class FirebaseService {
   }
 
   Query getQuery(
-      String path, {
-        int? limitToLast,
-      }) {
+    String path, {
+    int? limitToLast,
+    String? orderByChild,
+    dynamic equalTo,
+  }) {
     final cleanPath = _cleanPath(path) ?? '';
     Query query = _db.child(cleanPath);
+
+    if (orderByChild != null && orderByChild.trim().isNotEmpty) {
+      query = query.orderByChild(orderByChild.trim());
+    }
+
+    if (equalTo != null) {
+      query = query.equalTo(equalTo);
+    }
 
     if (limitToLast != null && limitToLast > 0) {
       query = query.limitToLast(limitToLast);
@@ -169,15 +168,9 @@ class FirebaseService {
     return '$cleanPath/$cleanId';
   }
 
-  void _logError(
-      String operation,
-      String? path,
-      Object error,
-      ) {
+  void _logError(String operation, String? path, Object error) {
     final location = path == null ? '' : ' [$path]';
 
-    debugPrint(
-      'FirebaseService: Error $operation$location: $error',
-    );
+    debugPrint('FirebaseService: Error $operation$location: $error');
   }
 }

@@ -20,6 +20,7 @@ class MonitorController extends GetxController {
 
   final vehicleNumber = TextEditingController();
   final vehicleName = TextEditingController();
+  final vehicleType = TextEditingController();
   final vehicleOwner = TextEditingController();
   final driver = TextEditingController();
   final supervisor = TextEditingController();
@@ -60,8 +61,7 @@ class MonitorController extends GetxController {
   List<ServiceModel> get services =>
       cache.services.values.where((service) => service.isActive).toList();
 
-  bool get isCustomerEmpty =>
-      customerName.text.trim().isEmpty || phone.text.trim().isEmpty;
+  bool get isCustomerEmpty => customerName.text.trim().isEmpty && phone.text.trim().isEmpty;
 
   @override
   void onInit() {
@@ -90,14 +90,11 @@ class MonitorController extends GetxController {
     address.clear();
     phone.clear();
     description.clear();
-    serviceType.clear();
-    rate.text = '0';
 
     selectedCustomer.value = null;
     selectedService.value = null;
 
     filteredCustomers.clear();
-    filteredServices.clear();
 
     customerCollapsed.value = false;
     loadDefaultVehicle();
@@ -122,18 +119,18 @@ class MonitorController extends GetxController {
 
   void onSearchCustomer(String query) {
     final value = query.trim().toLowerCase();
-    showCustomerSuggestions.value = value.length >= 2;
+
     if (value.length < 2) {
       filteredCustomers.clear();
+      showCustomerSuggestions.value = false;
       return;
     }
-    filteredCustomers.assignAll(
-      customers.where(
-        (customer) =>
-            customer.name.toLowerCase().contains(value) ||
-            customer.phone.contains(value),
+
+    filteredCustomers.assignAll(customers.where((customer) =>
+        customer.name.toLowerCase().contains(value) ||customer.phone.contains(value),
       ),
     );
+    showCustomerSuggestions.value = filteredCustomers.isNotEmpty;
   }
 
   void onSearchVehicle(String query) {
@@ -216,6 +213,7 @@ class MonitorController extends GetxController {
     selectedService.value = null;
     vehicleNumber.text = vehicle.number;
     vehicleName.text = vehicle.name;
+    vehicleType.text = vehicle.vehicleType;
     vehicleOwner.text = _userName(vehicle.ownerId);
     driver.text = _userName(vehicle.driverId);
     
@@ -251,17 +249,18 @@ class MonitorController extends GetxController {
 
   void startActivity() {
     if (selectedVehicle.value == null) {
-      _showMessage('Warning', 'Please select a vehicle first.');
+      showMessage('Warning', 'Please select a vehicle first.');
       vehicleCollapsed.value = false;
       return;
     }
 
     if (selectedService.value == null) {
-      _showMessage('Warning', 'Please select a service first.');
+      showMessage('Warning', 'Please select a service first.');
       return;
     }
 
     timerController.start();
+
     supervisor.text = LoginController.loginUser.fullname;
   }
 
@@ -280,33 +279,36 @@ class MonitorController extends GetxController {
   }
 
   Future<void> saveActivity() async {
+    var customer = selectedCustomer.value;
+
     if (selectedVehicle.value == null) {
-      _showMessage('Warning', 'Please select a vehicle.');
+      showMessage('Warning', 'Please select a vehicle.');
       return;
     }
 
     if (selectedService.value == null) {
-      _showMessage('Warning', 'Please select a service.');
+      showMessage('Warning', 'Please select a service.');
       return;
     }
 
-    if (isCustomerEmpty && selectedCustomer.value == null) {
+    if (isCustomerEmpty && customer == null) {
       customerCollapsed.value = false;
-      _showMessage('Warning', 'Please enter customer details.');
+      showMessage('Warning', 'Please enter customer details.');
       return;
     }
 
     if (timerController.state.value != TimerState.stopped) {
-      _showMessage('Warning', 'Please stop the activity before saving.');
+      showMessage('Warning', 'Please stop the activity before saving.');
       return;
     }
 
     isLoading.value = true;
 
     try {
+      customer ??= await saveCustomer();
+
       timerController.computeAmount(_rate);
 
-      final customer = await saveCustomer();
       final now = DateTime.now();
       final activityId = const Uuid().v4();
 
@@ -347,16 +349,16 @@ class MonitorController extends GetxController {
       );
 
       if (!success) {
-        _showMessage('Error', 'Failed to save activity.');
+        showMessage('Error', 'Failed to save activity.');
         return;
       }
 
-      _showMessage('Success', 'Activity saved successfully.');
+      showMessage('Success', 'Activity saved successfully.');
       timerController.reset();
       resetForm();
     } catch (error) {
-      debugPrint('MonitorController: $error');
-      _showMessage('Error', 'Failed to save activity.');
+      debugPrint('MonitorController.saveActivity: $error');
+      showMessage('Error', error.toString());
     } finally {
       isLoading.value = false;
     }
@@ -364,14 +366,13 @@ class MonitorController extends GetxController {
 
   Future<CustomerModel> saveCustomer() async {
     final selected = selectedCustomer.value;
-
     if (selected != null) return selected;
 
     final customerPhone = phone.text.trim();
 
     final existing = cache.getRecordByValue<CustomerModel>(
       'customers',
-      (customer) => customer.phone.trim() == customerPhone,
+          (customer) => customer.phone.trim() == customerPhone,
     );
 
     if (existing != null) {
@@ -380,10 +381,24 @@ class MonitorController extends GetxController {
     }
 
     final now = DateTime.now();
+    final uId = await sequenceService.generateSequence('C');
+
+    final duplicate = cache.getRecordByValue<CustomerModel>(
+      'customers',
+          (customer) => customer.uId == uId,
+    );
+
+    if (duplicate != null) {
+      throw StateError(
+        'Customer sequence ID "$uId" already exists.\n'
+            'Name: ${duplicate.name}\n'
+            'Phone: ${duplicate.phone}',
+      );
+    }
 
     final customer = CustomerModel(
       id: const Uuid().v4(),
-      uId: await sequenceService.generateSequence('C'),
+      uId: uId,
       name: customerName.text.trim(),
       phone: customerPhone,
       address: address.text.trim(),
@@ -393,15 +408,9 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
-    final success = await firebaseService.saveRecord(
-      'customers',
-      customer.id,
-      customer.toMap(),
-    );
+    final success = await firebaseService.saveRecord('customers',customer.id,customer.toMap(),);
 
-    if (!success) {
-      throw StateError('Failed to save customer.');
-    }
+    if (!success) {throw StateError('Failed to save customer.');}
 
     selectedCustomer.value = customer;
     return customer;
@@ -409,7 +418,7 @@ class MonitorController extends GetxController {
 
   double get _rate => double.tryParse(rate.text.trim()) ?? 0;
 
-  void _showMessage(String title, String message) {
+  void showMessage(String title, String message) {
     Get.snackbar(title, message);
   }
 

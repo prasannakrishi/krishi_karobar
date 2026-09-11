@@ -7,10 +7,12 @@ class UserModel {
 
   final String id;
   final String uId;
+  String nId;
   String fullname;
   String phone;
+  String? email;
   String? permanentAddress;
-  String? temporaryAddress;
+  String? assignedVehicleId;
   List<String> roles;
   String userType;
   String status;
@@ -22,10 +24,12 @@ class UserModel {
   UserModel({
     required this.id,
     required this.uId,
+    required this.nId,
     required this.fullname,
     required this.phone,
+    this.email,
     this.permanentAddress,
-    this.temporaryAddress,
+    this.assignedVehicleId,
     List<String>? roles,
     this.userType = UserTypes.organization,
     this.status = 'active',
@@ -57,10 +61,11 @@ class UserModel {
   static UserModel _systemUser = UserModel(
     id: systemId,
     uId: 'SU-01',
+    nId: 'SU-01',
     fullname: 'Prasanna Aadhunik Krishi Kendra Pvt. Ltd.',
     phone: '9858028096',
+    email: 'prasannakrishi@hotmail.com',
     permanentAddress: 'Ghorahi-15, Dang',
-    temporaryAddress: 'Ghorahi-15, Dang',
     userType: UserTypes.system,
     roles: [UserRoles.admin],
     status: 'active',
@@ -91,10 +96,12 @@ class UserModel {
     return UserModel(
       id: toStringValue(map['id'] ?? map['guid']),
       uId: toStringValue(map['uId'] ?? map['uid']),
+      nId: toStringValue(map['nId']),
       fullname: toStringValue(map['fullname']),
       phone: toStringValue(map['phone']),
-      permanentAddress: map['permanentAddress']?.toString(),
-      temporaryAddress: map['temporaryAddress']?.toString(),
+      email: map['email']?.toString(),
+      permanentAddress: map['permanentAddress']?.toString() ?? map['address']?.toString(),
+      assignedVehicleId: map['assignedVehicleId']?.toString(),
       roles: userType == UserTypes.guest ? [] : roles,
       userType: userType,
       status: toStringValue(map['status'], defaultValue: 'active'),
@@ -109,10 +116,12 @@ class UserModel {
     return {
       'id': id,
       'uId': uId,
+      'nId': nId,
       'fullname': fullname,
       'phone': phone,
+      'email': email,
       'permanentAddress': permanentAddress,
-      'temporaryAddress': temporaryAddress,
+      'assignedVehicleId': assignedVehicleId,
       'roles': List<String>.from(roles),
       'userType': userType,
       'status': status,
@@ -127,6 +136,7 @@ class UserModel {
     return UserModel(
       id: '',
       uId: '',
+      nId: '',
       fullname: '',
       phone: '',
       roles: [],

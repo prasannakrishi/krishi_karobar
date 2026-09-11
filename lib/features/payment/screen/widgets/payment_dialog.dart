@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../controllers/payment_controller.dart';
+import '../../../../models/models.dart';
+import '../../../../utils/helper/helper_widgets.dart';
+import 'package:krishi_karobar/features/controllers.dart';
 import 'payment_slip.dart';
 
 class PaymentDialog extends StatefulWidget {
   const PaymentDialog({super.key, required this.customerId});
-
   final String customerId;
 
   @override
@@ -19,41 +20,50 @@ class _PaymentDialogState extends State<PaymentDialog> {
   @override
   void initState() {
     super.initState();
-
     controller = Get.isRegistered<PaymentController>()
         ? Get.find<PaymentController>()
         : Get.put(PaymentController());
-
     controller.selectCustomer(widget.customerId);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 10),
       title: Obx(
         () => Text(
-          'Collect Payment - '
-          '${controller.selectedCustomer.value?.name ?? '-'}',
+          'Collect Payment - ${controller.selectedCustomer.value?.name ?? '-'}',
         ),
       ),
       content: SizedBox(
         width: double.maxFinite,
         child: Obx(() {
+          if (controller.isLoadingActivities.value) {
+            return const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
           if (controller.dueActivities.isEmpty) {
-            return const Text('This customer has no outstanding due.');
+            return const SizedBox(
+              height: 120,
+              child: Center(
+                child: Text('This customer has no outstanding due.'),
+              ),
+            );
           }
 
           return SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _dueList(),
+                _dueListTable(),
                 const SizedBox(height: 12),
                 _amountField(),
                 const SizedBox(height: 12),
                 _methodField(),
-                const SizedBox(height: 12),
-                _referenceField(),
                 const SizedBox(height: 12),
                 _descriptionField(),
               ],
@@ -62,7 +72,11 @@ class _PaymentDialogState extends State<PaymentDialog> {
         }),
       ),
       actions: [
-        TextButton(
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+          ),
           onPressed: controller.isSaving.value
               ? null
               : () {
@@ -73,14 +87,18 @@ class _PaymentDialogState extends State<PaymentDialog> {
         ),
         Obx(
           () => ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
+            ),
             onPressed:
-                controller.isSaving.value || controller.dueActivities.isEmpty
+                controller.isSaving.value ||
+                    controller.isLoadingActivities.value ||
+                    controller.dueActivities.isEmpty
                 ? null
                 : _savePayment,
             child: controller.isSaving.value
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Text('Save Payment'),
@@ -90,60 +108,84 @@ class _PaymentDialogState extends State<PaymentDialog> {
     );
   }
 
-  Widget _dueList() {
-    return Column(
+  Widget _dueListTable() {
+    final entries = controller.dueActivities;
+
+    return Stack(
       children: [
-        Row(
-          children: const [
-            Expanded(
-              flex: 2,
-              child: Text(
+        uDataTable(
+          columns: [
+            _buildCell(
+              const Text(
                 'Activity',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
+              110,
             ),
-            Expanded(
-              child: Text(
-                'Due',
-                textAlign: TextAlign.right,
+            // _buildCell(
+            //   const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
+            //   100,
+            // ),
+            _buildCell(
+              const Text(
+                'Duration',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
+              80,
+            ),
+            _buildCell(
+              const Text('Rate', style: TextStyle(fontWeight: FontWeight.bold)),
+              70,
+            ),
+            _buildCell(
+              const Text('Due', style: TextStyle(fontWeight: FontWeight.bold)),
+              100,
             ),
           ],
-        ),
-        const Divider(),
-        ...controller.dueActivities.map(
-          (activity) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(flex: 2, child: Text(activity.uId)),
-                Expanded(
-                  child: Text(
-                    'रु ${activity.dueAmount.toStringAsFixed(2)}',
-                    textAlign: TextAlign.right,
+          rowValues: [
+            ...entries.map(
+              (activity) => [
+                _buildCell(Text(activity.uId), 110),
+                // _buildCell(
+                //   Text(
+                //     DateFormat(
+                //       'yyyy/MM/dd',
+                //     ).format(activity.createdAt.toLocal()),
+                //   ),
+                //   100,
+                // ),
+                _buildCell(Text('${activity.duration} min'), 80),
+                _buildCell(Text('रु ${activity.rate.toInt()}'), 70),
+                _buildCell(
+                  Text('रु ${_activityDue(activity)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
+                  100,
                 ),
               ],
             ),
-          ),
-        ),
-        const Divider(),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Total Due',
-                style: TextStyle(fontWeight: FontWeight.bold),
+            [
+              _buildCell(
+                const Text(
+                  'Total Due',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                110,
               ),
-            ),
-            Text(
-              'रु ${controller.totalDue.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
+              //_buildCell(const Text(''), 100),
+              _buildCell(const Text(''), 80),
+              _buildCell(const Text(''), 70),
+              _buildCell(
+                Text(
+                  'रु ${controller.totalDue.toInt()}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                100,
               ),
-            ),
+            ],
           ],
         ),
       ],
@@ -169,6 +211,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
     return Obx(
       () => DropdownButtonFormField<String>(
         decoration: const InputDecoration(labelText: 'Payment Method'),
+        initialValue: controller.selectedPaymentMethod.value,
         items: const [
           DropdownMenuItem(value: 'cash', child: Text('Cash')),
           DropdownMenuItem(value: 'bankTransfer', child: Text('Bank Transfer')),
@@ -185,24 +228,10 @@ class _PaymentDialogState extends State<PaymentDialog> {
     );
   }
 
-  Widget _referenceField() {
-    return Obx(
-      () => TextField(
-        controller: controller.referenceController,
-        enabled: controller.selectedPaymentMethod.value != 'cash',
-        decoration: InputDecoration(
-          labelText: controller.selectedPaymentMethod.value == 'cash'
-              ? 'Reference No. (Optional)'
-              : 'Reference / Transaction No.',
-        ),
-      ),
-    );
-  }
-
   Widget _descriptionField() {
     return TextField(
       controller: controller.descriptionController,
-      maxLines: 2,
+      maxLines: 1,
       decoration: const InputDecoration(labelText: 'Description'),
     );
   }
@@ -214,9 +243,17 @@ class _PaymentDialogState extends State<PaymentDialog> {
       return;
     }
 
-    Get.back();
-
     await Get.dialog(PaymentSlip(payment: payment));
+
+      Get.back();
+  }
+
+  int _activityDue(ActivityModel activity) {
+    return (activity.amount - activity.paidAmount).round();
+  }
+
+  Widget _buildCell(Widget child, double width) {
+    return SizedBox(width: width, child: child);
   }
 
   @override
@@ -224,7 +261,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
     if (Get.isRegistered<PaymentController>()) {
       controller.reset();
     }
-
     super.dispose();
   }
 }

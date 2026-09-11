@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:get/get.dart';
-import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'helper_widgets.dart';
 
 class NetworkManager extends GetxController {
@@ -23,10 +21,16 @@ class NetworkManager extends GetxController {
   }
 
   Future<void> _updateConnectionStatus(List<ConnectivityResult> result) async {
+    final connected = result.any((status) =>
+    status == ConnectivityResult.wifi ||
+        status == ConnectivityResult.mobile ||
+        status == ConnectivityResult.ethernet ||
+        status == ConnectivityResult.vpn);
 
-    if (result.contains(ConnectivityResult.wifi) || result.contains(ConnectivityResult.mobile)) {
-      _connectionStatus.value = result.firstWhere((status) => status != ConnectivityResult.none, orElse: () => ConnectivityResult.none);
-    } else{
+    if (connected) {
+      _connectionStatus.value =
+          result.firstWhere((status) => status != ConnectivityResult.none);
+    } else {
       _connectionStatus.value = ConnectivityResult.none;
       warningSnackBar(title: 'No Internet Connection');
     }
@@ -36,18 +40,12 @@ class NetworkManager extends GetxController {
     try {
       final result = await _connectivity.checkConnectivity();
 
-      if (!result.contains(ConnectivityResult.wifi) && !result.contains(ConnectivityResult.mobile)) return false;
-      return await hasInternetAccess();
-    } on PlatformException catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> hasInternetAccess() async {
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException catch (_) {
+      return result.any((status) =>
+      status == ConnectivityResult.wifi ||
+          status == ConnectivityResult.mobile ||
+          status == ConnectivityResult.ethernet ||
+          status == ConnectivityResult.vpn);
+    } on PlatformException {
       return false;
     }
   }

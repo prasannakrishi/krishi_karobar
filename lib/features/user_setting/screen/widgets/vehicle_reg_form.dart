@@ -83,7 +83,7 @@ class VehiclesForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _TextField(controller: controller.vNotesController, label: 'Notes (Optional)', maxLines: 2),
+        _TextField(controller: controller.vNotesController, label: 'Notes (Optional)', maxLines: 1, required: false, fieldKey: 'vehicleNote',),
         const SizedBox(height: 12),
         Row(
           children: [

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:krishi_karobar/features/activity_monitor/screen/widget/monitor_controls.dart';
 import '../../../../common/widgets/app_scaffold.dart';
 import '../../../../common/widgets/appbar.dart';
-import '../../../utils/constants/enums.dart';
 import '../controllers/monitor_controller.dart';
 import 'widget/activity_details.dart';
 import 'widget/customer_info.dart';
@@ -50,7 +50,7 @@ class MonitorScreen extends GetView<MonitorController> {
           ],
         ),
       ),
-      bottomNavigationBar: _MonitorControls(controller: controller),
+      bottomNavigationBar: const MonitorControls(),
     );
   }
 }
@@ -110,111 +110,6 @@ class _Section extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _MonitorControls extends StatelessWidget {
-  const _MonitorControls({required this.controller});
-  final MonitorController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Obx(() {
-          final state = controller.timerController.state.value;
-          if (state == TimerState.initial) {
-            return _button(
-              context,
-              'START',
-              Icons.play_arrow,
-              controller.startActivity,
-            );
-          }
-          if (state == TimerState.running) {
-            return Row(
-              children: [
-                Expanded(
-                  child: _button(
-                    context,
-                    'PAUSE',
-                    Icons.pause,
-                    controller.pauseActivity,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _button(
-                    context,
-                    'STOP',
-                    Icons.stop,
-                    controller.stopActivity,
-                  ),
-                ),
-              ],
-            );
-          }
-          if (state == TimerState.paused) {
-            return Row(
-              children: [
-                Expanded(
-                  child: _button(
-                    context,
-                    'RESUME',
-                    Icons.play_arrow,
-                    controller.resumeActivity,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _button(
-                    context,
-                    'STOP',
-                    Icons.stop,
-                    controller.stopActivity,
-                  ),
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(
-                child: _button(
-                  context,
-                  'SAVE',
-                  Icons.save,
-                  controller.saveActivity,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _button(
-                  context,
-                  'RESET',
-                  Icons.refresh,
-                  controller.timerController.reset,
-                ),
-              ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _button(
-    BuildContext context,
-    String text,
-    IconData icon,
-    VoidCallback onPressed,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(text),
     );
   }
 }
