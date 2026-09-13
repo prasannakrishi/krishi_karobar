@@ -80,7 +80,7 @@ class MonitorControls extends GetView<MonitorController> {
                       context,
                       'RESET',
                       Icons.refresh,
-                      controller.timerController.reset,
+                      controller.confirmReset,
                     ),
                   ),
                 ],

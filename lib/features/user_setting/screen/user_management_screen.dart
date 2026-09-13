@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
+import '../../../common/widgets/access_denied_screen.dart';
+import '../../../services/services.dart';
 import '../../../utils/helper/helper_widgets.dart';
 import '../controller/user_controller.dart';
 import 'widgets/user_form.dart';
@@ -11,7 +14,11 @@ class UserManagementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    if (!Authz.can(Permissions.userView)) {
+      return const AccessDeniedScreen(title: 'Users');
+    }
+    return UAppScaffold(
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         titleSpacing: 0,
@@ -24,17 +31,9 @@ class UserManagementScreen extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: controller.clearSelection,
-                  icon: const Icon(Icons.arrow_back),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
-                  ),
-                ),
+
                 SizedBox(
-                  width: 32,
+                  width: 36,
                   height: 48,
                   child: Center(
                     child: Checkbox(
@@ -61,7 +60,7 @@ class UserManagementScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (!multi && selected)
+                if (!multi && selected && Authz.can(Permissions.userEdit))
                   IconButton(
                     tooltip: 'Edit',
                     onPressed: () {
@@ -73,20 +72,21 @@ class UserManagementScreen extends StatelessWidget {
                     },
                     icon: const Icon(Icons.edit_outlined),
                   ),
-                if (selected)
+                if (selected && Authz.can(Permissions.userDelete))
                   IconButton(
                     tooltip: 'Delete',
                     onPressed: controller.deleteSelectedUsers,
                     icon: const Icon(Icons.delete_outline),
                   ),
-                IconButton(
-                  tooltip: 'Add',
-                  onPressed: () {
-                    controller.startAdd();
-                    Get.to(() => UserForm());
-                  },
-                  icon: const Icon(Icons.add),
-                ),
+                if (Authz.can(Permissions.userCreate))
+                  IconButton(
+                    tooltip: 'Add',
+                    onPressed: () {
+                      controller.startAdd();
+                      Get.to(() => UserForm());
+                    },
+                    icon: const Icon(Icons.add),
+                  ),
                 const SizedBox(width: 8),
               ],
             ),

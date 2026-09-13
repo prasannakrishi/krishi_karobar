@@ -10,3 +10,4 @@ export 'recent_activity/controllers/activity_controller.dart';
 export 'user_setting/controller/setting_controller.dart';
 export 'user_setting/controller/vehicle_controller.dart';
 export 'user_setting/controller/user_controller.dart';
+export 'user_setting/controller/service_controller.dart';

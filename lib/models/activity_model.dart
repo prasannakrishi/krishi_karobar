@@ -6,6 +6,7 @@ class ActivityModel {
   String customerId;
   String vehicleId;
   String serviceId;
+  String? driverId;
   String supervisorId;
   DateTime startTime;
   DateTime endTime;
@@ -32,6 +33,7 @@ class ActivityModel {
     required this.customerId,
     required this.vehicleId,
     required this.serviceId,
+    this.driverId,
     required this.supervisorId,
     required this.startTime,
     required this.endTime,
@@ -62,6 +64,7 @@ class ActivityModel {
       customerId: toStringValue(map['customerId'] ?? map['customer']),
       vehicleId: toStringValue(map['vehicleId'] ?? map['vehicle']),
       serviceId: toStringValue(map['serviceId'] ?? map['serviceType']),
+      driverId: map['driverId']?.toString(),
       supervisorId: toStringValue(map['supervisorId']),
       startTime: start,
       endTime: toDateTime(map['endTime']) ?? start,
@@ -93,6 +96,7 @@ class ActivityModel {
       customerId: '',
       vehicleId: '',
       serviceId: '',
+      driverId: null,
       supervisorId: '',
       startTime: now,
       endTime: now,
@@ -112,6 +116,7 @@ class ActivityModel {
       'customerId': customerId,
       'vehicleId': vehicleId,
       'serviceId': serviceId,
+      'driverId': driverId,
       'supervisorId': supervisorId,
       'startTime': startTime.toUtc().toIso8601String(),
       'endTime': endTime.toUtc().toIso8601String(),

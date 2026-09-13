@@ -17,13 +17,13 @@ class PaymentSlip extends StatelessWidget {
     final receiver = cache.users[payment.receivedBy];
 
     return AlertDialog(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       insetPadding: const EdgeInsets.symmetric(horizontal: 2),
 
       content: SizedBox(
         child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _buildHeader(),
               const Divider(),
@@ -83,14 +83,14 @@ class PaymentSlip extends StatelessWidget {
       final service = activity == null ? null : cache.services[activity.serviceId];
 
       return [
-        _buildCell(Text(activity?.uId ?? '-'), 110),
+        _buildCell(Text(activity?.uId ?? '-'), 115),
         _buildCell(Text(service?.name ?? '-'), 80),
-        _buildCell(Text(_money(allocation.previousDue)), 55),
-        _buildCell(Text(_money(allocation.paidAmount)), 55),
+        _buildCell(Text(_money(allocation.previousDue)), 50),
+        _buildCell(Text(_money(80000)), 50),
         _buildCell(Text(_money(allocation.remainingDue),
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-          55,
+          70,
         ),
       ];
     }).toList();
@@ -112,7 +112,7 @@ class PaymentSlip extends StatelessWidget {
                 'Activity',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              110,
+              115,
             ),
             _buildCell(
               const Text(
@@ -123,21 +123,21 @@ class PaymentSlip extends StatelessWidget {
             ),
             _buildCell(
               const Text(
-                'Due रु ',
+                'Due',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              55,
+              40,
             ),
             _buildCell(
               const Text(
-                'Paid रु ',
+                'Paid',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              55,
+              50,
             ),
             _buildCell(
               const Text(
-                'Remain रु ',
+                'Remain',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               70,

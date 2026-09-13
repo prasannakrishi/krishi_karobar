@@ -29,7 +29,6 @@ class VehicleController extends GetxController {
   // USERS
 
   final selectedOwner = Rxn<UserModel>();
-  final selectedDriver = Rxn<UserModel>();
 
   final vehicleTypes = <String>[
     'Tractor',
@@ -38,8 +37,6 @@ class VehicleController extends GetxController {
 
   final allUsers = <UserModel>[].obs;
   final vehicleOwners = <UserModel>[].obs;
-  final filteredOwners = <UserModel>[].obs;
-  final drivers = <UserModel>[].obs;
 
   // SERVICES
 
@@ -49,6 +46,14 @@ class VehicleController extends GetxController {
   // UI STATE
 
   final isSelectionOpen = false.obs;
+
+  // MANAGEMENT LIST SELECTION (Vehicle Management screen)
+
+  final selectedVehicleIds = <String>{}.obs;
+  final selectionMode = false.obs;
+
+  final isEditMode = false.obs;
+  VehicleModel? editingVehicle;
 
   // FORM
 
@@ -80,14 +85,15 @@ class VehicleController extends GetxController {
   void onInit() {
     super.onInit();
 
-    loadVehicles();
     loadDefaultVehicle();
-    fetchUsers();
-    fetchServices();
+    _bootstrap();
+  }
 
-    vOwnerController.addListener(() {
-      _onSearchOwner(vOwnerController.text);
-    });
+  Future<void> _bootstrap() async {
+    await loadVehicles();
+    await fetchUsers();
+    await fetchServices();
+    ensureDefaultVehicleForCurrentUser();
   }
 
   // USERS
@@ -98,8 +104,6 @@ class VehicleController extends GetxController {
       allUsers.assignAll(users);
       vehicleOwners.assignAll(users.where(_isVehicleOwner).toList(),
       );
-
-      drivers.assignAll(users.where(_isDriver).toList(),);
     } catch (e) {
       debugPrint(
         'VehicleController: Error fetching users: $e',
@@ -116,45 +120,10 @@ class VehicleController extends GetxController {
         roles.contains('vehicle owner');
   }
 
-  bool _isDriver(UserModel user) {
-    return user.roles.any((role) => role.trim().toLowerCase() == 'driver');
-  }
-
-  // OWNER SEARCH
-
-  void _onSearchOwner(String query) {
-    final search = query.trim().toLowerCase();
-
-    if (search.length < 2) {
-      filteredOwners.clear();
-      return;
-    }
-
-    filteredOwners.assignAll(
-      vehicleOwners.where(
-            (user) {
-          final name =
-          user.fullname.toLowerCase();
-
-          final phone =
-          user.phone.toLowerCase();
-
-          return name.contains(search) ||
-              phone.contains(search);
-        },
-      ),
-    );
-  }
-
-  void selectOwner(UserModel user) {
+  void selectOwner(UserModel? user) {
     selectedOwner.value = user;
-    vOwnerController.text = user.fullname;
-    filteredOwners.clear();
-    warningField.value = null;
-  }
-
-  void clearOwnerSearch() {
-    filteredOwners.clear();
+    vOwnerController.text = user?.fullname ?? '';
+    if (user != null) warningField.value = null;
   }
 
   // SERVICES
@@ -211,6 +180,7 @@ class VehicleController extends GetxController {
       );
 
       vehiclesList.assignAll(list);
+      ensureDefaultVehicleForCurrentUser();
     } catch (e) {
       debugPrint(
         'VehicleController: Error loading vehicles: $e',
@@ -269,11 +239,47 @@ class VehicleController extends GetxController {
     }
   }
 
+  // VEHICLES ASSIGNED TO A USER (as owner or driver)
+
+  List<VehicleModel> assignedVehiclesForUser(String userId) {
+    if (userId.isEmpty) return const [];
+
+    final user = allUsers.firstWhereOrNull((u) => u.id == LoginController.loginUser.id);
+
+    // Organization admins/super-admins can operate any vehicle.
+    if (user != null && user.hasAllVehicleAccess) {
+      return vehiclesList.toList();
+    }
+
+    return vehiclesList
+        .where(
+          (v) =>
+              v.ownerId == userId ||
+              (user?.assignedVehicleIds.contains(v.id) ?? false),
+        )
+        .toList();
+  }
+
+  /// If the logged-in user has exactly one vehicle assigned to them
+  /// (as owner or driver) and no default vehicle has been picked yet,
+  /// that single vehicle automatically becomes the default.
+  void ensureDefaultVehicleForCurrentUser() {
+    final userId = LoginController.loginUser.id;
+    if (userId.isEmpty) return;
+
+    // Respect an already-persisted default vehicle.
+    if (vehicle.id.isNotEmpty) return;
+
+    final assigned = assignedVehiclesForUser(userId);
+
+    if (assigned.length == 1) {
+      setDefaultVehicle(assigned.first, showMessage: false);
+    }
+  }
+
   // INITIALIZE FORM
 
   void initializeVehicle(VehicleModel v) {
-    selectedVehicle.value = v;
-
     vNumberController.text = v.number;
     vNameController.text = v.name;
     vTypeController.text = v.vehicleType;
@@ -283,11 +289,6 @@ class VehicleController extends GetxController {
     selectedOwner.value =
         allUsers.firstWhereOrNull(
               (user) => user.id == v.ownerId,
-        );
-
-    selectedDriver.value =
-        allUsers.firstWhereOrNull(
-              (user) => user.id == v.driverId,
         );
 
     vOwnerController.text =
@@ -300,16 +301,110 @@ class VehicleController extends GetxController {
     warningField.value = null;
   }
 
+  // MANAGEMENT LIST SELECTION
+
+  bool isRowSelected(String id) => selectedVehicleIds.contains(id);
+
+  bool get hasSelection => selectedVehicleIds.isNotEmpty;
+  bool get hasSingleSelection => selectedVehicleIds.length == 1;
+  bool get hasMultipleSelection => selectedVehicleIds.length > 1;
+
+  bool get isAllSelected =>
+      vehiclesList.isNotEmpty &&
+      selectedVehicleIds.length == vehiclesList.length;
+
+  bool get isPartiallySelected =>
+      selectedVehicleIds.isNotEmpty && !isAllSelected;
+
+  VehicleModel? get selectedListVehicle {
+    if (!hasSingleSelection) return null;
+    return vehiclesList.firstWhereOrNull(
+      (v) => v.id == selectedVehicleIds.first,
+    );
+  }
+
+  void selectRow(String id) {
+    if (selectionMode.value) {
+      toggleSelection(id);
+      return;
+    }
+
+    selectedVehicleIds
+      ..clear()
+      ..add(id);
+    selectedVehicleIds.refresh();
+  }
+
+  void startMultiSelect(String id) {
+    selectionMode.value = true;
+    selectedVehicleIds
+      ..clear()
+      ..add(id);
+    selectedVehicleIds.refresh();
+  }
+
+  void toggleSelection(String id) {
+    if (!selectionMode.value) return;
+
+    if (selectedVehicleIds.contains(id)) {
+      selectedVehicleIds.remove(id);
+    } else {
+      selectedVehicleIds.add(id);
+    }
+
+    selectedVehicleIds.refresh();
+
+    if (selectedVehicleIds.isEmpty) {
+      selectionMode.value = false;
+    }
+  }
+
+  void toggleSelectAll() {
+    if (!selectionMode.value) {
+      selectionMode.value = true;
+    }
+
+    if (isAllSelected) {
+      selectedVehicleIds.clear();
+    } else {
+      selectedVehicleIds
+        ..clear()
+        ..addAll(vehiclesList.map((v) => v.id));
+    }
+
+    selectedVehicleIds.refresh();
+
+    if (selectedVehicleIds.isEmpty) {
+      selectionMode.value = false;
+    }
+  }
+
+  void clearRowSelection() {
+    selectedVehicleIds.clear();
+    selectionMode.value = false;
+    selectedVehicleIds.refresh();
+  }
+
+  // START ADD / EDIT (Vehicle Management form)
+
+  void startAdd() {
+    clearVehicle();
+    isEditMode.value = false;
+    editingVehicle = null;
+  }
+
+  void startEdit(VehicleModel v) {
+    editingVehicle = v;
+    isEditMode.value = true;
+    initializeVehicle(v);
+  }
+
   // CLEAR FORM
 
   void clearVehicle() {
-    selectedVehicle.value = null;
-
     selectedOwner.value = null;
-    selectedDriver.value = null;
 
     selectedServiceIds.clear();
-    filteredOwners.clear();
     warningField.value = null;
 
     vNumberController.clear();
@@ -318,6 +413,9 @@ class VehicleController extends GetxController {
     vOwnerController.clear();
     vModelController.clear();
     vNotesController.clear();
+
+    isEditMode.value = false;
+    editingVehicle = null;
   }
 
   // VALIDATION
@@ -381,8 +479,7 @@ class VehicleController extends GetxController {
   // SAVE VEHICLE
 
   Future<bool> saveVehicle() async {
-    final validationMessage =
-    validateVehicle();
+    final validationMessage = validateVehicle();
 
     if (validationMessage != null) {
       Get.snackbar(
@@ -394,19 +491,20 @@ class VehicleController extends GetxController {
       return false;
     }
 
+    return isEditMode.value ? _updateVehicle() : _createVehicle();
+  }
+
+  Future<bool> _createVehicle() async {
     isLoading.value = true;
 
     try {
-      final vehicleType =
-      vTypeController.text.trim();
+      final vehicleType = vTypeController.text.trim();
 
-      final sequencePrefix =
-      _getVehicleSequencePrefix(
+      final sequencePrefix = _getVehicleSequencePrefix(
         vehicleType,
       );
 
-      final vehicleUId =
-      await sequenceService.generateSequence(
+      final vehicleUId = await sequenceService.generateSequence(
         sequencePrefix,
       );
 
@@ -421,12 +519,12 @@ class VehicleController extends GetxController {
         model: vModelController.text.trim().isEmpty
             ? null
             : vModelController.text.trim(),
-        supportServiceIds:
-        List<String>.from(
+        supportServiceIds: List<String>.from(
           selectedServiceIds,
         ),
         ownerId: selectedOwner.value!.id,
-        driverId: selectedDriver.value?.id,
+        // driverId is intentionally left null here - it's only ever set
+        // while an activity is actively running on this vehicle.
         status: 'available',
         isActive: true,
         notes: vNotesController.text.trim().isEmpty
@@ -436,8 +534,7 @@ class VehicleController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      final success =
-      await firebaseService.saveRecord(
+      final success = await firebaseService.saveRecord(
         'vehicles',
         newVehicle.id,
         newVehicle.toMap(),
@@ -455,14 +552,13 @@ class VehicleController extends GetxController {
 
       await loadVehicles();
 
+      // Newly registered vehicle becomes the app-wide default vehicle.
       setDefaultVehicle(
         newVehicle,
         showMessage: false,
       );
 
-      clearVehicle();
-
-      Get.back();
+      clearRowSelection();
 
       Get.snackbar(
         'Success',
@@ -484,6 +580,146 @@ class VehicleController extends GetxController {
       );
 
       return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> _updateVehicle() async {
+    final target = editingVehicle;
+    if (target == null) return false;
+
+    isLoading.value = true;
+
+    try {
+      final updatedData = {
+        'name': vNameController.text.trim(),
+        'number': vNumberController.text.trim(),
+        'vehicleType': vTypeController.text.trim(),
+        'model': vModelController.text.trim().isEmpty
+            ? null
+            : vModelController.text.trim(),
+        'supportServiceIds': List<String>.from(selectedServiceIds),
+        'ownerId': selectedOwner.value!.id,
+        // driverId / supervisorId are not editable here - they're managed
+        // automatically by the activity start/end flow.
+        'notes': vNotesController.text.trim().isEmpty
+            ? null
+            : vNotesController.text.trim(),
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        'updatedBy': LoginController.loginUser.id,
+      };
+
+      final updated = await firebaseService.updateRecord(
+        'vehicles',
+        target.id,
+        updatedData,
+      );
+
+      if (!updated) {
+        Get.snackbar(
+          'Error',
+          'Failed to update vehicle.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+
+        return false;
+      }
+
+      await loadVehicles();
+
+      // Keep the app-wide default vehicle in sync if it was the one edited.
+      if (vehicle.id == target.id) {
+        final refreshed = vehiclesList.firstWhereOrNull(
+          (v) => v.id == target.id,
+        );
+
+        if (refreshed != null) {
+          setDefaultVehicle(refreshed, showMessage: false);
+        }
+      }
+
+      clearRowSelection();
+
+      Get.snackbar(
+        'Success',
+        'Vehicle updated successfully.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
+
+      return true;
+    } catch (e) {
+      debugPrint(
+        'VehicleController: Error updating vehicle: $e',
+      );
+
+      Get.snackbar(
+        'Error',
+        'Something went wrong while updating vehicle.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  /// A vehicle is "in use" if it's assigned to a user (as their vehicle),
+  /// or has recorded activities against it. Such vehicles are kept out of
+  /// deletion to avoid breaking those references.
+  bool _isVehicleInUse(String vehicleId) {
+    final assignedToUser = cache
+        .getCachedRecords<UserModel>('users')
+        .any((user) => user.assignedVehicleIds.contains(vehicleId));
+
+    if (assignedToUser) return true;
+
+    return cache
+        .getCachedRecords<ActivityModel>('activities')
+        .any((activity) => activity.vehicleId == vehicleId);
+  }
+
+  Future<void> deleteSelectedVehicles() async {
+    if (selectedVehicleIds.isEmpty) return;
+
+    final ids = selectedVehicleIds.toList();
+    final blockedNumbers = <String>[];
+    final deletableIds = <String>[];
+
+    for (final id in ids) {
+      if (_isVehicleInUse(id)) {
+        final v = vehiclesList.firstWhereOrNull((vh) => vh.id == id);
+        blockedNumbers.add(v?.number ?? id);
+      } else {
+        deletableIds.add(id);
+      }
+    }
+
+    if (blockedNumbers.isNotEmpty) {
+      Get.snackbar(
+        'Vehicle',
+        blockedNumbers.length == 1
+            ? '"${blockedNumbers.first}" is assigned to a user or activity '
+                'and cannot be deleted.'
+            : 'These vehicles are in use and cannot be deleted: '
+                '${blockedNumbers.join(', ')}.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+
+    if (deletableIds.isEmpty) return;
+
+    isLoading.value = true;
+
+    try {
+      for (final id in deletableIds) {
+        await firebaseService.deleteRecord('vehicles', id);
+      }
+
+      await loadVehicles();
+      clearRowSelection();
     } finally {
       isLoading.value = false;
     }

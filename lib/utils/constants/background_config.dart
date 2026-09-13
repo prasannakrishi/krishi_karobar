@@ -8,10 +8,10 @@ class UBackgroundConfig {
   static const bool useImage = true;
   static const String image = UImages.loginBackground;
 
-  static const double imageOpacity = 0.16;
-  static const double blur = 10.0;
-  static const double overlayOpacity = 0.78;
+  static const double imageOpacity = .6;
+  static const double blur = 50.0;
+  static const double overlayOpacity = 0.4;
 
-  static const lightOverlay = Color(0xFFF7FAF7);
+  static const lightOverlay = Color(0xFFFFFFFF);
   static const darkOverlay = Color(0xFF121712);
 }

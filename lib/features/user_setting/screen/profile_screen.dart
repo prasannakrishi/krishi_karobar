@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:krishi_karobar/common/widgets/appbar.dart';
-import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
+import 'package:krishi_karobar/features/controllers.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -74,9 +74,9 @@ class UDetailRow extends StatelessWidget {
     this.valueStyle,
   });
 
-  final String? title;        // optional
-  final String value;         // required
-  final IconData? icon;       // optional
+  final String? title; // optional
+  final String value; // required
+  final IconData? icon; // optional
   final TextStyle? titleStyle;
   final TextStyle? valueStyle;
 
@@ -101,10 +101,7 @@ class UDetailRow extends StatelessWidget {
           child: Text(
             value,
             style: valueStyle ??
-                Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.apply(fontWeightDelta: 2),
+                Theme.of(context).textTheme.bodyMedium?.apply(fontWeightDelta: 2),
             overflow: TextOverflow.ellipsis,
           ),
         ),

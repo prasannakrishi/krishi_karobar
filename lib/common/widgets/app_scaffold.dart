@@ -11,6 +11,7 @@ class UAppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.floatingActionButton,
     this.extendBodyBehindAppBar = true,
+    this.transparentBackground = false,
   });
 
   final Widget body;
@@ -18,6 +19,7 @@ class UAppScaffold extends StatelessWidget {
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final bool extendBodyBehindAppBar;
+  final bool transparentBackground;
 
   @override
   Widget build(BuildContext context) {
@@ -26,9 +28,9 @@ class UAppScaffold extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _background(),
-        if (UBackgroundConfig.blur > 0) _blur(),
-        _overlay(isDark),
+        if (!transparentBackground) _background(),
+        if (!transparentBackground && UBackgroundConfig.blur > 0) _blur(),
+        if (!transparentBackground) _overlay(isDark),
         Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: extendBodyBehindAppBar,
@@ -76,11 +78,10 @@ class UAppScaffold extends StatelessWidget {
 
   Widget _overlay(bool isDark) {
     return Container(
-      color:
-          (isDark
-                  ? UBackgroundConfig.darkOverlay
-                  : UBackgroundConfig.lightOverlay)
-              .withValues(alpha: UBackgroundConfig.overlayOpacity),
+      color: (isDark
+          ? UBackgroundConfig.darkOverlay
+          : UBackgroundConfig.lightOverlay)
+          .withValues(alpha: UBackgroundConfig.overlayOpacity),
     );
   }
 }

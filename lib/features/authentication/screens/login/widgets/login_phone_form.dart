@@ -117,9 +117,7 @@ class _ULoginPhoneFormState extends State<ULoginPhoneForm> {
     await _completeSignIn(credential);
   }
 
-  Future<void> _completeSignIn(
-      AuthCredential credential,
-      ) async {
+  Future<void> _completeSignIn(AuthCredential credential) async {
     if (_isCompleting) return;
 
     _isCompleting = true;
@@ -195,10 +193,10 @@ class _ULoginPhoneFormState extends State<ULoginPhoneForm> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _header(context),
-                const SizedBox(height: USizes.lg),
+                const SizedBox(height: 10),
                 _phoneField(),
                 if (_isCodeSent.value) ...[
-                  const SizedBox(height: USizes.md),
+                  const SizedBox(height: 10),
                   _otpField(),
                   Align(
                     alignment: Alignment.centerRight,
@@ -209,7 +207,7 @@ class _ULoginPhoneFormState extends State<ULoginPhoneForm> {
                     ),
                   ),
                 ],
-                const SizedBox(height: USizes.md),
+                const SizedBox(height: 5),
                 _submitButton(),
               ],
             ),
@@ -278,7 +276,7 @@ class _ULoginPhoneFormState extends State<ULoginPhoneForm> {
     return TextFormField(
       controller: _otpController,
       keyboardType: TextInputType.number,
-      maxLength: 6,
+      //maxLength: 6,
       enabled: !_isLoading.value,
       decoration: CustomDecoration.uInputDecoration(
         prefixIcon: const Icon(Iconsax.password_check),
@@ -301,7 +299,7 @@ class _ULoginPhoneFormState extends State<ULoginPhoneForm> {
 
     return SizedBox(
       width: double.infinity,
-      height: 55,
+      height: 60,
       child: ElevatedButton(
         onPressed: isLoading
             ? null

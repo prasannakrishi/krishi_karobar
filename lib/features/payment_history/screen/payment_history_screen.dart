@@ -52,7 +52,6 @@ class PaymentHistoryScreen extends StatelessWidget {
               child: CircularProgressIndicator(),
             );
           }
-
           return Column(
             children: [
               Padding(

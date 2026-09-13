@@ -11,6 +11,8 @@ class VehicleModel {
   List<String> supportServiceIds;
   String ownerId;
   String? driverId;
+  String? supervisorId;
+  String? serviceId;
   String status;
   bool isActive;
   String? notes;
@@ -29,6 +31,8 @@ class VehicleModel {
     this.supportServiceIds = const [],
     required this.ownerId,
     this.driverId,
+    this.supervisorId,
+    this.serviceId,
     this.status = 'available',
     this.isActive = true,
     this.notes,
@@ -37,6 +41,9 @@ class VehicleModel {
     this.updatedAt,
     this.updatedBy,
   });
+
+  /// True while this vehicle currently has an activity running on it.
+  bool get isInUse => driverId != null && driverId!.isNotEmpty;
 
   factory VehicleModel.fromMap(Map<String, dynamic> map) {
     final rawServiceIds = map['supportServiceIds'];
@@ -58,6 +65,8 @@ class VehicleModel {
       supportServiceIds: serviceIds,
       ownerId: toStringValue(map['ownerId']),
       driverId: map['driverId']?.toString(),
+      supervisorId: map['supervisorId']?.toString(),
+      serviceId: map['serviceId']?.toString(),
       status: toStringValue(map['status'], defaultValue: 'available'),
       isActive: toBool(map['isActive'], defaultValue: true),
       notes: map['notes']?.toString(),
@@ -79,6 +88,8 @@ class VehicleModel {
       'supportServiceIds': supportServiceIds,
       'ownerId': ownerId,
       'driverId': driverId,
+      'supervisorId': supervisorId,
+      'serviceId': serviceId,
       'status': status,
       'isActive': isActive,
       'notes': notes,
@@ -100,6 +111,8 @@ class VehicleModel {
       supportServiceIds: [],
       ownerId: '',
       driverId: null,
+      supervisorId: null,
+      serviceId: null,
       status: 'available',
       isActive: true,
       notes: null,

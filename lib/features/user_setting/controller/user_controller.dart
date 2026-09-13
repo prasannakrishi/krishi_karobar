@@ -25,7 +25,7 @@ class UserController extends GetxController {
 
   final selectedUserType = UserTypes.organization.obs;
   final selectedRoles = <String>[].obs;
-  final selectedVehicleId = RxnString();
+  final selectedVehicleIds = <String>[].obs;
   final selectedStatus = 'active'.obs;
 
   final isEditMode = false.obs;
@@ -148,7 +148,7 @@ class UserController extends GetxController {
 
     selectedUserType.value = user.userType;
     selectedRoles.assignAll(user.roles);
-    selectedVehicleId.value = user.assignedVehicleId;
+    selectedVehicleIds.assignAll(user.assignedVehicleIds);
     selectedStatus.value = user.status;
   }
 
@@ -160,7 +160,7 @@ class UserController extends GetxController {
 
     selectedUserType.value = UserTypes.organization;
     selectedRoles.clear();
-    selectedVehicleId.value = null;
+    selectedVehicleIds.clear();
     selectedStatus.value = 'active';
 
     isEditMode.value = false;
@@ -175,6 +175,21 @@ class UserController extends GetxController {
     }
   }
 
+  void toggleVehicleAssignment(String vehicleId) {
+    if (selectedVehicleIds.contains(vehicleId)) {
+      selectedVehicleIds.remove(vehicleId);
+    } else {
+      selectedVehicleIds.add(vehicleId);
+    }
+  }
+
+  /// Admins/super-admins implicitly get every vehicle, so there's nothing
+  /// for them to hand-pick; guests never operate a vehicle either.
+  bool get showVehicleAssignment =>
+      selectedUserType.value != UserTypes.guest &&
+          !selectedRoles.contains(UserRoles.admin) &&
+          !selectedRoles.contains(UserRoles.superAdmin);
+
   void onUserTypeChanged(String? value) {
     if (value == null) return;
 
@@ -182,9 +197,7 @@ class UserController extends GetxController {
 
     if (value == UserTypes.guest) {
       selectedRoles.clear();
-      selectedVehicleId.value = null;
-    } else if (value != UserTypes.external) {
-      selectedVehicleId.value = null;
+      selectedVehicleIds.clear();
     }
   }
 
@@ -245,6 +258,31 @@ class UserController extends GetxController {
       final uId = await sequenceService.generateSequence('U');
       final now = DateTime.now().toUtc();
 
+      final roles = selectedUserType.value == UserTypes.guest
+          ? <String>[]
+          : selectedRoles.toList();
+
+      final invalidRoles = roles
+          .where(
+            (r) => !UserRoles.isAllowedForUserType(r, selectedUserType.value),
+      )
+          .toList();
+
+      if (invalidRoles.isNotEmpty) {
+        _error(
+          '${invalidRoles.join(', ')} not allowed for '
+              '${selectedUserType.value} users.',
+        );
+        return false;
+      }
+
+      // Only a Super Admin may create another Super Admin.
+      if (roles.contains(UserRoles.superAdmin) &&
+          !LoginController.loginUser.hasRole(UserRoles.superAdmin)) {
+        _error("You don't have permission to perform this action.");
+        return false;
+      }
+
       final user = UserModel(
         id: id,
         uId: uId,
@@ -253,12 +291,8 @@ class UserController extends GetxController {
         phone: phone,
         email: email.isEmpty ? null : email,
         permanentAddress: address,
-        assignedVehicleId: selectedUserType.value == UserTypes.external
-            ? selectedVehicleId.value
-            : null,
-        roles: selectedUserType.value == UserTypes.guest
-            ? []
-            : selectedRoles.toList(),
+        assignedVehicleIds: showVehicleAssignment? selectedVehicleIds.toList() : [],
+        roles: roles,
         userType: selectedUserType.value,
         status: selectedStatus.value,
         createdAt: now,
@@ -276,6 +310,13 @@ class UserController extends GetxController {
         return false;
       }
 
+      await AuditService.instance.log(
+        action: 'user_created',
+        performedBy: LoginController.loginUser.id,
+        targetUserId: id,
+        newValue: {'userType': user.userType, 'roles': user.roles},
+      );
+
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadUsers();
       clearSelection();
@@ -289,6 +330,18 @@ class UserController extends GetxController {
     }
   }
 
+  /// True if a Super Admin OTHER than [excludingUserId] still exists and is
+  /// active - used to block removing/deactivating the very last Super Admin
+  /// (spec sections 5 & 28).
+  bool _hasAnotherActiveSuperAdmin(String excludingUserId) {
+    return users.any(
+          (u) =>
+      u.id != excludingUserId &&
+          u.status.trim().toLowerCase() == 'active' &&
+          u.hasRole(UserRoles.superAdmin),
+    );
+  }
+
   Future<bool> _updateUser({
     required String name,
     required String phone,
@@ -297,6 +350,43 @@ class UserController extends GetxController {
   }) async {
     final user = editingUser;
     if (user == null) return false;
+
+    final newUserType = selectedUserType.value;
+    final newRoles = newUserType == UserTypes.guest
+        ? <String>[]
+        : selectedRoles.toList();
+    final newStatus = selectedStatus.value;
+
+    final identityChanged =
+        newUserType != user.userType || !_sameRoles(newRoles, user.roles);
+
+    if (identityChanged) {
+      final error = Authz.validateRoleChange(
+        actor: LoginController.loginUser,
+        targetUserId: user.id,
+        newUserType: newUserType,
+        newRoles: newRoles,
+      );
+
+      if (error != null) {
+        _error(error);
+        return false;
+      }
+    }
+
+    final losingSuperAdmin =
+        user.hasRole(UserRoles.superAdmin) &&
+            !newRoles.contains(UserRoles.superAdmin);
+    final beingDeactivated =
+        user.status.trim().toLowerCase() == 'active' &&
+            newStatus.trim().toLowerCase() != 'active' &&
+            user.hasRole(UserRoles.superAdmin);
+
+    if ((losingSuperAdmin || beingDeactivated) &&
+        !_hasAnotherActiveSuperAdmin(user.id)) {
+      _error('Cannot remove/deactivate the last Super Admin.');
+      return false;
+    }
 
     isLoading.value = true;
 
@@ -308,14 +398,12 @@ class UserController extends GetxController {
         'phone': phone,
         'email': email.isEmpty ? null : email,
         'permanentAddress': address,
-        'assignedVehicleId': selectedUserType.value == UserTypes.external
-            ? selectedVehicleId.value
-            : null,
-        'roles': selectedUserType.value == UserTypes.guest
-            ? <String>[]
-            : selectedRoles.toList(),
-        'userType': selectedUserType.value,
-        'status': selectedStatus.value,
+        'assignedVehicleIds': showVehicleAssignment
+            ? selectedVehicleIds.toList()
+            : <String>[],
+        'roles': newRoles,
+        'userType': newUserType,
+        'status': newStatus,
         'updatedAt': now.toIso8601String(),
         'updatedBy': LoginController.loginUser.id,
       };
@@ -331,6 +419,16 @@ class UserController extends GetxController {
         return false;
       }
 
+      if (identityChanged) {
+        await AuditService.instance.log(
+          action: 'user_role_changed',
+          performedBy: LoginController.loginUser.id,
+          targetUserId: user.id,
+          oldValue: {'userType': user.userType, 'roles': user.roles},
+          newValue: {'userType': newUserType, 'roles': newRoles},
+        );
+      }
+
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadUsers();
       clearSelection();
@@ -342,6 +440,12 @@ class UserController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  bool _sameRoles(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final setA = a.toSet();
+    return setA.length == b.toSet().length && setA.containsAll(b);
   }
 
   Future<void> deleteSelectedUsers() async {

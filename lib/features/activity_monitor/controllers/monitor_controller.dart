@@ -24,6 +24,7 @@ class MonitorController extends GetxController {
   final vehicleOwner = TextEditingController();
   final driver = TextEditingController();
   final supervisor = TextEditingController();
+  final service = TextEditingController();
 
   final customerName = TextEditingController();
   final address = TextEditingController();
@@ -40,6 +41,8 @@ class MonitorController extends GetxController {
   final selectedCustomer = Rxn<CustomerModel>();
   final selectedVehicle = Rxn<VehicleModel>();
   late final selectedService = Rxn<ServiceModel>();
+  final selectedDriver = Rxn<UserModel>();
+  final driverWarning = false.obs;
 
   final filteredCustomers = <CustomerModel>[].obs;
   final filteredVehicles = <VehicleModel>[].obs;
@@ -60,6 +63,19 @@ class MonitorController extends GetxController {
 
   List<ServiceModel> get services =>
       cache.services.values.where((service) => service.isActive).toList();
+
+  bool get isLoginUserDriver => LoginController.loginUser.hasRole(UserRoles.driver);
+
+  List<UserModel> get driversForVehicle {
+    final vehicle = selectedVehicle.value;
+    if (vehicle == null) return const [];
+
+    return cache.users.values.where((user) {
+      if (!user.hasRole(UserRoles.driver)) return false;
+      if (user.hasAllVehicleAccess) return true;
+      return user.assignedVehicleIds.contains(vehicle.id);
+    }).toList();
+  }
 
   bool get isCustomerEmpty => customerName.text.trim().isEmpty && phone.text.trim().isEmpty;
 
@@ -103,6 +119,8 @@ class MonitorController extends GetxController {
   void clearVehicle() {
     selectedVehicle.value = null;
     selectedService.value = null;
+    selectedDriver.value = null;
+    driverWarning.value = false;
 
     vehicleNumber.clear();
     vehicleName.clear();
@@ -215,8 +233,16 @@ class MonitorController extends GetxController {
     vehicleName.text = vehicle.name;
     vehicleType.text = vehicle.vehicleType;
     vehicleOwner.text = _userName(vehicle.ownerId);
-    driver.text = _userName(vehicle.driverId);
-    
+
+    driverWarning.value = false;
+    if (isLoginUserDriver) {
+      selectedDriver.value = LoginController.loginUser;
+      driver.text = LoginController.loginUser.fullname;
+    } else {
+      selectedDriver.value = null;
+      driver.clear();
+    }
+
     serviceType.clear();
     serviceSearch.clear();
     rate.text = '0';
@@ -241,6 +267,12 @@ class MonitorController extends GetxController {
     timerController.computeAmount(service.rate);
   }
 
+  void selectDriver(UserModel user) {
+    selectedDriver.value = user;
+    driver.text = user.fullname;
+    driverWarning.value = false;
+  }
+
   void onCustomerChanged() {
     if (selectedCustomer.value != null) {
       selectedCustomer.value = null;
@@ -259,9 +291,101 @@ class MonitorController extends GetxController {
       return;
     }
 
-    timerController.start();
+    if (selectedDriver.value == null) {
+      driverWarning.value = true;
+      showMessage('Driver required', 'Please select a driver before starting the activity.');
+      return;
+    }
 
+    _confirmDialog(
+      title: 'Start Activity?',
+      message: 'Please confirm the activity details before starting:\n\n'
+          'Vehicle: ${vehicleNumber.text}\n'
+          'Driver: ${selectedDriver.value?.fullname ?? '-'}\n'
+          'Supervisor: ${LoginController.loginUser.fullname}\n'
+          'Service: ${selectedService.value?.name ?? '-'}',
+      confirmLabel: 'Start',
+    ).then((confirmed) {
+      if (confirmed != true) return;
+      _startConfirmed();
+    });
+  }
+
+  void _startConfirmed() {
+    timerController.start();
     supervisor.text = LoginController.loginUser.fullname;
+    _markVehicleActive();
+  }
+
+  Future<void> _markVehicleActive() async {
+    final vehicle = selectedVehicle.value;
+    final driverUser = selectedDriver.value;
+    if (vehicle == null) return;
+
+    vehicle.driverId = driverUser?.id;
+    vehicle.supervisorId = LoginController.loginUser.id;
+
+    await firebaseService.updateRecord('vehicles', vehicle.id, {
+      'driverId': driverUser?.id,
+      'supervisorId': LoginController.loginUser.id,
+    });
+  }
+
+  /// Frees the vehicle up again by clearing its dynamic driver/supervisor.
+  Future<void> _clearVehicleActive() async {
+    final vehicle = selectedVehicle.value;
+    if (vehicle == null) return;
+    if (vehicle.driverId == null && vehicle.supervisorId == null) return;
+
+    vehicle.driverId = null;
+    vehicle.supervisorId = null;
+
+    await firebaseService.updateRecord('vehicles', vehicle.id, {
+      'driverId': null,
+      'supervisorId': null,
+    });
+  }
+
+  /// Simple Yes/No confirmation dialog. Returns true only if the user
+  /// explicitly confirms - used before starting, saving, or resetting an
+  /// activity so a mis-touch never silently starts/saves/wipes an activity.
+  Future<bool?> _confirmDialog({
+    required String title,
+    required String message,
+    String confirmLabel = 'Confirm',
+  }) {
+    return Get.dialog<bool>(
+      AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
+  }
+
+  /// Confirms with the user before discarding the current activity data.
+  Future<void> confirmReset() async {
+    final confirmed = await _confirmDialog(
+      title: 'Reset Activity?',
+      message: 'This will discard the current activity data. Continue?',
+      confirmLabel: 'Reset',
+    );
+
+    if (confirmed != true) return;
+
+    await _clearVehicleActive();
+    timerController.reset();
+    resetForm();
   }
 
   void pauseActivity() {
@@ -291,6 +415,12 @@ class MonitorController extends GetxController {
       return;
     }
 
+    if (selectedDriver.value == null) {
+      driverWarning.value = true;
+      showMessage('Driver required', 'Please select a driver before saving.');
+      return;
+    }
+
     if (isCustomerEmpty && customer == null) {
       customerCollapsed.value = false;
       showMessage('Warning', 'Please enter customer details.');
@@ -301,6 +431,19 @@ class MonitorController extends GetxController {
       showMessage('Warning', 'Please stop the activity before saving.');
       return;
     }
+
+    final confirmed = await _confirmDialog(
+      title: 'Save Activity?',
+      message: 'Please confirm before saving:\n\n'
+          'Vehicle: ${vehicleNumber.text}\n'
+          'Driver: ${selectedDriver.value?.fullname ?? '-'}\n'
+          'Supervisor: ${LoginController.loginUser.fullname}\n'
+          'Service: ${serviceType.text}\n'
+          'Amount: ${timerController.amount.value.toStringAsFixed(0)}',
+      confirmLabel: 'Save',
+    );
+
+    if (confirmed != true) return;
 
     isLoading.value = true;
 
@@ -323,6 +466,7 @@ class MonitorController extends GetxController {
         customerId: customer.id,
         vehicleId: selectedVehicle.value!.id,
         serviceId: selectedService.value!.id,
+        driverId: selectedDriver.value?.id,
         supervisorId: LoginController.loginUser.id,
         startTime: timerController.startTime ?? now,
         endTime: timerController.endTime ?? now,
@@ -352,6 +496,9 @@ class MonitorController extends GetxController {
         showMessage('Error', 'Failed to save activity.');
         return;
       }
+
+      // Activity has ended - free the vehicle up again.
+      await _clearVehicleActive();
 
       showMessage('Success', 'Activity saved successfully.');
       timerController.reset();
@@ -432,6 +579,7 @@ class MonitorController extends GetxController {
     vehicleOwner.dispose();
     driver.dispose();
     supervisor.dispose();
+    service.dispose();
 
     customerName.dispose();
     address.dispose();

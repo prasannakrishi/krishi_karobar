@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
 import 'package:krishi_karobar/common/widgets/appbar.dart';
 import 'package:krishi_karobar/features/user_setting/controller/vehicle_controller.dart';
 
@@ -9,10 +10,14 @@ class VehicleSelectScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<VehicleController>();
+    final controller = Get.isRegistered<VehicleController>()
+        ? Get.find<VehicleController>()
+        : Get.put(VehicleController(), permanent: true);
     controller.loadVehicles();
 
-    return Scaffold(
+    return UAppScaffold(
+      transparentBackground: true,
+      extendBodyBehindAppBar: false,
       appBar: UAppBar(
         title: 'Select Vehicle',
         showBackArrow: true,

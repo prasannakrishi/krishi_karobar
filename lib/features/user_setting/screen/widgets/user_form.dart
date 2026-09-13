@@ -355,24 +355,51 @@ class _VehicleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final enabled =
-        controller.selectedUserType.value == UserTypes.external;
+    final enabled = controller.showVehicleAssignment;
+    final selectedVehicles = enabled
+        ? controller.vehicles
+        .where((v) => controller.selectedVehicleIds.contains(v.id))
+        .toList()
+        : <VehicleModel>[];
 
     return InkWell(
-      onTap: () => _showVehicleDialog(context, controller),
+      onTap: enabled ? () => _showVehiclePicker(context) : null,
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: 'Assigned Vehicle',
+          labelText: 'Assigned Vehicles',
           enabled: enabled,
+          suffixIcon: enabled
+              ? const Icon(Icons.keyboard_arrow_down_rounded, size: 20)
+              : null,
         ),
-        child: Text(
-          enabled
-              ? controller.vehicleName(
-            controller.selectedVehicleId.value,
-          )
-              : 'Not applicable',
+        child: !enabled
+            ? const Text(
+          'Not applicable',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+        )
+            : selectedVehicles.isEmpty
+            ? const Text(
+          'Select vehicles',
+          style: TextStyle(color: Colors.grey),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        )
+            : Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: selectedVehicles
+              .map(
+                (v) => Chip(
+              label: Text(v.number),
+              materialTapTargetSize:
+              MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              onDeleted: () =>
+                  controller.toggleVehicleAssignment(v.id),
+            ),
+          )
+              .toList(),
         ),
       ),
     );
@@ -381,75 +408,78 @@ class _VehicleField extends StatelessWidget {
   void _showVehiclePicker(BuildContext context) {
     final vehicles = controller.vehicles;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Assigned Vehicle'),
-        content: SizedBox(
-          width: 420,
-          child: vehicles.isEmpty
-              ? const Center(child: Text('No registered vehicle found'))
-              : ListView.builder(
-            shrinkWrap: true,
-            itemCount: vehicles.length,
-            itemBuilder: (_, index) {
-              final vehicle = vehicles[index];
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Assigned Vehicles',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: vehicles.isEmpty
+                          ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Text('No registered vehicle found'),
+                      )
+                          : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: vehicles.length,
+                        itemBuilder: (_, index) {
+                          final vehicle = vehicles[index];
+                          final selected = controller
+                              .selectedVehicleIds
+                              .contains(vehicle.id);
 
-              return ListTile(
-                dense: true,
-                title: Text(vehicle.number),
-                subtitle: Text(
-                  '${vehicle.uId} • ${vehicle.name}',
+                          return CheckboxListTile(
+                            dense: true,
+                            value: selected,
+                            controlAffinity:
+                            ListTileControlAffinity.leading,
+                            title: Text(
+                              '${vehicle.uId} • ${vehicle.name}',
+                            ),
+                            subtitle: Text(vehicle.number),
+                            onChanged: (_) {
+                              controller.toggleVehicleAssignment(
+                                vehicle.id,
+                              );
+                              setState(() {});
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Get.back(),
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ],
                 ),
-                onTap: () {
-                  controller.selectedVehicleId.value = vehicle.id;
-                  Navigator.pop(context);
-                },
               );
             },
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showVehicleDialog(
-      BuildContext context,
-      UserController controller,
-      ) {
-    final vehicles = controller.vehicles;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Assigned Vehicle'),
-        content: SizedBox(
-          width: 420,
-          child: vehicles.isEmpty
-              ? const Center(
-            child: Text('No registered vehicle found'),
-          )
-              : ListView.builder(
-            shrinkWrap: true,
-            itemCount: vehicles.length,
-            itemBuilder: (_, index) {
-              final vehicle = vehicles[index];
-
-              return ListTile(
-                dense: true,
-                title: Text(
-                  '${vehicle.uId} • ${vehicle.name}',
-                ),
-                subtitle: Text(vehicle.number),
-                onTap: () {
-                  controller.selectedVehicleId.value = vehicle.id;
-                  Navigator.pop(context);
-                },
-              );
-            },
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -118,8 +118,7 @@ class LoginController extends GetxController {
         fullname: name.text.trim(),
         phone: phoneNumber,
         permanentAddress: address.text.trim(),
-        userType: UserTypes.organization,
-
+        userType: UserTypes.guest,
         roles: const [],
         status: 'active',
         createdAt: now,
@@ -157,6 +156,26 @@ class LoginController extends GetxController {
           'Account mapping could not be created.',
         );
       }
+
+      await AuditService.instance.log(
+        action: 'user_registered',
+        performedBy: databaseId,
+        targetUserId: databaseId,
+        newValue: {'userType': UserTypes.guest, 'roles': const []},
+      );
+
+      await firebaseService.saveRecord(
+        'notification_queue',
+        _uuid.v4(),
+        {
+          'type': 'new_guest_registration',
+          'userId': databaseId,
+          'fullname': newUser.fullname,
+          'phone': newUser.phone,
+          'registeredAt': now.toIso8601String(),
+          'status': 'pending',
+        },
+      );
 
       await _completeAuthentication(firebaseUser);
     });

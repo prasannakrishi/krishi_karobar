@@ -110,7 +110,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
 
   Widget _dueListTable() {
     final entries = controller.dueActivities;
-
     return Stack(
       children: [
         uDataTable(
@@ -120,7 +119,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 'Activity',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              110,
+              120,
             ),
             // _buildCell(
             //   const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -145,7 +144,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
           rowValues: [
             ...entries.map(
               (activity) => [
-                _buildCell(Text(activity.uId), 110),
+                _buildCell(Text(activity.uId), 120),
                 // _buildCell(
                 //   Text(
                 //     DateFormat(
@@ -157,7 +156,8 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 _buildCell(Text('${activity.duration} min'), 80),
                 _buildCell(Text('रु ${activity.rate.toInt()}'), 70),
                 _buildCell(
-                  Text('रु ${_activityDue(activity)}',
+                  Text(
+                    'रु ${_activityDue(activity)}',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   100,
@@ -245,7 +245,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
 
     await Get.dialog(PaymentSlip(payment: payment));
 
-      Get.back();
+    Get.back();
   }
 
   int _activityDue(ActivityModel activity) {

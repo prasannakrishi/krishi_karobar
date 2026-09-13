@@ -19,6 +19,7 @@ class ActivityScreen extends StatelessWidget {
     final controller = Get.put(ActivityController());
 
     return UAppScaffold(
+      transparentBackground: true,
       extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Activities'),
       body: Column(

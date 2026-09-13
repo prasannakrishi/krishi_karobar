@@ -16,6 +16,7 @@ class MonitorScreen extends GetView<MonitorController> {
       Get.put(MonitorController());
     }
     return UAppScaffold(
+      transparentBackground: true,
       extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Activity Monitor'),
       body: SingleChildScrollView(
@@ -25,7 +26,7 @@ class MonitorScreen extends GetView<MonitorController> {
             Obx(
               () => _Section(
                 title: 'VEHICLE INFO',
-                summary:controller.selectedVehicle.value?.number ??'Select vehicle',
+                summary:"${controller.selectedDriver.value?.name} - ${controller.selectedVehicle.value?.number}",
                 collapsed: controller.vehicleCollapsed.value,
                 onTap: controller.vehicleCollapsed.toggle,
                 child: VehicleInfo(controller: controller),
@@ -35,11 +36,7 @@ class MonitorScreen extends GetView<MonitorController> {
             Obx(
               () => _Section(
                 title: 'CUSTOMER INFO',
-                summary:
-                    controller.selectedCustomer.value?.name ??
-                    (controller.customerName.text.isEmpty
-                        ? 'Enter customer'
-                        : controller.customerName.text),
+                summary:"${controller.selectedCustomer.value?.name.padRight(20)}\n${controller.selectedCustomer.value?.uId}",
                 collapsed: controller.customerCollapsed.value,
                 onTap: controller.customerCollapsed.toggle,
                 child: CustomerForm(controller: controller),

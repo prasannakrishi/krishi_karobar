@@ -12,7 +12,7 @@ class UserModel {
   String phone;
   String? email;
   String? permanentAddress;
-  String? assignedVehicleId;
+  List<String> assignedVehicleIds;
   List<String> roles;
   String userType;
   String status;
@@ -29,7 +29,7 @@ class UserModel {
     required this.phone,
     this.email,
     this.permanentAddress,
-    this.assignedVehicleId,
+    List<String>? assignedVehicleIds,
     List<String>? roles,
     this.userType = UserTypes.organization,
     this.status = 'active',
@@ -37,7 +37,8 @@ class UserModel {
     this.createdBy,
     this.updatedAt,
     this.updatedBy,
-  }) : roles = _normalizeRoles(roles ?? []);
+  })  : assignedVehicleIds = assignedVehicleIds ?? [],
+        roles = _normalizeRoles(roles ?? []);
 
   static List<String> _normalizeRoles(List<String> roles) {
     return roles
@@ -93,6 +94,16 @@ class UserModel {
 
     final userType = _normalizeUserType(map['userType']?.toString());
 
+    final rawVehicleIds = map['assignedVehicleIds'];
+    final assignedVehicleIds = rawVehicleIds is List
+        ? rawVehicleIds
+            .map((v) => v.toString())
+            .where((v) => v.isNotEmpty)
+            .toList()
+        : (map['assignedVehicleId']?.toString().isNotEmpty ?? false)
+            ? [map['assignedVehicleId'].toString()]
+            : <String>[];
+
     return UserModel(
       id: toStringValue(map['id'] ?? map['guid']),
       uId: toStringValue(map['uId'] ?? map['uid']),
@@ -101,7 +112,7 @@ class UserModel {
       phone: toStringValue(map['phone']),
       email: map['email']?.toString(),
       permanentAddress: map['permanentAddress']?.toString() ?? map['address']?.toString(),
-      assignedVehicleId: map['assignedVehicleId']?.toString(),
+      assignedVehicleIds: assignedVehicleIds,
       roles: userType == UserTypes.guest ? [] : roles,
       userType: userType,
       status: toStringValue(map['status'], defaultValue: 'active'),
@@ -121,7 +132,7 @@ class UserModel {
       'phone': phone,
       'email': email,
       'permanentAddress': permanentAddress,
-      'assignedVehicleId': assignedVehicleId,
+      'assignedVehicleIds': List<String>.from(assignedVehicleIds),
       'roles': List<String>.from(roles),
       'userType': userType,
       'status': status,
@@ -154,6 +165,8 @@ class UserModel {
   bool hasRole(String role) {
     return roles.contains(role);
   }
+  bool get hasAllVehicleAccess =>
+      hasRole(UserRoles.admin) || hasRole(UserRoles.superAdmin);
 
   String get name => fullname;
 }
