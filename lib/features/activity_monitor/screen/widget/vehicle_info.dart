@@ -44,7 +44,10 @@ class VehicleInfo extends StatelessWidget {
               child: TextFormField(
                 controller: controller.vehicleOwner,
                 readOnly: true,
-                decoration: const InputDecoration(labelText: 'Owner'),
+                decoration: const InputDecoration(
+                    labelText: 'Owner',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 12),
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -53,12 +56,12 @@ class VehicleInfo extends StatelessWidget {
                     () => TextFormField(
                   controller: controller.driver,
                   readOnly: true,
-                  onTap: () => _showDriverPicker(context),
+                  onTap: controller.liveActivity != null && !controller.isController
+                      ? null
+                      : () => _showDriverPicker(context),
                   decoration: InputDecoration(
                     labelText: 'Driver *',
-                    suffixIcon: controller.isLoginUserDriver
-                        ? null
-                        : const Icon(Icons.keyboard_arrow_down_rounded),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 12),
                     errorText: controller.driverWarning.value
                         ? 'Please select a driver'
                         : null,

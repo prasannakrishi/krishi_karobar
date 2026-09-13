@@ -17,7 +17,9 @@ class UserManagementScreen extends StatelessWidget {
     if (!Authz.can(Permissions.userView)) {
       return const AccessDeniedScreen(title: 'Users');
     }
+
     return UAppScaffold(
+      transparentBackground: false,
       extendBodyBehindAppBar: false,
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -31,9 +33,17 @@ class UserManagementScreen extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-
+                IconButton(
+                  onPressed: controller.clearSelection,
+                  icon: const Icon(Icons.arrow_back),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                ),
                 SizedBox(
-                  width: 36,
+                  width: 32,
                   height: 48,
                   child: Center(
                     child: Checkbox(

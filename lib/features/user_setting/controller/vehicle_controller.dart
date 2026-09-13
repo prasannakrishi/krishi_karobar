@@ -254,9 +254,9 @@ class VehicleController extends GetxController {
     return vehiclesList
         .where(
           (v) =>
-              v.ownerId == userId ||
-              (user?.assignedVehicleIds.contains(v.id) ?? false),
-        )
+      v.ownerId == userId ||
+          (user?.assignedVehicleIds.contains(v.id) ?? false),
+    )
         .toList();
   }
 
@@ -311,7 +311,7 @@ class VehicleController extends GetxController {
 
   bool get isAllSelected =>
       vehiclesList.isNotEmpty &&
-      selectedVehicleIds.length == vehiclesList.length;
+          selectedVehicleIds.length == vehiclesList.length;
 
   bool get isPartiallySelected =>
       selectedVehicleIds.isNotEmpty && !isAllSelected;
@@ -319,7 +319,7 @@ class VehicleController extends GetxController {
   VehicleModel? get selectedListVehicle {
     if (!hasSingleSelection) return null;
     return vehiclesList.firstWhereOrNull(
-      (v) => v.id == selectedVehicleIds.first,
+          (v) => v.id == selectedVehicleIds.first,
     );
   }
 
@@ -523,8 +523,8 @@ class VehicleController extends GetxController {
           selectedServiceIds,
         ),
         ownerId: selectedOwner.value!.id,
-        // driverId is intentionally left null here - it's only ever set
-        // while an activity is actively running on this vehicle.
+        // driverId is a persistent default driver assignment. It may be
+        // filled from Activity Monitor when the vehicle has no driver.
         status: 'available',
         isActive: true,
         notes: vNotesController.text.trim().isEmpty
@@ -601,8 +601,8 @@ class VehicleController extends GetxController {
             : vModelController.text.trim(),
         'supportServiceIds': List<String>.from(selectedServiceIds),
         'ownerId': selectedOwner.value!.id,
-        // driverId / supervisorId are not editable here - they're managed
-        // automatically by the activity start/end flow.
+        // driverId / supervisorId are managed from Activity Monitor;
+        // driverId persists while supervisorId is the current activity owner.
         'notes': vNotesController.text.trim().isEmpty
             ? null
             : vNotesController.text.trim(),
@@ -631,7 +631,7 @@ class VehicleController extends GetxController {
       // Keep the app-wide default vehicle in sync if it was the one edited.
       if (vehicle.id == target.id) {
         final refreshed = vehiclesList.firstWhereOrNull(
-          (v) => v.id == target.id,
+              (v) => v.id == target.id,
         );
 
         if (refreshed != null) {
@@ -702,9 +702,9 @@ class VehicleController extends GetxController {
         'Vehicle',
         blockedNumbers.length == 1
             ? '"${blockedNumbers.first}" is assigned to a user or activity '
-                'and cannot be deleted.'
+            'and cannot be deleted.'
             : 'These vehicles are in use and cannot be deleted: '
-                '${blockedNumbers.join(', ')}.',
+            '${blockedNumbers.join(', ')}.',
         snackPosition: SnackPosition.BOTTOM,
       );
     }

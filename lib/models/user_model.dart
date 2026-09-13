@@ -165,6 +165,14 @@ class UserModel {
   bool hasRole(String role) {
     return roles.contains(role);
   }
+
+  /// True if [role] is legal for this user's current userType
+  /// (spec section 6/13 - userType+role validity matrix).
+  bool isRoleAllowed(String role) =>
+      UserRoles.isAllowedForUserType(role, userType);
+
+  /// Organization admins/super-admins are treated as having access to every
+  /// vehicle rather than a hand-picked list.
   bool get hasAllVehicleAccess =>
       hasRole(UserRoles.admin) || hasRole(UserRoles.superAdmin);
 

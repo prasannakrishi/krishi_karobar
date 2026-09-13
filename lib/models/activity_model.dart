@@ -1,5 +1,18 @@
 import '../utils/helper/helper_method.dart';
 
+/// Activity lifecycle states (spec section 10).
+class ActivityStatus {
+  ActivityStatus._();
+
+  static const running = 'running';
+  static const paused = 'paused';
+  static const completed = 'completed';
+  static const cancelled = 'cancelled';
+  static const pending = 'pending'; // legacy default, kept for old records
+
+  static const List<String> liveStates = [running, paused];
+}
+
 class ActivityModel {
   final String id;
   final String uId;
@@ -8,6 +21,13 @@ class ActivityModel {
   String serviceId;
   String? driverId;
   String supervisorId;
+  // The user who pressed START on this specific activity. Only this user
+  // may pause/resume/complete it (spec: "Started-By User Control"). This
+  // must never be settable by anyone other than the backend/rules-enforced
+  // value at creation time - see AuditService/Authz.canControlActivity.
+  String? startedByUserId;
+  DateTime? pauseTime;
+  DateTime? resumeTime;
   DateTime startTime;
   DateTime endTime;
   int duration;
@@ -35,6 +55,9 @@ class ActivityModel {
     required this.serviceId,
     this.driverId,
     required this.supervisorId,
+    this.startedByUserId,
+    this.pauseTime,
+    this.resumeTime,
     required this.startTime,
     required this.endTime,
     required this.duration,
@@ -66,6 +89,9 @@ class ActivityModel {
       serviceId: toStringValue(map['serviceId'] ?? map['serviceType']),
       driverId: map['driverId']?.toString(),
       supervisorId: toStringValue(map['supervisorId']),
+      startedByUserId: map['startedByUserId']?.toString(),
+      pauseTime: toDateTime(map['pauseTime']),
+      resumeTime: toDateTime(map['resumeTime']),
       startTime: start,
       endTime: toDateTime(map['endTime']) ?? start,
       duration: toInt(map['duration']),
@@ -98,6 +124,9 @@ class ActivityModel {
       serviceId: '',
       driverId: null,
       supervisorId: '',
+      startedByUserId: null,
+      pauseTime: null,
+      resumeTime: null,
       startTime: now,
       endTime: now,
       duration: 0,
@@ -109,6 +138,10 @@ class ActivityModel {
     );
   }
 
+  /// True while this activity is actively running or paused (i.e. still
+  /// "live" - not yet completed/cancelled).
+  bool get isLive => ActivityStatus.liveStates.contains(status);
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -118,6 +151,9 @@ class ActivityModel {
       'serviceId': serviceId,
       'driverId': driverId,
       'supervisorId': supervisorId,
+      'startedByUserId': startedByUserId,
+      'pauseTime': pauseTime?.toUtc().toIso8601String(),
+      'resumeTime': resumeTime?.toUtc().toIso8601String(),
       'startTime': startTime.toUtc().toIso8601String(),
       'endTime': endTime.toUtc().toIso8601String(),
       'duration': duration,

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
-import 'package:krishi_karobar/features/user_setting/screen/widgets/vehicle_select_screen.dart';
 
+import '../../../features/user_setting/screen/widgets/vehicle_select_screen.dart';
+import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
 import '../../../common/widgets/settings_menu_title.dart';
 import '../../../features/user_setting/screen/user_management_screen.dart';
+import '../../../services/services.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 import 'profile_screen.dart';
 import 'service_management_screen.dart';
@@ -26,9 +27,7 @@ class SettingsScreen extends StatelessWidget {
     return UAppScaffold(
       transparentBackground: true,
       extendBodyBehindAppBar: false,
-      appBar: const UAppBar(
-        title: 'Settings',
-      ),
+      appBar: const UAppBar(title: 'Settings'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -36,11 +35,9 @@ class SettingsScreen extends StatelessWidget {
             const UserProfile(),
             const SizedBox(height: 10),
             _SelectedVehicleRow(controller: vehicleController),
-            const SizedBox(height: 5,),
-            const Divider(),
             const SizedBox(height: 5),
-            Obx(
-                  () => USettingsMenuTile(
+            const Divider(),
+            Obx( () => USettingsMenuTile(
                 icon: Iconsax.setting_2,
                 title: 'Management',
                 subtitle: 'Manage users, vehicles and services',
@@ -52,19 +49,16 @@ class SettingsScreen extends StatelessWidget {
                 onTap: controller.toggleManagement,
               ),
             ),
-            Obx(
-                  () {
-                if (!controller.managementExpanded.value) {
-                  return const SizedBox.shrink();
-                }
+            Obx(() {
+              if (!controller.managementExpanded.value) {
+                return const SizedBox.shrink();
+              }
 
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    left: 8,
-                    right: 8,
-                  ),
-                  child: Column(
-                    children: [
+              return Padding(
+                padding: const EdgeInsets.only(left: 8, right: 8),
+                child: Column(
+                  children: [
+                    if (Authz.can(Permissions.userView))
                       USettingsMenuTile(
                         icon: Iconsax.profile_2user,
                         title: 'Users',
@@ -73,6 +67,7 @@ class SettingsScreen extends StatelessWidget {
                           Get.to(() => UserManagementScreen());
                         },
                       ),
+                    if (Authz.can(Permissions.vehicleView))
                       USettingsMenuTile(
                         icon: Iconsax.truck,
                         title: 'Vehicles',
@@ -81,24 +76,22 @@ class SettingsScreen extends StatelessWidget {
                           Get.to(() => VehicleManagementScreen());
                         },
                       ),
+                    if (Authz.can(Permissions.serviceView))
                       USettingsMenuTile(
                         icon: Iconsax.setting_4,
                         title: 'Services',
                         subtitle: 'Manage available services',
                         onTap: () {
-                          Get.to(
-                            () => ServiceManagementScreen(),
-                          );
+                          Get.to(() => ServiceManagementScreen());
                         },
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 4),
             Obx(
-                  () => USettingsMenuTile(
+              () => USettingsMenuTile(
                 icon: Iconsax.setting,
                 title: 'Preferences',
                 subtitle: 'App and account preferences',
@@ -110,49 +103,39 @@ class SettingsScreen extends StatelessWidget {
                 onTap: controller.togglePreferences,
               ),
             ),
-            Obx(
-                  () {
-                if (!controller.preferencesExpanded.value) {
-                  return const SizedBox.shrink();
-                }
+            Obx(() {
+              if (!controller.preferencesExpanded.value) {
+                return const SizedBox.shrink();
+              }
 
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    left: 8,
-                    right: 8,
-                  ),
-                  child: Column(
-                    children: [
-                      USettingsMenuTile(
-                        icon: Iconsax.user_edit,
-                        title: 'Profile',
-                        subtitle: 'View and edit your profile',
-                        onTap: () {
-                          Get.to(
-                                () => const ProfileScreen(),
-                          );
-                        },
-                      ),
-                      USettingsMenuTile(
-                        icon: Iconsax.key,
-                        title: 'Change Password',
-                        subtitle: 'Update your login password',
-                        onTap: () {},
-                      ),
-                      USettingsMenuTile(
-                        icon: Iconsax.notification,
-                        title: 'Notifications',
-                        subtitle: 'Manage app notifications',
-                        trailing: Switch(
-                          value: true,
-                          onChanged: (_) {},
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+              return Padding(
+                padding: const EdgeInsets.only(left: 8, right: 8),
+                child: Column(
+                  children: [
+                    USettingsMenuTile(
+                      icon: Iconsax.user_edit,
+                      title: 'Profile',
+                      subtitle: 'View and edit your profile',
+                      onTap: () {
+                        Get.to(() => const ProfileScreen());
+                      },
+                    ),
+                    USettingsMenuTile(
+                      icon: Iconsax.key,
+                      title: 'Change Password',
+                      subtitle: 'Update your login password',
+                      onTap: () {},
+                    ),
+                    USettingsMenuTile(
+                      icon: Iconsax.notification,
+                      title: 'Notifications',
+                      subtitle: 'Manage app notifications',
+                      trailing: Switch(value: true, onChanged: (_) {}),
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -202,7 +185,9 @@ class _SelectedVehicleRow extends StatelessWidget {
       }
 
       final selected = controller.selectedVehicle.value != null &&
-          assigned.any((v) => v.id == controller.selectedVehicle.value!.id)
+          assigned.any(
+                (v) => v.id == controller.selectedVehicle.value!.id,
+          )
           ? controller.selectedVehicle.value
           : null;
 
@@ -215,7 +200,10 @@ class _SelectedVehicleRow extends StatelessWidget {
               initialValue: selected?.id,
               isExpanded: true,
               isDense: true,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 20,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Selected Vehicle',
                 isDense: true,
@@ -235,10 +223,15 @@ class _SelectedVehicleRow extends StatelessWidget {
                   .toList(),
               onChanged: (id) {
                 if (id == null) return;
+
                 final vehicle =
                 assigned.firstWhereOrNull((v) => v.id == id);
+
                 if (vehicle != null) {
-                  controller.setDefaultVehicle(vehicle, showMessage: false);
+                  controller.setDefaultVehicle(
+                    vehicle,
+                    showMessage: false,
+                  );
                 }
               },
             ),
@@ -248,5 +241,3 @@ class _SelectedVehicleRow extends StatelessWidget {
     });
   }
 }
-
-

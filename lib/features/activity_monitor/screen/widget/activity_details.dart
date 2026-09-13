@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../../../../models/service_model.dart';
+import '../../../../models/models.dart';
 import '../../controllers/monitor_controller.dart';
 
 class ActivityForm extends StatelessWidget {
@@ -61,8 +61,8 @@ class ActivityForm extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
-                    labelText: 'Start Time',
-                    contentPadding: EdgeInsets.all(8)
+                      labelText: 'Start Time',
+                      contentPadding: EdgeInsets.all(8)
                   ),
                 ),
               ),
@@ -75,8 +75,8 @@ class ActivityForm extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
-                    labelText: 'End Time',
-                    contentPadding: EdgeInsets.all(8)
+                      labelText: 'End Time',
+                      contentPadding: EdgeInsets.all(8)
                   ),
                 ),
               ),
@@ -85,24 +85,65 @@ class ActivityForm extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-          () => Row(
+              () => Row(
             children: [
               Expanded(child:
-                _InfoCard(
-                  title: 'DURATION',
-                  value: timer.duration.value,
-                ),
+              _InfoCard(
+                title: 'DURATION',
+                value: timer.duration.value,
+              ),
               ),
               const SizedBox(width: 8),
               Expanded(child:
               _InfoCard(
-                  title: 'AMOUNT',
-                  value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
-                ),
+                title: 'AMOUNT',
+                value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+              ),
               ),
             ],
           ),
         ),
+        Obx(() {
+          final activity = controller.liveActivity;
+          if (activity == null) return const SizedBox.shrink();
+
+          final isPaused = activity.status == ActivityStatus.paused;
+
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: (isPaused ? Colors.orange : Colors.green)
+                    .withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isPaused ? Colors.orange : Colors.green,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isPaused ? Icons.pause_circle : Icons.play_circle,
+                    color: isPaused ? Colors.orange : Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${isPaused ? 'PAUSED' : 'RUNNING'} · Started by '
+                          '${controller.startedByName(activity)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -123,7 +164,8 @@ class _ServiceSelector extends StatelessWidget {
           : 'Select service'),
       items: controller.supportedServices
           .map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
-      onChanged: controller.selectedVehicle.value == null
+      onChanged: controller.selectedVehicle.value == null ||
+          (controller.liveActivity != null && !controller.isController)
           ? null
           : (service) {
         if (service != null) {

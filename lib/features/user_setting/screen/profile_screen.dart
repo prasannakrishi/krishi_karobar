@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
 import 'package:krishi_karobar/common/widgets/appbar.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 
@@ -8,7 +9,9 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return UAppScaffold(
+      transparentBackground: true,
+      extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Profile Details',),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),

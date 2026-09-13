@@ -11,6 +11,15 @@ class MonitorControls extends GetView<MonitorController> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Obx(() {
+          final live = controller.liveActivity;
+
+          // Someone else started this activity - view only, no controls
+          // (spec sections 6/17: UI hiding is reinforced by
+          // Authz.canControlActivity on every action too).
+          if (live != null && !controller.isController) {
+            return _ViewOnlyBanner(startedBy: controller.startedByName(live));
+          }
+
           switch (controller.timerController.state.value) {
             case TimerState.initial:
               return _button(
@@ -92,15 +101,44 @@ class MonitorControls extends GetView<MonitorController> {
   }
 
   Widget _button(
-    BuildContext context,
-    String label,
-    IconData icon,
-    VoidCallback onPressed,
-  ) {
+      BuildContext context,
+      String label,
+      IconData icon,
+      VoidCallback onPressed,
+      ) {
     return ElevatedButton.icon(
-      onPressed: onPressed,
+      onPressed: controller.isLoading.value ? null : onPressed,
       icon: Icon(icon),
       label: Text(label),
+    );
+  }
+}
+
+class _ViewOnlyBanner extends StatelessWidget {
+  const _ViewOnlyBanner({required this.startedBy});
+
+  final String startedBy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.visibility_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You are viewing this activity. Only $startedBy '
+                  '(who started it) can control it.',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

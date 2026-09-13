@@ -118,6 +118,9 @@ class LoginController extends GetxController {
         fullname: name.text.trim(),
         phone: phoneNumber,
         permanentAddress: address.text.trim(),
+        // Public self-registration ALWAYS creates a Guest account with no
+        // role. An authorized admin must explicitly promote the user to
+        // Organization/External + a role afterwards (spec section 9/12).
         userType: UserTypes.guest,
         roles: const [],
         status: 'active',
@@ -157,6 +160,10 @@ class LoginController extends GetxController {
         );
       }
 
+      // Spec section 10.6/10.7: notify admins + audit the registration.
+      // Sending the actual email happens server-side (Cloud Function
+      // listening on 'notification_queue') - the client never talks to
+      // an email provider directly (spec section 11).
       await AuditService.instance.log(
         action: 'user_registered',
         performedBy: databaseId,

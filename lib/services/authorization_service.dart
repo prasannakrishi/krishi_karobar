@@ -220,6 +220,28 @@ class Authz {
   }
 
   // ---------------------------------------------------------------------
+  // ACTIVITY STARTED-BY CONTROL (Activity Live Monitor spec)
+  // ---------------------------------------------------------------------
+
+  /// Anyone with activity.view + the normal vehicle data-scope check can see
+  /// a running/paused Activity live - this does NOT grant control.
+  static bool canViewActivity(ActivityModel activity, VehicleModel? vehicle) {
+    if (!can(Permissions.activityView)) return false;
+    if (vehicle == null) return true;
+    return canViewVehicle(vehicle);
+  }
+
+  /// ONLY the user who originally started this specific Activity may
+  /// pause/resume/complete/cancel it - never role, ownership, or who is
+  /// currently looking at the screen (spec sections 4/6/16/17).
+  static bool canControlActivity(ActivityModel activity) {
+    if (!isSessionValid) return false;
+    if (!activity.isLive) return false; // completed/cancelled = frozen
+    if (activity.startedByUserId == null) return false;
+    return activity.startedByUserId == _user.id;
+  }
+
+  // ---------------------------------------------------------------------
   // PRIVILEGE-ESCALATION GUARDS (spec sections 13/14/28)
   // ---------------------------------------------------------------------
 

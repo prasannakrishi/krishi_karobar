@@ -61,6 +61,34 @@ class TimerController extends GetxController {
     _startTimer();
   }
 
+  /// Restores timer state from a persisted Activity record (e.g. after an
+  /// app restart or page refresh) so the controller can keep
+  /// pausing/resuming/completing the SAME activity seamlessly.
+  void rehydrate({
+    required DateTime startTime,
+    required Duration accumulated,
+    DateTime? runningSince,
+  }) {
+    _stopTimer();
+
+    this.startTime = startTime;
+    this.accumulated = accumulated;
+    endTime = null;
+    startTimeText.value = _formatTime(startTime);
+    endTimeText.value = '';
+
+    if (runningSince != null) {
+      _runningSince = runningSince;
+      state.value = TimerState.running;
+      _startTimer();
+    } else {
+      _runningSince = null;
+      state.value = TimerState.paused;
+    }
+
+    _updateElapsed();
+  }
+
   void stop() {
     if (state.value == TimerState.running && _runningSince != null) {
       accumulated += DateTime.now().difference(_runningSince!);

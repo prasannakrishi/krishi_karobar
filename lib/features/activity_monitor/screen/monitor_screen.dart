@@ -26,7 +26,7 @@ class MonitorScreen extends GetView<MonitorController> {
             Obx(
               () => _Section(
                 title: 'VEHICLE INFO',
-                summary:"${controller.selectedDriver.value?.name} - ${controller.selectedVehicle.value?.number}",
+                summary:"${controller.selectedDriver.value?.name.padRight(20)}\n${controller.selectedVehicle.value?.number}",
                 collapsed: controller.vehicleCollapsed.value,
                 onTap: controller.vehicleCollapsed.toggle,
                 child: VehicleInfo(controller: controller),
