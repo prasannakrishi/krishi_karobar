@@ -430,7 +430,7 @@ class _VehicleField extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height:4),
                     Flexible(
                       child: vehicles.isEmpty
                           ? const Padding(

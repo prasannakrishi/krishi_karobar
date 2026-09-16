@@ -37,7 +37,8 @@ class SettingsScreen extends StatelessWidget {
             _SelectedVehicleRow(controller: vehicleController),
             const SizedBox(height: 5),
             const Divider(),
-            Obx( () => USettingsMenuTile(
+            Obx(
+              () => USettingsMenuTile(
                 icon: Iconsax.setting_2,
                 title: 'Management',
                 subtitle: 'Manage users, vehicles and services',
@@ -168,26 +169,16 @@ class _SelectedVehicleRow extends StatelessWidget {
       );
 
       if (assigned.isEmpty) {
-        return InkWell(
-          onTap: () => Get.to(() => const VehicleSelectScreen()),
-          child: const UDetailRow(
-            value: 'Not Assigned',
-            icon: Iconsax.truck,
-          ),
-        );
+        return UDetailRow(value: 'Not Assigned', icon: Iconsax.truck);
       }
 
       if (assigned.length == 1) {
-        return UDetailRow(
-          value: assigned.first.number,
-          icon: Iconsax.truck,
-        );
+        return UDetailRow(value: assigned.first.number, icon: Iconsax.truck);
       }
 
-      final selected = controller.selectedVehicle.value != null &&
-          assigned.any(
-                (v) => v.id == controller.selectedVehicle.value!.id,
-          )
+      final selected =
+          controller.selectedVehicle.value != null &&
+              assigned.any((v) => v.id == controller.selectedVehicle.value!.id)
           ? controller.selectedVehicle.value
           : null;
 
@@ -200,10 +191,7 @@ class _SelectedVehicleRow extends StatelessWidget {
               initialValue: selected?.id,
               isExpanded: true,
               isDense: true,
-              icon: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 20,
-              ),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
               decoration: const InputDecoration(
                 labelText: 'Selected Vehicle',
                 isDense: true,
@@ -213,25 +201,18 @@ class _SelectedVehicleRow extends StatelessWidget {
               items: assigned
                   .map(
                     (v) => DropdownMenuItem<String>(
-                  value: v.id,
-                  child: Text(
-                    v.number,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
+                      value: v.id,
+                      child: Text(v.number, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
                   .toList(),
               onChanged: (id) {
                 if (id == null) return;
 
-                final vehicle =
-                assigned.firstWhereOrNull((v) => v.id == id);
+                final vehicle = assigned.firstWhereOrNull((v) => v.id == id);
 
                 if (vehicle != null) {
-                  controller.setDefaultVehicle(
-                    vehicle,
-                    showMessage: false,
-                  );
+                  controller.setDefaultVehicle(vehicle, showMessage: false);
                 }
               },
             ),
