@@ -5,8 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../models/models.dart';
+import '../utils/exceptions/app_exceptions.dart';
+import 'authorization_service.dart';
 import 'firebase_service.dart';
 
+/// Realtime mirror of the business tables the CURRENT session is allowed to
+/// hold locally.
+///
+/// Two levels of scoping apply (spec section 22):
+///   1. path level  - `Authz.canCachePath` decides whether a table loads at
+///      all (guests load nothing, external users never load payments, ...).
+///   2. record level - `_isInScope` keeps only the records the session may
+///      see, and evicts a record that later moves out of scope.
 class DataCacheService extends GetxController {
   static DataCacheService get instance => Get.find<DataCacheService>();
 
@@ -37,7 +47,7 @@ class DataCacheService extends GetxController {
   UserModel? get currentUser => _currentUser;
 
   Future<void> initializeForUser(UserModel user) async {
-    if (user.isGuest) {
+    if (user.isGuest || !Authz.isSessionValid(actor: user)) {
       await clearCache();
       _currentUser = user;
       return;
@@ -66,36 +76,45 @@ class DataCacheService extends GetxController {
 
   Future<void> _initialize(UserModel user) async {
     try {
+      await _cancelListeners();
       await _clearData();
 
+      // Vehicles first: the users/activities scope checks read from it.
+      await _setupCache<VehicleModel>(
+        user: user,
+        path: 'vehicles',
+        cache: vehicles,
+        fromMap: VehicleModel.fromMap,
+      );
+
       await Future.wait([
-        _setupCache(
+        _setupCache<UserModel>(
+          user: user,
           path: 'users',
           cache: users,
           fromMap: UserModel.fromMap,
         ),
-        _setupCache(
+        _setupCache<CustomerModel>(
+          user: user,
           path: 'customers',
           cache: customers,
           fromMap: CustomerModel.fromMap,
         ),
-        _setupCache(
-          path: 'vehicles',
-          cache: vehicles,
-          fromMap: VehicleModel.fromMap,
-        ),
-        _setupCache(
+        _setupCache<ServiceModel>(
+          user: user,
           path: 'services',
           cache: services,
           fromMap: ServiceModel.fromMap,
         ),
-        _setupCache(
+        _setupCache<ActivityModel>(
+          user: user,
           path: 'activities',
           cache: activities,
           fromMap: ActivityModel.fromMap,
           limitToLast: 50,
         ),
-        _setupCache(
+        _setupCache<PaymentModel>(
+          user: user,
           path: 'payments',
           cache: payments,
           fromMap: PaymentModel.fromMap,
@@ -113,11 +132,14 @@ class DataCacheService extends GetxController {
   }
 
   Future<void> _setupCache<T>({
+    required UserModel user,
     required String path,
     required RxMap<String, T> cache,
     required T Function(Map<String, dynamic>) fromMap,
     int? limitToLast,
   }) async {
+    if (!Authz.canCachePath(path, actor: user)) return;
+
     try {
       final query = _firebaseService.getQuery(
         path,
@@ -142,6 +164,7 @@ class DataCacheService extends GetxController {
           data['id'] ??= id;
 
           _addToCache(
+            path: path,
             cache: cache,
             data: data,
             fromMap: fromMap,
@@ -152,6 +175,7 @@ class DataCacheService extends GetxController {
       _listeners.add(
         query.onChildAdded.listen(
               (event) => _handleChildAdded(
+            path: path,
             cache: cache,
             snapshot: event.snapshot,
             fromMap: fromMap,
@@ -162,6 +186,7 @@ class DataCacheService extends GetxController {
       _listeners.add(
         query.onChildChanged.listen(
               (event) => _handleChildChanged(
+            path: path,
             cache: cache,
             snapshot: event.snapshot,
             fromMap: fromMap,
@@ -179,16 +204,26 @@ class DataCacheService extends GetxController {
       );
     } catch (error) {
       _logError('loading', path, error);
+
+      // The database rules are the final boundary and may be stricter than
+      // the client. A refused table degrades that feature only - it must not
+      // abort the whole session.
+      final mapped = AppException.from(error, operation: 'loading', path: path);
+
+      if (mapped is AuthorizationException) return;
+
       rethrow;
     }
   }
 
   void _handleChildAdded<T>({
+    required String path,
     required RxMap<String, T> cache,
     required DataSnapshot snapshot,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
     _addToCache(
+      path: path,
       cache: cache,
       data: _snapshotToMap(snapshot),
       fromMap: fromMap,
@@ -196,11 +231,13 @@ class DataCacheService extends GetxController {
   }
 
   void _handleChildChanged<T>({
+    required String path,
     required RxMap<String, T> cache,
     required DataSnapshot snapshot,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
     _addToCache(
+      path: path,
       cache: cache,
       data: _snapshotToMap(snapshot),
       fromMap: fromMap,
@@ -219,23 +256,78 @@ class DataCacheService extends GetxController {
   }
 
   void _addToCache<T>({
+    required String path,
     required RxMap<String, T> cache,
     required Map<String, dynamic> data,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
-    try {
-      final id = data['id']?.toString().trim();
+    final id = data['id']?.toString().trim();
 
-      if (id == null || id.isEmpty) return;
+    if (id == null || id.isEmpty) return;
 
-      if (T == UserModel && id == UserModel.systemUser.id) {
-        return;
-      }
-
-      cache[id] = fromMap(data);
-    } catch (error) {
-      _logError('adding record to cache', null, error);
+    if (T == UserModel && id == UserModel.systemUser.id) {
+      return;
     }
+
+    final T record;
+
+    try {
+      record = fromMap(data);
+    } catch (error) {
+      // A corrupt record is skipped, never stored as a valid-looking empty
+      // one (spec section 24).
+      _logError(
+        'parsing record $id',
+        path,
+        DataValidationException(
+          code: 'model-parse-failed',
+          details: '$path/$id :: $error',
+        ),
+      );
+      return;
+    }
+
+    if (!_isInScope(path, record)) {
+      cache.remove(id);
+      return;
+    }
+
+    cache[id] = record;
+  }
+
+  /// Record-level read scope for the current session.
+  bool _isInScope<T>(String path, T record) {
+    final user = _currentUser;
+
+    if (user == null) return false;
+
+    if (record is VehicleModel) {
+      return Authz.canViewVehicle(record, actor: user);
+    }
+
+    if (record is ActivityModel) {
+      return Authz.canViewActivity(
+        record,
+        vehicles[record.vehicleId],
+        actor: user,
+      );
+    }
+
+    if (record is UserModel) {
+      if (record.id == user.id) return true;
+      if (Authz.can(Permissions.userView, actor: user)) return true;
+
+      // Without user.view a session still needs the names of the people
+      // attached to the vehicles it can see.
+      return vehicles.values.any(
+        (vehicle) =>
+            vehicle.ownerId == record.id ||
+            vehicle.driverId == record.id ||
+            vehicle.supervisorId == record.id,
+      );
+    }
+
+    return true;
   }
 
   Map<String, dynamic> _snapshotToMap(DataSnapshot snapshot) {
@@ -320,10 +412,13 @@ class DataCacheService extends GetxController {
       String? path,
       Object error,
       ) {
+    if (!kDebugMode) return;
+
     final location = path == null ? '' : ' [$path]';
 
     debugPrint(
-      'DataCacheService: Error $operation$location: $error',
+      'DataCacheService: Error $operation$location: '
+      '${AppException.from(error)}',
     );
   }
 

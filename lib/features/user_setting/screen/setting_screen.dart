@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../features/user_setting/screen/widgets/vehicle_select_screen.dart';
 import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
 import '../../../common/widgets/settings_menu_title.dart';
@@ -164,22 +163,29 @@ class _SelectedVehicleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      final selectedVehicle = controller.selectedVehicle.value;
+
       final assigned = controller.assignedVehiclesForUser(
         LoginController.loginUser.id,
       );
 
       if (assigned.isEmpty) {
-        return UDetailRow(value: 'Not Assigned', icon: Iconsax.truck);
+        return UDetailRow(
+          value: 'Not Assigned',
+          icon: Iconsax.truck,
+        );
       }
 
       if (assigned.length == 1) {
-        return UDetailRow(value: assigned.first.number, icon: Iconsax.truck);
+        return UDetailRow(
+          value: assigned.first.number,
+          icon: Iconsax.truck,
+        );
       }
 
-      final selected =
-          controller.selectedVehicle.value != null &&
-              assigned.any((v) => v.id == controller.selectedVehicle.value!.id)
-          ? controller.selectedVehicle.value
+      final selected = selectedVehicle != null &&
+          assigned.any((v) => v.id == selectedVehicle.id)
+          ? selectedVehicle
           : null;
 
       return Row(

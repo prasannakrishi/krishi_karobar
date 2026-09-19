@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 
 class ServiceController extends GetxController {
@@ -169,6 +170,15 @@ class ServiceController extends GetxController {
   }
 
   Future<bool> saveService() async {
+    try {
+      Authz.requirePermission(
+        isEditMode.value ? Permissions.serviceEdit : Permissions.serviceCreate,
+      );
+    } on AppException catch (e) {
+      _error(e.message);
+      return false;
+    }
+
     final name = nameController.text.trim();
     final description = descriptionController.text.trim();
     final rateText = rateController.text.trim();
@@ -221,23 +231,18 @@ class ServiceController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      final saved = await firebaseService.saveRecord(
+      await firebaseService.saveRecord(
         'services',
         id,
         service.toMap(),
       );
-
-      if (!saved) {
-        _error('Unable to save service.');
-        return false;
-      }
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadServices();
       clearSelection();
       return true;
     } catch (e) {
-      _error('Unable to create service.');
+      _error(AppException.messageOf(e));
       debugPrint('ServiceController createService: $e');
       return false;
     } finally {
@@ -268,23 +273,18 @@ class ServiceController extends GetxController {
         'updatedBy': LoginController.loginUser.id,
       };
 
-      final updated = await firebaseService.updateRecord(
+      await firebaseService.updateRecord(
         'services',
         service.id,
         updatedData,
       );
-
-      if (!updated) {
-        _error('Unable to update service.');
-        return false;
-      }
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadServices();
       clearSelection();
       return true;
     } catch (e) {
-      _error('Unable to update service.');
+      _error(AppException.messageOf(e));
       debugPrint('ServiceController updateService: $e');
       return false;
     } finally {
@@ -309,6 +309,13 @@ class ServiceController extends GetxController {
 
   Future<void> deleteSelectedServices() async {
     if (selectedServiceIds.isEmpty) return;
+
+    try {
+      Authz.requirePermission(Permissions.serviceDelete);
+    } on AppException catch (e) {
+      _error(e.message);
+      return;
+    }
 
     final ids = selectedServiceIds.toList();
     final blockedNames = <String>[];
@@ -345,6 +352,9 @@ class ServiceController extends GetxController {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadServices();
       clearSelection();
+    } catch (e) {
+      _error(AppException.messageOf(e));
+      debugPrint('ServiceController deleteServices: $e');
     } finally {
       isLoading.value = false;
     }

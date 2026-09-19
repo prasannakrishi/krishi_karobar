@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -9,6 +8,7 @@ import '../../../features/authentication/controllers/login_controllers.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../utils/constants/enums.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import 'timer_controller.dart';
 
 class MonitorController extends GetxController {
@@ -121,7 +121,20 @@ class MonitorController extends GetxController {
 
     _syncTimers[key]?.cancel();
     _syncTimers[key] = Timer(const Duration(milliseconds: 600), () {
-      firebaseService.updateRecord('activities', id, data);
+      _background('activities', id, data);
+    });
+  }
+
+  /// Background write for live-sync fields. A failure here must never
+  /// interrupt the running activity, but it still has to be classified and
+  /// logged rather than surfacing as an unhandled async error.
+  void _background(String path, String id, Map<String, dynamic> data) {
+    firebaseService.updateRecord(path, id, data).catchError((Object error) {
+      debugPrint(
+        'MonitorController background sync [$path/$id]: '
+            '${AppException.from(error)}',
+      );
+      return false;
     });
   }
 
@@ -189,23 +202,21 @@ class MonitorController extends GetxController {
     final live = matches.isEmpty ? null : matches.first;
 
     if (live == null) {
-      // A live record disappearing from the realtime cache means the
-      // activity ended/cancelled elsewhere. Viewers must reset immediately;
-      // once the record is no longer live, isController becomes true, so
-      // checking !isController here would incorrectly leave viewer forms
-      // stuck in the old running state.
-      if (currentActivityId != null && !_isFinalizingActivity) {
+      if (currentActivityId == null) {
+        return;
+      }
+
+      final cachedCurrent = cache.activities[currentActivityId!];
+
+      if (cachedCurrent != null && !cachedCurrent.isLive && !_isFinalizingActivity) {
         currentActivityId = null;
         timerController.reset();
         resetForm();
       }
+
       return;
     }
 
-    // Bind the first time we discover it, and keep re-binding for viewers
-    // so their fields stay in sync with the controller's edits. Never
-    // re-bind on the controller's own device for its own activity - that
-    // would restart the local ticking timer on every echoed write.
     if (currentActivityId != live.id || !isController) {
       _bindToLiveActivity(live);
     }
@@ -465,7 +476,7 @@ class MonitorController extends GetxController {
         (vehicle.serviceId == null || vehicle.serviceId!.trim().isEmpty)) {
       vehicle.serviceId = service.id;
       storage.write('default_vehicle', vehicle.toMap());
-      firebaseService.updateRecord('vehicles', vehicle.id, {
+      _background('vehicles', vehicle.id, {
         'serviceId': service.id,
       });
     }
@@ -492,7 +503,7 @@ class MonitorController extends GetxController {
       vehicle.driverId = user.id;
       cache.vehicles[vehicle.id] = vehicle;
       storage.write('default_vehicle', vehicle.toMap());
-      firebaseService.updateRecord('vehicles', vehicle.id, {
+      _background('vehicles', vehicle.id, {
         'driverId': user.id,
       });
     }
@@ -514,7 +525,7 @@ class MonitorController extends GetxController {
     for (final timer in _syncTimers.values) {
       timer.cancel();
     }
-    firebaseService.updateRecord('activities', id, data);
+    _background('activities', id, data);
   }
 
   /// Enforces: sync the customer onto the live activity ONLY when there's
@@ -547,9 +558,18 @@ class MonitorController extends GetxController {
   }
 
   void startActivity() {
-    if (selectedVehicle.value == null) {
+    if (!_requirePermission(Permissions.activityStart)) return;
+
+    final vehicle = selectedVehicle.value;
+
+    if (vehicle == null) {
       showMessage('Warning', 'Please select a vehicle first.');
       vehicleCollapsed.value = false;
+      return;
+    }
+
+    if (!Authz.canViewVehicle(vehicle)) {
+      showMessage('Not allowed', "You don't have access to this record.");
       return;
     }
 
@@ -582,7 +602,8 @@ class MonitorController extends GetxController {
           'Service: ${selectedService.value?.name ?? '-'}',
       confirmLabel: 'Start',
     ).then((confirmed) {
-      if (confirmed != true) return;
+      if (confirmed != true)
+      {return;}
       _startConfirmed();
     });
   }
@@ -596,14 +617,28 @@ class MonitorController extends GetxController {
     final service = selectedService.value;
     if (vehicle == null || service == null) return;
 
-    timerController.start();
-    supervisor.text = LoginController.loginUser.fullname;
+    _isSavingActivity = true;
 
+    // The activity's uId depends on a Firebase sequence transaction and can
+    // fail (bad vehicle uId prefix, sequence conflict, network/permission
+    // error). This must be resolved - and the record actually persisted -
+    // BEFORE the visible timer starts, so a failed creation never leaves a
+    // ticking timer with no backing activity.
     final id = const Uuid().v4();
-    final activityUId = await sequenceService.generateActivityUid(
-      serviceType: service.name,
-      vehicleUId: vehicle.uId,
-    );
+    final String activityUId;
+
+    try {
+      activityUId = await sequenceService.generateActivityUid(
+        serviceType: service.name,
+        vehicleUId: vehicle.uId,
+      );
+    } catch (error) {
+      _isSavingActivity = false;
+      debugPrint('MonitorController.startActivity (sequence): $error');
+      showMessage('Error', AppException.messageOf(error));
+      return;
+    }
+
     final now = DateTime.now();
 
     final activity = ActivityModel(
@@ -629,23 +664,25 @@ class MonitorController extends GetxController {
       updatedAt: now,
     );
 
-    currentActivityId = id;
-    _isSavingActivity = true;
-
-    final saved = await firebaseService.saveRecord(
-      'activities',
-      id,
-      activity.toMap(),
-    );
-
-    if (!saved) {
-      currentActivityId = null;
-      timerController.reset();
+    try {
+      await firebaseService.saveRecord(
+        'activities',
+        id,
+        activity.toMap(),
+      );
+    } catch (error) {
       _isSavingActivity = false;
-      showMessage('Error', 'Failed to start activity.');
+      debugPrint('MonitorController.startActivity (save): $error');
+      showMessage('Error', AppException.messageOf(error));
       return;
     }
+
+    // Only now that the activity is confirmed persisted do we commit local
+    // state and start the visible timer.
+    currentActivityId = id;
     _isSavingActivity = false;
+    supervisor.text = LoginController.loginUser.fullname;
+    timerController.start();
 
     await AuditService.instance.log(
       action: 'activity_started',
@@ -675,7 +712,13 @@ class MonitorController extends GetxController {
       storage.write('default_vehicle', vehicle.toMap());
     }
 
-    await firebaseService.updateRecord('vehicles', vehicle.id, updates);
+    try {
+      await firebaseService.updateRecord('vehicles', vehicle.id, updates);
+    } catch (error) {
+      debugPrint(
+        'MonitorController._markVehicleActive: ${AppException.from(error)}',
+      );
+    }
   }
 
   /// Clears only the volatile activity assignment. The vehicle's persistent
@@ -686,9 +729,15 @@ class MonitorController extends GetxController {
 
     vehicle.supervisorId = null;
 
-    await firebaseService.updateRecord('vehicles', vehicle.id, {
-      'supervisorId': null,
-    });
+    try {
+      await firebaseService.updateRecord('vehicles', vehicle.id, {
+        'supervisorId': null,
+      });
+    } catch (error) {
+      debugPrint(
+        'MonitorController._clearVehicleActive: ${AppException.from(error)}',
+      );
+    }
   }
 
   /// Simple Yes/No confirmation dialog. Returns true only if the user
@@ -721,6 +770,18 @@ class MonitorController extends GetxController {
   /// True if this device may act on the running/paused activity, showing a
   /// consistent "no permission" message otherwise (defense in depth - the
   /// UI should already hide these actions from a non-controller).
+  /// Privilege guard for the activity operations. Record-level ownership is
+  /// checked separately by [_requireControl].
+  bool _requirePermission(String permission) {
+    try {
+      Authz.requirePermission(permission);
+      return true;
+    } on AppException catch (e) {
+      showMessage('Not allowed', e.message);
+      return false;
+    }
+  }
+
   bool _requireControl() {
     final activity = liveActivity;
     if (activity == null) return true; // no live activity - normal flow
@@ -739,6 +800,10 @@ class MonitorController extends GetxController {
   /// this just clears the local form; otherwise it cancels the live
   /// activity record so every viewer sees it end.
   Future<void> confirmReset() async {
+    if (currentActivityId != null &&
+        !_requirePermission(Permissions.activityCancel)) {
+      return;
+    }
     if (!_requireControl()) return;
 
     final hasLiveRecord = currentActivityId != null;
@@ -758,11 +823,19 @@ class MonitorController extends GetxController {
 
     if (hasLiveRecord) {
       final id = currentActivityId!;
-      await firebaseService.updateRecord('activities', id, {
-        'status': ActivityStatus.cancelled,
-        'cancelledBy': LoginController.loginUser.id,
-        'cancelledAt': DateTime.now().toUtc().toIso8601String(),
-      });
+
+      try {
+        await firebaseService.updateRecord('activities', id, {
+          'status': ActivityStatus.cancelled,
+          'cancelledBy': LoginController.loginUser.id,
+          'cancelledAt': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (error) {
+        _isFinalizingActivity = false;
+        debugPrint('MonitorController.confirmReset: $error');
+        showMessage('Error', AppException.messageOf(error));
+        return;
+      }
 
       await AuditService.instance.log(
         action: 'activity_cancelled',
@@ -794,7 +867,7 @@ class MonitorController extends GetxController {
     final id = currentActivityId;
     if (id == null) return;
 
-    firebaseService.updateRecord('activities', id, {
+    _background('activities', id, {
       'status': ActivityStatus.paused,
       'pauseTime': DateTime.now().toUtc().toIso8601String(),
       'duration': timerController.durationSeconds,
@@ -818,7 +891,7 @@ class MonitorController extends GetxController {
     final id = currentActivityId;
     if (id == null) return;
 
-    firebaseService.updateRecord('activities', id, {
+    _background('activities', id, {
       'status': ActivityStatus.running,
       'resumeTime': DateTime.now().toUtc().toIso8601String(),
     });
@@ -871,15 +944,70 @@ class MonitorController extends GetxController {
       return;
     }
 
+    if (!_requirePermission(Permissions.activityComplete)) return;
     if (!_requireControl()) return;
 
-    final activityId = currentActivityId;
-    if (activityId == null) {
-      showMessage('Error', 'No active activity to save. Please start again.');
+    String? activityId = currentActivityId;
+
+    // 1. Use the currently bound live activity first.
+    if (activityId == null || activityId.isEmpty) {
+      final live = liveActivity;
+
+      if (live != null && ActivityStatus.liveStates.contains(live.status)) {
+        activityId = live.id;
+      }
+    }
+
+    // 2. Check DataCacheService directly for the selected vehicle.
+    if (activityId == null || activityId.isEmpty) {
+      final vehicle = selectedVehicle.value;
+
+      if (vehicle != null) {
+        final cachedLive = cache.activities.values
+            .where(
+              (activity) =>
+          activity.vehicleId == vehicle.id &&
+              ActivityStatus.liveStates.contains(activity.status),
+        )
+            .toList();
+
+        if (cachedLive.isNotEmpty) {
+          activityId = cachedLive.first.id;
+        }
+      }
+    }
+
+    // 3. Final fallback: read the active activity directly from Firebase.
+    if (activityId == null || activityId.isEmpty) {
+      final vehicle = selectedVehicle.value;
+
+      if (vehicle != null) {
+        final cachedLive = cache.activities.values
+            .where(
+              (activity) =>
+          activity.vehicleId == vehicle.id &&
+              ActivityStatus.liveStates.contains(activity.status),
+        )
+            .toList();
+
+        if (cachedLive.isNotEmpty) {
+          activityId = cachedLive.first.id;
+        }
+      }
+    }
+
+    if (activityId == null || activityId.isEmpty) {
+      showMessage(
+        'Error',
+        'No active activity to save. Please start again.',
+      );
       return;
     }
 
+    currentActivityId = activityId;
+
     _saveConfirmationPending = true;
+
     final confirmed = await _confirmDialog(
       title: 'Save Activity?',
       message: 'Please confirm before saving:\n\n'
@@ -890,6 +1018,7 @@ class MonitorController extends GetxController {
           'Amount: ${timerController.amount.value.toStringAsFixed(0)}',
       confirmLabel: 'Save',
     );
+
     _saveConfirmationPending = false;
 
     if (confirmed != true) return;
@@ -899,16 +1028,23 @@ class MonitorController extends GetxController {
     _isFinalizingActivity = true;
 
     try {
-      // Re-read the record before completing it. This prevents a second save
-      // attempt from completing an activity that another request already
-      // finalized.
-      final latest = await firebaseService.getRecordById('activities', activityId);
+      final latest = await firebaseService.getRecordById(
+        'activities',
+        activityId,
+      );
+
       final latestStatus = latest?['status']?.toString();
-      if (latest == null || !ActivityStatus.liveStates.contains(latestStatus)) {
+
+      if (latest == null ||
+          !ActivityStatus.liveStates.contains(latestStatus)) {
         currentActivityId = null;
         timerController.reset();
         resetForm();
-        showMessage('Warning', 'This activity has already been completed or cancelled.');
+
+        showMessage(
+          'Warning',
+          'This activity has already been completed or cancelled.',
+        );
         return;
       }
 
@@ -927,46 +1063,41 @@ class MonitorController extends GetxController {
         'amount': timerController.amount.value,
         'paidAmount': 0,
         'dueAmount': timerController.amount.value,
-        'description': description.text.trim().isEmpty
-            ? null
-            : description.text.trim(),
+        'description': description.text.trim().isEmpty? null: description.text.trim(),
         'status': ActivityStatus.completed,
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      final success = await firebaseService.updateRecord(
+      await firebaseService.updateRecord(
         'activities',
         activityId,
         updatedData,
       );
 
-      if (!success) {
-        showMessage('Error', 'Failed to save activity.');
-        return;
-      }
-
       await AuditService.instance.log(
         action: 'activity_completed',
         performedBy: LoginController.loginUser.id,
         targetRecordId: activityId,
-        oldValue: {'status': ActivityStatus.running},
+        oldValue: {'status': latestStatus},
         newValue: {'status': ActivityStatus.completed},
       );
 
-      // Activity has ended - free the vehicle up again.
       await _clearVehicleActive();
+
       currentActivityId = null;
 
       showMessage('Success', 'Activity saved successfully.');
+
       timerController.reset();
       resetForm();
+
       for (final timer in _syncTimers.values) {
         timer.cancel();
       }
       _syncTimers.clear();
     } catch (error) {
       debugPrint('MonitorController.saveActivity: $error');
-      showMessage('Error', error.toString());
+      showMessage('Error', AppException.messageOf(error));
     } finally {
       _isFinalizingActivity = false;
       _isSavingActivity = false;
@@ -1018,9 +1149,7 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
-    final success = await firebaseService.saveRecord('customers',customer.id,customer.toMap(),);
-
-    if (!success) {throw StateError('Failed to save customer.');}
+    await firebaseService.saveRecord('customers',customer.id,customer.toMap(),);
 
     selectedCustomer.value = customer;
     return customer;

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 
 class UserController extends GetxController {
@@ -212,6 +213,25 @@ class UserController extends GetxController {
   }
 
   Future<bool> saveUser() async {
+    try {
+      Authz.requirePermission(
+        isEditMode.value ? Permissions.userEdit : Permissions.userCreate,
+      );
+
+      final target = editingUser;
+
+      if (isEditMode.value && target != null) {
+        Authz.requireRecordAccess(
+          Authz.canEditUser(target),
+          recordType: 'user',
+          recordId: target.id,
+        );
+      }
+    } on AppException catch (e) {
+      _error(e.message);
+      return false;
+    }
+
     final name = nameController.text.trim();
     final phone = phoneController.text.trim();
     final address = addressController.text.trim();
@@ -299,16 +319,11 @@ class UserController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      final saved = await firebaseService.saveRecord(
+      await firebaseService.saveRecord(
         'users',
         id,
         user.toMap(),
       );
-
-      if (!saved) {
-        _error('Unable to save user.');
-        return false;
-      }
 
       await AuditService.instance.log(
         action: 'user_created',
@@ -322,7 +337,7 @@ class UserController extends GetxController {
       clearSelection();
       return true;
     } catch (e) {
-      _error('Unable to create user.');
+      _error(AppException.messageOf(e));
       debugPrint('UserController createUser: $e');
       return false;
     } finally {
@@ -408,16 +423,11 @@ class UserController extends GetxController {
         'updatedBy': LoginController.loginUser.id,
       };
 
-      final updated = await firebaseService.updateRecord(
+      await firebaseService.updateRecord(
         'users',
         user.id,
         updatedData,
       );
-
-      if (!updated) {
-        _error('Unable to update user.');
-        return false;
-      }
 
       if (identityChanged) {
         await AuditService.instance.log(
@@ -434,7 +444,7 @@ class UserController extends GetxController {
       clearSelection();
       return true;
     } catch (e) {
-      _error('Unable to update user.');
+      _error(AppException.messageOf(e));
       debugPrint('UserController updateUser: $e');
       return false;
     } finally {
@@ -459,6 +469,24 @@ class UserController extends GetxController {
     }
 
     final ids = selectedUserIds.toList();
+
+    try {
+      Authz.requirePermission(Permissions.userDelete);
+
+      for (final id in ids) {
+        final target = users.firstWhereOrNull((user) => user.id == id);
+
+        Authz.requireRecordAccess(
+          target != null && Authz.canDeleteUser(target),
+          recordType: 'user',
+          recordId: id,
+        );
+      }
+    } on AppException catch (e) {
+      _error(e.message);
+      return;
+    }
+
     isLoading.value = true;
 
     try {
@@ -469,6 +497,9 @@ class UserController extends GetxController {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       loadUsers();
       clearSelection();
+    } catch (e) {
+      _error(AppException.messageOf(e));
+      debugPrint('UserController deleteUsers: $e');
     } finally {
       isLoading.value = false;
     }

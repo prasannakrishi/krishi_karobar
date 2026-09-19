@@ -9,7 +9,9 @@ import 'package:krishi_karobar/features/recent_activity/controllers/activity_con
 import 'package:krishi_karobar/models/models.dart';
 import 'package:krishi_karobar/services/data_cache_service.dart';
 import 'package:krishi_karobar/services/firebase_service.dart';
+import 'package:krishi_karobar/services/authorization_service.dart';
 import 'package:krishi_karobar/services/sequences_service.dart';
+import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 
 class VehicleController extends GetxController {
   static VehicleController get instance => Get.find();
@@ -479,6 +481,25 @@ class VehicleController extends GetxController {
   // SAVE VEHICLE
 
   Future<bool> saveVehicle() async {
+    try {
+      Authz.requirePermission(
+        isEditMode.value ? Permissions.vehicleEdit : Permissions.vehicleCreate,
+      );
+
+      final target = editingVehicle;
+
+      if (isEditMode.value && target != null) {
+        Authz.requireRecordAccess(
+          Authz.canEditVehicle(target),
+          recordType: 'vehicle',
+          recordId: target.id,
+        );
+      }
+    } on AppException catch (e) {
+      _notify('Not allowed', e.message);
+      return false;
+    }
+
     final validationMessage = validateVehicle();
 
     if (validationMessage != null) {
@@ -534,21 +555,11 @@ class VehicleController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      final success = await firebaseService.saveRecord(
+      await firebaseService.saveRecord(
         'vehicles',
         newVehicle.id,
         newVehicle.toMap(),
       );
-
-      if (!success) {
-        Get.snackbar(
-          'Error',
-          'Failed to register vehicle.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-
-        return false;
-      }
 
       await loadVehicles();
 
@@ -573,11 +584,7 @@ class VehicleController extends GetxController {
         'VehicleController: Error saving vehicle: $e',
       );
 
-      Get.snackbar(
-        'Error',
-        'Something went wrong while registering vehicle.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      _notify('Error', AppException.messageOf(e));
 
       return false;
     } finally {
@@ -610,21 +617,11 @@ class VehicleController extends GetxController {
         'updatedBy': LoginController.loginUser.id,
       };
 
-      final updated = await firebaseService.updateRecord(
+      await firebaseService.updateRecord(
         'vehicles',
         target.id,
         updatedData,
       );
-
-      if (!updated) {
-        Get.snackbar(
-          'Error',
-          'Failed to update vehicle.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-
-        return false;
-      }
 
       await loadVehicles();
 
@@ -654,11 +651,7 @@ class VehicleController extends GetxController {
         'VehicleController: Error updating vehicle: $e',
       );
 
-      Get.snackbar(
-        'Error',
-        'Something went wrong while updating vehicle.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      _notify('Error', AppException.messageOf(e));
 
       return false;
     } finally {
@@ -683,6 +676,23 @@ class VehicleController extends GetxController {
 
   Future<void> deleteSelectedVehicles() async {
     if (selectedVehicleIds.isEmpty) return;
+
+    try {
+      Authz.requirePermission(Permissions.vehicleDelete);
+
+      for (final id in selectedVehicleIds) {
+        final target = vehiclesList.firstWhereOrNull((v) => v.id == id);
+
+        Authz.requireRecordAccess(
+          target != null && Authz.canDeleteVehicle(target),
+          recordType: 'vehicle',
+          recordId: id,
+        );
+      }
+    } on AppException catch (e) {
+      _notify('Not allowed', e.message);
+      return;
+    }
 
     final ids = selectedVehicleIds.toList();
     final blockedNumbers = <String>[];
@@ -720,9 +730,20 @@ class VehicleController extends GetxController {
 
       await loadVehicles();
       clearRowSelection();
+    } catch (e) {
+      _notify('Error', AppException.messageOf(e));
+      debugPrint('VehicleController deleteVehicles: $e');
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void _notify(String title, String message) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   @override

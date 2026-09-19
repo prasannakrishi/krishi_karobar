@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../models/models.dart';
 import '../../../services/data_cache_service.dart';
+import '../../../services/authorization_service.dart';
 import '../../../services/firebase_service.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/helper_method.dart';
 
@@ -426,16 +428,32 @@ class ActivityController extends GetxController {
       ) async {
     final now = DateTime.now();
 
-    final success = await firebaseService.updateRecord(
-      'activities',
-      activity.id,
-      {
-        'description': description,
-        'updatedAt': now.toUtc().toIso8601String(),
-      },
-    );
+    try {
+      Authz.requirePermission(Permissions.activityEdit);
 
-    if (!success) return false;
+      Authz.requireRecordAccess(
+        Authz.canEditActivity(activity),
+        recordType: 'activity',
+        recordId: activity.id,
+      );
+
+      await firebaseService.updateRecord(
+        'activities',
+        activity.id,
+        {
+          'description': description,
+          'updatedAt': now.toUtc().toIso8601String(),
+        },
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Activity',
+        AppException.messageOf(e),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      debugPrint('ActivityController updateDescription: $e');
+      return false;
+    }
 
     activity.description = description;
     activity.updatedAt = now;

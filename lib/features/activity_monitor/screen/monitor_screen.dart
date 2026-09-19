@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishi_karobar/features/activity_monitor/screen/widget/monitor_controls.dart';
+import 'package:krishi_karobar/features/controllers.dart';
 import '../../../../common/widgets/app_scaffold.dart';
 import '../../../../common/widgets/appbar.dart';
-import '../controllers/monitor_controller.dart';
 import 'widget/activity_details.dart';
 import 'widget/customer_info.dart';
 import 'widget/vehicle_info.dart';

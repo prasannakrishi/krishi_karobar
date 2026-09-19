@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../utils/exceptions/app_exceptions.dart';
 import 'firebase_service.dart';
 
 /// Centralized audit logging (spec section 22).
@@ -27,15 +29,21 @@ class AuditService {
     final id = _uuid.v4();
     final now = DateTime.now().toUtc();
 
-    await _firebaseService.saveRecord('audit_logs', id, {
-      'id': id,
-      'action': action,
-      'performedBy': performedBy,
-      'targetUserId': targetUserId,
-      'targetRecordId': targetRecordId,
-      'oldValue': oldValue,
-      'newValue': newValue,
-      'timestamp': now.toIso8601String(),
-    });
+    try {
+      await _firebaseService.saveRecord('audit_logs', id, {
+        'id': id,
+        'action': action,
+        'performedBy': performedBy,
+        'targetUserId': targetUserId,
+        'targetRecordId': targetRecordId,
+        'oldValue': oldValue,
+        'newValue': newValue,
+        'timestamp': now.toIso8601String(),
+      });
+    } catch (error) {
+      // Audit logging is best effort: it must never fail the operation it
+      // is recording.
+      debugPrint('AuditService $action: ${AppException.from(error)}');
+    }
   }
 }

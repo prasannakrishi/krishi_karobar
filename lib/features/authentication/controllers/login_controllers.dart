@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/helper/helper_widgets.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
@@ -127,37 +128,36 @@ class LoginController extends GetxController {
         createdAt: now,
       );
 
-      final profileSaved = await firebaseService.saveRecord(
-        'users',
-        databaseId,
-        newUser.toMap(),
-      );
-
-      if (!profileSaved) {
-        await _auth.currentUser?.delete();
-        throw Exception(
-          'Account created but user profile could not be saved.',
+      // The authUsers mapping is written first: every rule on /users
+      // resolves the writer through authUsers/{auth.uid}/recordId, so the
+      // mapping has to exist before the business record is created.
+      try {
+        await firebaseService.saveRecord(
+          'authUsers',
+          firebaseUser.uid,
+          {
+            'recordId': databaseId,
+            'status': 'active',
+            'roles': {
+              for (final role in UserRoles.values) role: false,
+            },
+          },
         );
+      } catch (e) {
+        await _auth.currentUser?.delete();
+        throw Exception(AppException.messageOf(e));
       }
 
-      final authMappingSaved = await firebaseService.saveRecord(
-        'authUsers',
-        firebaseUser.uid,
-        {
-          'recordId': databaseId,
-          'status': 'active',
-          'roles': {
-            for (final role in UserRoles.values) role: false,
-          },
-        },
-      );
-
-      if (!authMappingSaved) {
-        await firebaseService.deleteRecord('users', databaseId);
-        await _auth.currentUser?.delete();
-        throw Exception(
-          'Account mapping could not be created.',
+      try {
+        await firebaseService.saveRecord(
+          'users',
+          databaseId,
+          newUser.toMap(),
         );
+      } catch (e) {
+        await firebaseService.deleteRecord('authUsers', firebaseUser.uid);
+        await _auth.currentUser?.delete();
+        throw Exception(AppException.messageOf(e));
       }
 
       // Spec section 10.6/10.7: notify admins + audit the registration.
@@ -171,18 +171,23 @@ class LoginController extends GetxController {
         newValue: {'userType': UserTypes.guest, 'roles': const []},
       );
 
-      await firebaseService.saveRecord(
-        'notification_queue',
-        _uuid.v4(),
-        {
-          'type': 'new_guest_registration',
-          'userId': databaseId,
-          'fullname': newUser.fullname,
-          'phone': newUser.phone,
-          'registeredAt': now.toIso8601String(),
-          'status': 'pending',
-        },
-      );
+      try {
+        await firebaseService.saveRecord(
+          'notification_queue',
+          _uuid.v4(),
+          {
+            'type': 'new_guest_registration',
+            'userId': databaseId,
+            'fullname': newUser.fullname,
+            'phone': newUser.phone,
+            'registeredAt': now.toIso8601String(),
+            'status': 'pending',
+          },
+        );
+      } catch (e) {
+        // Notifying admins must never block a completed registration.
+        debugPrint('LoginController notification_queue: $e');
+      }
 
       await _completeAuthentication(firebaseUser);
     });
@@ -197,22 +202,25 @@ class LoginController extends GetxController {
   Future<void> _completeAuthentication(
       User firebaseUser,
       ) async {
-    final profile = await UserProfileResolver().resolve(firebaseUser);
+    final UserModel profile;
 
-    if (profile == null) {
+    try {
+      profile = await UserProfileResolver().resolve(firebaseUser);
+    } catch (e) {
       await _auth.signOut();
-      throw Exception( 'User profile not found or account is inactive.');
+      throw Exception(AppException.messageOf(e));
     }
 
     loginUser = profile;
 
-    if (!profile.isGuest) {
-      if (!Get.isRegistered<DataCacheService>()) {
-        Get.put(DataCacheService());
-      }
-
-      await DataCacheService.instance.initializeForUser(profile);
+    // The cache service is always registered - screens resolve it through
+    // DataCacheService.instance regardless of user type. For a Guest it
+    // simply holds no business data.
+    if (!Get.isRegistered<DataCacheService>()) {
+      Get.put(DataCacheService());
     }
+
+    await DataCacheService.instance.initializeForUser(profile);
 
     _saveSession();
     _savePhoneHistory();
@@ -273,7 +281,7 @@ class LoginController extends GetxController {
     } catch (e) {
       errorSnackBar(
         title: 'Logout Failed',
-        message: e.toString().replaceFirst('Exception: ', ''),
+        message: _errorMessage(e),
       );
     } finally {
       UFullScreenLoader.stopLoading();
@@ -289,11 +297,16 @@ class LoginController extends GetxController {
     } catch (e) {
       errorSnackBar(
         title: 'Authentication Failed',
-        message: e.toString().replaceFirst('Exception: ', ''),
+        message: _errorMessage(e),
       );
     } finally {
       UFullScreenLoader.stopLoading();
     }
+  }
+
+  String _errorMessage(Object error) {
+    if (error is AppException) return error.message;
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   String _authError(FirebaseAuthException e) {
