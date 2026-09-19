@@ -1,6 +1,14 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../utils/exceptions/app_exceptions.dart';
+
+/// Thin Realtime Database wrapper.
+///
+/// Every failure is classified into an [AppException] and thrown so the
+/// caller can tell a permission denial apart from a network drop or a
+/// malformed payload. Absence of a record is NOT an error: [getRecordById]
+/// returns null and [getRecords] returns an empty list.
 class FirebaseService {
   FirebaseService({DatabaseReference? databaseReference})
     : _db = databaseReference ?? FirebaseDatabase.instance.ref();
@@ -12,15 +20,20 @@ class FirebaseService {
     String id,
     Map<String, dynamic> data,
   ) async {
-    final recordPath = _recordPath(path, id);
-    if (recordPath == null || data.isEmpty) return false;
+    final recordPath = _requirePath(path, id, 'saveRecord');
+
+    if (data.isEmpty) {
+      throw DataValidationException(
+        code: 'empty-payload',
+        details: 'saveRecord [$recordPath]',
+      );
+    }
 
     try {
       await _db.child(recordPath).set(data);
       return true;
     } catch (error) {
-      _logError('saving', recordPath, error);
-      return false;
+      throw _mapError('saving', recordPath, error);
     }
   }
 
@@ -29,33 +42,48 @@ class FirebaseService {
     String id,
     Map<String, dynamic> data,
   ) async {
-    final recordPath = _recordPath(path, id);
-    if (recordPath == null || data.isEmpty) return false;
+    final recordPath = _requirePath(path, id, 'updateRecord');
+
+    if (data.isEmpty) {
+      throw DataValidationException(
+        code: 'empty-payload',
+        details: 'updateRecord [$recordPath]',
+      );
+    }
 
     try {
       await _db.child(recordPath).update(data);
       return true;
     } catch (error) {
-      _logError('updating', recordPath, error);
-      return false;
+      throw _mapError('updating', recordPath, error);
     }
   }
 
   Future<bool> updateRecords(Map<String, dynamic> updates) async {
-    if (updates.isEmpty) return false;
+    if (updates.isEmpty) {
+      throw const DataValidationException(
+        code: 'empty-payload',
+        details: 'updateRecords',
+      );
+    }
 
     try {
       await _db.update(updates);
       return true;
     } catch (error) {
-      _logError('updating multiple records', null, error);
-      return false;
+      throw _mapError('updating multiple records', null, error);
     }
   }
 
   Future<List<Map<String, dynamic>>> getRecords(String path) async {
     final cleanPath = _cleanPath(path);
-    if (cleanPath == null) return [];
+
+    if (cleanPath == null) {
+      throw const DataValidationException(
+        code: 'invalid-path',
+        details: 'getRecords',
+      );
+    }
 
     try {
       final snapshot = await _db.child(cleanPath).get();
@@ -65,7 +93,13 @@ class FirebaseService {
       }
 
       final value = snapshot.value;
-      if (value is! Map) return [];
+
+      if (value is! Map) {
+        throw DataValidationException(
+          code: 'unexpected-shape',
+          details: 'getRecords [$cleanPath] expected a map',
+        );
+      }
 
       final records = <Map<String, dynamic>>[];
 
@@ -83,14 +117,12 @@ class FirebaseService {
 
       return records;
     } catch (error) {
-      _logError('loading', cleanPath, error);
-      return [];
+      throw _mapError('loading', cleanPath, error);
     }
   }
 
   Future<Map<String, dynamic>?> getRecordById(String path, String id) async {
-    final recordPath = _recordPath(path, id);
-    if (recordPath == null) return null;
+    final recordPath = _requirePath(path, id, 'getRecordById');
 
     try {
       final snapshot = await _db.child(recordPath).get();
@@ -100,28 +132,31 @@ class FirebaseService {
       }
 
       final value = snapshot.value;
-      if (value is! Map) return null;
+
+      if (value is! Map) {
+        throw DataValidationException(
+          code: 'unexpected-shape',
+          details: 'getRecordById [$recordPath] expected a map',
+        );
+      }
 
       final data = Map<String, dynamic>.from(value);
       data['id'] ??= id.trim();
 
       return data;
     } catch (error) {
-      _logError('loading', recordPath, error);
-      return null;
+      throw _mapError('loading', recordPath, error);
     }
   }
 
   Future<bool> deleteRecord(String path, String id) async {
-    final recordPath = _recordPath(path, id);
-    if (recordPath == null) return false;
+    final recordPath = _requirePath(path, id, 'deleteRecord');
 
     try {
       await _db.child(recordPath).remove();
       return true;
     } catch (error) {
-      _logError('deleting', recordPath, error);
-      return false;
+      throw _mapError('deleting', recordPath, error);
     }
   }
 
@@ -168,9 +203,39 @@ class FirebaseService {
     return '$cleanPath/$cleanId';
   }
 
-  void _logError(String operation, String? path, Object error) {
+  String _requirePath(String path, String id, String operation) {
+    final recordPath = _recordPath(path, id);
+
+    if (recordPath == null) {
+      throw DataValidationException(
+        code: 'invalid-path',
+        details: '$operation($path, $id)',
+      );
+    }
+
+    return recordPath;
+  }
+
+  AppException _mapError(String operation, String? path, Object error) {
+    final mapped = AppException.from(
+      error,
+      operation: operation,
+      path: path,
+    );
+
+    _logError(operation, path, mapped);
+
+    return mapped;
+  }
+
+  void _logError(String operation, String? path, AppException error) {
+    if (!kDebugMode) return;
+
     final location = path == null ? '' : ' [$path]';
 
-    debugPrint('FirebaseService: Error $operation$location: $error');
+    debugPrint(
+      'FirebaseService: Error $operation$location: '
+      '${error.code} :: ${error.details}',
+    );
   }
 }

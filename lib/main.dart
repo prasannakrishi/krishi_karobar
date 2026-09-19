@@ -18,6 +18,7 @@ Future<void> main() async {
 
   Get.put(NetworkManager(), permanent: true);
   Get.put(SequenceService(), permanent: true);
+  Get.put(DataCacheService(), permanent: true);
 
   runApp(const KrishiKarobarApp());
 }

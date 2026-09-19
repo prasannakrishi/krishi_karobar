@@ -1,5 +1,6 @@
 import '../features/authentication/controllers/login_controllers.dart';
 import '../models/models.dart';
+import '../utils/exceptions/app_exceptions.dart';
 
 /// Granular, [module].[action] permission constants.
 ///
@@ -146,103 +147,343 @@ class _RolePermissions {
 /// NOT the security boundary. The Realtime Database rules (see
 /// `firebase_rtdb.rules.json` provided separately) are what actually stop a
 /// malicious client from writing data it shouldn't.
+/// Centralized authorization: AUTHENTICATION -> ACCOUNT STATUS -> USER TYPE
+/// -> ROLE -> PERMISSION -> RECORD SCOPE.
+///
+/// This is the ONLY place permission logic lives. Screens call `Authz.can(...)`
+/// to hide actions; controllers/services call the `require*` methods, which
+/// throw a classified [AppException] so an unauthorized operation never
+/// reaches Firebase.
+///
+/// Client-side authorization is not the security boundary - the Realtime
+/// Database rules (`firebase_rtdb.rules.json`) are.
 class Authz {
   Authz._();
 
   static UserModel get _user => LoginController.loginUser;
 
-  static bool get isAuthenticated => _user.id.isNotEmpty;
+  /// Every check can be evaluated for an explicit [actor] (used by
+  /// DataCacheService while a session is being established) and falls back
+  /// to the signed-in user otherwise.
+  static UserModel _resolve(UserModel? actor) => actor ?? _user;
 
-  static bool get isActive => _user.status.trim().toLowerCase() == 'active';
+  static String _status(UserModel user) => user.status.trim().toLowerCase();
 
-  /// True if the current session is allowed to do anything at all.
-  static bool get isSessionValid => isAuthenticated && isActive;
+  static bool isAuthenticated({UserModel? actor}) =>
+      _resolve(actor).id.trim().isNotEmpty;
 
-  static bool hasUserType(String userType) => _user.userType == userType;
+  static bool isActive({UserModel? actor}) =>
+      _status(_resolve(actor)) == 'active';
 
-  static bool hasRole(String role) => _user.hasRole(role);
+  static bool isSuspended({UserModel? actor}) =>
+      _status(_resolve(actor)) == 'suspended';
 
-  static bool hasAnyRole(Iterable<String> roles) =>
-      roles.any(_user.hasRole);
+  /// True if the session is allowed to do anything at all.
+  static bool isSessionValid({UserModel? actor}) =>
+      isAuthenticated(actor: actor) && isActive(actor: actor);
 
-  static Set<String> get _permissions {
-    if (!isSessionValid || _user.isGuest) return const {};
-    return _RolePermissions.forRoles(_user.roles);
+  static bool hasUserType(String userType, {UserModel? actor}) =>
+      _resolve(actor).userType == userType;
+
+  static bool hasRole(String role, {UserModel? actor}) =>
+      _resolve(actor).hasRole(role);
+
+  static bool hasAnyRole(Iterable<String> roles, {UserModel? actor}) {
+    final user = _resolve(actor);
+    return roles.any(user.hasRole);
+  }
+
+  static Set<String> _permissionsFor(UserModel user) {
+    if (!isSessionValid(actor: user) || user.isGuest) return const {};
+    return _RolePermissions.forRoles(user.roles);
   }
 
   /// Core check: authentication + active status + permission grant.
-  /// Data-scope/business-rule checks are additive on top of this -
-  /// see [canViewVehicle] / [canManageActivity] for examples.
-  static bool can(String permission) {
-    if (!isSessionValid) return false;
-    return _permissions.contains(permission);
+  static bool can(String permission, {UserModel? actor}) {
+    return _permissionsFor(_resolve(actor)).contains(permission);
   }
 
-  static bool canAny(List<String> permissions) => permissions.any(can);
+  static bool canAny(List<String> permissions, {UserModel? actor}) =>
+      permissions.any((p) => can(p, actor: actor));
 
-  static bool canAll(List<String> permissions) => permissions.every(can);
+  static bool canAll(List<String> permissions, {UserModel? actor}) =>
+      permissions.every((p) => can(p, actor: actor));
 
-  static bool canAccessModule(String modulePrefix) {
-    if (!isSessionValid) return false;
-    return _permissions.any((p) => p.startsWith('$modulePrefix.'));
+  static bool canAccessModule(String modulePrefix, {UserModel? actor}) {
+    return _permissionsFor(
+      _resolve(actor),
+    ).any((p) => p.startsWith('$modulePrefix.'));
   }
 
   // ---------------------------------------------------------------------
-  // DATA SCOPE HELPERS (spec section 8)
+  // REQUIRE* - throwing guards for controllers and services.
+  // ---------------------------------------------------------------------
+
+  static UserModel requireAuthenticated({UserModel? actor}) {
+    final user = _resolve(actor);
+
+    if (user.id.trim().isEmpty) {
+      throw const AuthenticationException.required();
+    }
+
+    return user;
+  }
+
+  static UserModel requireActiveUser({UserModel? actor}) {
+    final user = requireAuthenticated(actor: actor);
+    final status = _status(user);
+
+    if (status == 'suspended') {
+      throw const AuthenticationException.suspendedAccount();
+    }
+
+    if (status != 'active') {
+      throw const AuthenticationException.inactiveAccount();
+    }
+
+    return user;
+  }
+
+  static UserModel requirePermission(String permission, {UserModel? actor}) {
+    final user = requireActiveUser(actor: actor);
+
+    if (!_permissionsFor(user).contains(permission)) {
+      throw AuthorizationException.permission(details: permission);
+    }
+
+    return user;
+  }
+
+  /// Record-scope guard. [allowed] is the outcome of the matching `can*`
+  /// check; [recordType]/[recordId] are debug-only context.
+  static void requireRecordAccess(
+    bool allowed, {
+    String? recordType,
+    String? recordId,
+  }) {
+    if (allowed) return;
+
+    throw RecordAccessException(
+      details: '${recordType ?? 'record'}:${recordId ?? '-'}',
+    );
+  }
+
+  static void requireVehicleAccess(
+    VehicleModel vehicle, {
+    String permission = Permissions.vehicleView,
+    UserModel? actor,
+  }) {
+    requirePermission(permission, actor: actor);
+
+    requireRecordAccess(
+      canViewVehicle(vehicle, actor: actor),
+      recordType: 'vehicle',
+      recordId: vehicle.id,
+    );
+  }
+
+  static void requireActivityAccess(
+    ActivityModel activity, {
+    VehicleModel? vehicle,
+    UserModel? actor,
+  }) {
+    requirePermission(Permissions.activityView, actor: actor);
+
+    requireRecordAccess(
+      canViewActivity(activity, vehicle, actor: actor),
+      recordType: 'activity',
+      recordId: activity.id,
+    );
+  }
+
+  /// Only the user who started an activity may control it.
+  static void requireActivityControl(
+    ActivityModel activity, {
+    UserModel? actor,
+  }) {
+    requireActiveUser(actor: actor);
+
+    requireRecordAccess(
+      canControlActivity(activity, actor: actor),
+      recordType: 'activity',
+      recordId: activity.id,
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // DATA SCOPE HELPERS
   // Permission alone is not enough - these add the "is this MY record"
   // check on top of the raw permission.
   // ---------------------------------------------------------------------
 
-  /// Vehicle Owners/Drivers may only view vehicles assigned to them;
-  /// everyone else with vehicle.view sees every vehicle.
-  static bool canViewVehicle(VehicleModel vehicle) {
-    if (!can(Permissions.vehicleView)) return false;
-    if (_user.hasAllVehicleAccess) return true;
-    if (!_user.hasRole(UserRoles.driver) &&
-        !_user.hasRole(UserRoles.vehicleOwner)) {
-      return true;
-    }
-    return vehicle.ownerId == _user.id ||
-        _user.assignedVehicleIds.contains(vehicle.id);
+  /// True when the user's vehicle access is limited to an explicit
+  /// assignment list rather than the whole fleet.
+  static bool isVehicleScoped({UserModel? actor}) {
+    final user = _resolve(actor);
+
+    if (user.hasAllVehicleAccess) return false;
+    if (user.isExternal) return true;
+
+    return user.hasRole(UserRoles.driver) ||
+        user.hasRole(UserRoles.vehicleOwner);
+  }
+
+  /// Vehicle Owners/Drivers/External users may only see vehicles assigned
+  /// to them; everyone else with vehicle.view sees every vehicle.
+  static bool canViewVehicle(VehicleModel vehicle, {UserModel? actor}) {
+    if (!can(Permissions.vehicleView, actor: actor)) return false;
+
+    final user = _resolve(actor);
+
+    if (!isVehicleScoped(actor: user)) return true;
+
+    return vehicle.ownerId == user.id ||
+        user.assignedVehicleIds.contains(vehicle.id);
+  }
+
+  static bool canEditVehicle(VehicleModel vehicle, {UserModel? actor}) {
+    if (!can(Permissions.vehicleEdit, actor: actor)) return false;
+    return canViewVehicle(vehicle, actor: actor);
+  }
+
+  static bool canDeleteVehicle(VehicleModel vehicle, {UserModel? actor}) {
+    if (!can(Permissions.vehicleDelete, actor: actor)) return false;
+    return canViewVehicle(vehicle, actor: actor);
   }
 
   /// Drivers/Vehicle Owners may only act on activities tied to a vehicle
   /// they're scoped to; everyone else with the base permission can proceed.
-  static bool canManageActivity(String permission, {String? vehicleId}) {
-    if (!can(permission)) return false;
+  static bool canManageActivity(
+    String permission, {
+    String? vehicleId,
+    UserModel? actor,
+  }) {
+    if (!can(permission, actor: actor)) return false;
     if (vehicleId == null) return true;
-    if (_user.hasAllVehicleAccess) return true;
-    if (!_user.hasRole(UserRoles.driver) &&
-        !_user.hasRole(UserRoles.vehicleOwner)) {
-      return true;
-    }
-    return _user.assignedVehicleIds.contains(vehicleId);
+
+    final user = _resolve(actor);
+
+    if (!isVehicleScoped(actor: user)) return true;
+
+    return user.assignedVehicleIds.contains(vehicleId);
   }
 
   // ---------------------------------------------------------------------
-  // ACTIVITY STARTED-BY CONTROL (Activity Live Monitor spec)
+  // RECORD-LEVEL ACCESS
   // ---------------------------------------------------------------------
+
+  static bool canViewUser(UserModel target, {UserModel? actor}) {
+    final user = _resolve(actor);
+
+    if (target.id == user.id) return isSessionValid(actor: user);
+    if (target.isSystem) return false;
+
+    return can(Permissions.userView, actor: user);
+  }
+
+  static bool canEditUser(UserModel target, {UserModel? actor}) {
+    if (target.isSystem) return false;
+    return can(Permissions.userEdit, actor: actor);
+  }
+
+  static bool canDeleteUser(UserModel target, {UserModel? actor}) {
+    if (target.isSystem) return false;
+    if (target.id == _resolve(actor).id) return false;
+
+    return can(Permissions.userDelete, actor: actor);
+  }
+
+  static bool canViewService(ServiceModel service, {UserModel? actor}) =>
+      can(Permissions.serviceView, actor: actor);
+
+  static bool canEditService(ServiceModel service, {UserModel? actor}) =>
+      can(Permissions.serviceEdit, actor: actor);
+
+  static bool canDeleteService(ServiceModel service, {UserModel? actor}) =>
+      can(Permissions.serviceDelete, actor: actor);
 
   /// Anyone with activity.view + the normal vehicle data-scope check can see
   /// a running/paused Activity live - this does NOT grant control.
-  static bool canViewActivity(ActivityModel activity, VehicleModel? vehicle) {
-    if (!can(Permissions.activityView)) return false;
-    if (vehicle == null) return true;
-    return canViewVehicle(vehicle);
+  static bool canViewActivity(
+    ActivityModel activity,
+    VehicleModel? vehicle, {
+    UserModel? actor,
+  }) {
+    if (!can(Permissions.activityView, actor: actor)) return false;
+
+    final user = _resolve(actor);
+
+    if (activity.startedByUserId == user.id ||
+        activity.driverId == user.id ||
+        activity.supervisorId == user.id) {
+      return true;
+    }
+
+    if (vehicle != null) return canViewVehicle(vehicle, actor: user);
+
+    return !isVehicleScoped(actor: user) ||
+        user.assignedVehicleIds.contains(activity.vehicleId);
+  }
+
+  static bool canEditActivity(
+    ActivityModel activity, {
+    UserModel? actor,
+  }) {
+    if (!can(Permissions.activityEdit, actor: actor)) return false;
+
+    return canManageActivity(
+      Permissions.activityEdit,
+      vehicleId: activity.vehicleId,
+      actor: actor,
+    );
   }
 
   /// ONLY the user who originally started this specific Activity may
   /// pause/resume/complete/cancel it - never role, ownership, or who is
-  /// currently looking at the screen (spec sections 4/6/16/17).
-  static bool canControlActivity(ActivityModel activity) {
-    if (!isSessionValid) return false;
+  /// currently looking at the screen.
+  static bool canControlActivity(ActivityModel activity, {UserModel? actor}) {
+    final user = _resolve(actor);
+
+    if (!isSessionValid(actor: user)) return false;
     if (!activity.isLive) return false; // completed/cancelled = frozen
     if (activity.startedByUserId == null) return false;
-    return activity.startedByUserId == _user.id;
+
+    return activity.startedByUserId == user.id;
   }
 
   // ---------------------------------------------------------------------
-  // PRIVILEGE-ESCALATION GUARDS (spec sections 13/14/28)
+  // CACHE SCOPE
+  // Decides which business tables a session may load at all. Record-level
+  // filtering on top of this lives in DataCacheService.
+  // ---------------------------------------------------------------------
+
+  static bool canCachePath(String path, {UserModel? actor}) {
+    final user = _resolve(actor);
+
+    if (!isSessionValid(actor: user) || user.isGuest) return false;
+
+    switch (path.trim().toLowerCase()) {
+      case 'users':
+        // Always loaded, but filtered per record: a session without
+        // user.view only keeps itself and the people on its vehicles.
+        return true;
+      case 'vehicles':
+        return can(Permissions.vehicleView, actor: user);
+      case 'services':
+        return can(Permissions.serviceView, actor: user);
+      case 'activities':
+      case 'customers':
+        return can(Permissions.activityView, actor: user);
+      case 'payments':
+        return user.isOrganization &&
+            can(Permissions.activityView, actor: user);
+      default:
+        return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // PRIVILEGE-ESCALATION GUARDS
   // ---------------------------------------------------------------------
 
   /// True if [actor] is allowed to set [targetUserId] to [newRoles] under

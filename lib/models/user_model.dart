@@ -1,3 +1,4 @@
+import '../utils/exceptions/app_exceptions.dart';
 import '../utils/helper/helper_method.dart';
 import 'user_roles.dart';
 import 'user_types.dart';
@@ -48,6 +49,8 @@ class UserModel {
         .toList();
   }
 
+  /// Unknown/absent userType resolves to Guest, never Organization: a
+  /// corrupt or partially written record must never grant business access.
   static String _normalizeUserType(String? userType) {
     final value = userType?.trim().toLowerCase();
 
@@ -56,7 +59,7 @@ class UserModel {
     if (value == UserTypes.guest) return UserTypes.guest;
     if (value == UserTypes.system) return UserTypes.system;
 
-    return UserTypes.organization;
+    return UserTypes.guest;
   }
 
   static UserModel _systemUser = UserModel(
@@ -104,8 +107,17 @@ class UserModel {
             ? [map['assignedVehicleId'].toString()]
             : <String>[];
 
+    final id = toStringValue(map['id'] ?? map['guid']).trim();
+
+    if (id.isEmpty) {
+      throw const DataValidationException(
+        code: 'missing-record-id',
+        details: 'UserModel.fromMap received a record without an id',
+      );
+    }
+
     return UserModel(
-      id: toStringValue(map['id'] ?? map['guid']),
+      id: id,
       uId: toStringValue(map['uId'] ?? map['uid']),
       nId: toStringValue(map['nId']),
       fullname: toStringValue(map['fullname']),

@@ -78,18 +78,18 @@ class MonitorControls extends GetView<MonitorController> {
                   Expanded(
                     child: _button(
                       context,
-                      'SAVE',
-                      Icons.save,
-                      controller.saveActivity,
+                      'RESET',
+                      Icons.refresh,
+                      controller.confirmReset,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _button(
                       context,
-                      'RESET',
-                      Icons.refresh,
-                      controller.confirmReset,
+                      'SAVE',
+                      Icons.save,
+                      controller.saveActivity,
                     ),
                   ),
                 ],

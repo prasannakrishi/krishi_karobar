@@ -37,7 +37,7 @@ class VehicleInfo extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 5),
         Row(
           children: [
             Expanded(
@@ -46,7 +46,7 @@ class VehicleInfo extends StatelessWidget {
                 readOnly: true,
                 decoration: const InputDecoration(
                     labelText: 'Owner',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 12),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 10),
                 ),
               ),
             ),
@@ -61,7 +61,7 @@ class VehicleInfo extends StatelessWidget {
                       : () => _showDriverPicker(context),
                   decoration: InputDecoration(
                     labelText: 'Driver *',
-                    contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 1, vertical: 10),
                     errorText: controller.driverWarning.value
                         ? 'Please select a driver'
                         : null,
@@ -88,7 +88,7 @@ class VehicleInfo extends StatelessWidget {
 
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(5),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -100,7 +100,7 @@ class VehicleInfo extends StatelessWidget {
                 Flexible(
                   child: drivers.isEmpty
                       ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+                    padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
                       'No drivers available. Assign one '
                           'from Settings > Users.',

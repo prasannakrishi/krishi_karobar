@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import '../../authentication/controllers/login_controllers.dart';
 
 class PaymentController extends GetxController {
@@ -104,7 +105,7 @@ class PaymentController extends GetxController {
     } catch (error) {
       debugPrint('PaymentController: Failed to load dues: $error');
       customerActivities.clear();
-      _showError('Failed to load customer outstanding activities.');
+      _showError(AppException.messageOf(error));
     } finally {
       isLoadingActivities.value = false;
     }
@@ -165,6 +166,13 @@ class PaymentController extends GetxController {
 
   Future<PaymentModel?> savePayment() async {
     if (isSaving.value) {
+      return null;
+    }
+
+    try {
+      Authz.requirePermission(Permissions.activityEdit);
+    } on AppException catch (e) {
+      _showError(e.message);
       return null;
     }
 
@@ -283,12 +291,7 @@ class PaymentController extends GetxController {
         updates['$activityPath/updatedAt'] = now.toUtc().toIso8601String();
       }
 
-      final success = await firebaseService.updateRecords(updates);
-
-      if (!success) {
-        _showError('Payment could not be saved.');
-        return null;
-      }
+      await firebaseService.updateRecords(updates);
 
       _refreshLocalActivities(allocations, now);
 
@@ -301,7 +304,7 @@ class PaymentController extends GetxController {
       return payment;
     } catch (error) {
       debugPrint('PaymentController: $error');
-      _showError('Payment failed. Please try again.');
+      _showError(AppException.messageOf(error));
       return null;
     } finally {
       isSaving.value = false;
