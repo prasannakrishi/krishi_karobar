@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
 import '../../../../common/widgets/customer_search_field.dart';
+import '../../../../common/widgets/description_autocomplete.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 import 'package:krishi_karobar/utils/validators/validation.dart';
@@ -32,6 +33,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
   late TextEditingController rateController;
   late TextEditingController amountController;
   late TextEditingController paidAmountController;
+  late TextEditingController discountController;
   late TextEditingController descriptionController;
 
   bool showNewCustomerFields = false;
@@ -43,11 +45,14 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     customerAddressController = TextEditingController();
     customerPhoneController = TextEditingController();
 
-    durationMinutesController = TextEditingController(text: '60');
-    rateController = TextEditingController(text: '500');
-    amountController = TextEditingController(text: '500');
-    paidAmountController = TextEditingController(text: '0');
+    durationMinutesController = TextEditingController(text: '');
+    rateController = TextEditingController(text: '');
+    amountController = TextEditingController(text: '');
+    paidAmountController = TextEditingController(text: '');
+    discountController = TextEditingController(text: '');
     descriptionController = TextEditingController();
+
+    _loadDefaultVehicleAndService();
   }
 
   @override
@@ -59,8 +64,58 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     rateController.dispose();
     amountController.dispose();
     paidAmountController.dispose();
+    discountController.dispose();
     descriptionController.dispose();
     super.dispose();
+  }
+
+  List<VehicleModel> get availableVehicles {
+    final user = LoginController.loginUser;
+    final assignedIds = user.assignedVehicleIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+    if (user.hasRole(UserRoles.admin) || user.hasRole(UserRoles.superAdmin) || user.hasRole(UserRoles.manager) || assignedIds.isEmpty) {
+      return cache.vehicles.values.where((v) => v.isActive).toList();
+    }
+    return cache.vehicles.values.where((v) => v.isActive && assignedIds.contains(v.id)).toList();
+  }
+
+  List<ServiceModel> get supportedServices {
+    if (selectedVehicleId == null) return [];
+    final vehicle = cache.vehicles[selectedVehicleId];
+    if (vehicle == null) return [];
+    return cache.services.values
+        .where((s) => vehicle.supportServiceIds.contains(s.id))
+        .toList();
+  }
+
+  void _loadDefaultVehicleAndService() {
+    final vehicles = availableVehicles;
+    if (vehicles.isNotEmpty) {
+      final defaultVehicle = vehicles.first;
+      selectedVehicleId = defaultVehicle.id;
+
+      if (defaultVehicle.serviceId != null && defaultVehicle.serviceId!.isNotEmpty) {
+        final s = cache.services[defaultVehicle.serviceId];
+        if (s != null && defaultVehicle.supportServiceIds.contains(s.id)) {
+          selectedServiceId = s.id;
+          rateController.text = s.rate.toString();
+          _recalculateAmount();
+        } else {
+          final supported = supportedServices;
+          if (supported.isNotEmpty) {
+            selectedServiceId = supported.first.id;
+            rateController.text = supported.first.rate.toString();
+            _recalculateAmount();
+          }
+        }
+      } else {
+        final supported = supportedServices;
+        if (supported.isNotEmpty) {
+          selectedServiceId = supported.first.id;
+          rateController.text = supported.first.rate.toString();
+          _recalculateAmount();
+        }
+      }
+    }
   }
 
   void _recalculateAmount() {
@@ -130,15 +185,16 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     final rate = int.tryParse(rateController.text.trim()) ?? 0;
     final amount = int.tryParse(amountController.text.trim()) ?? 0;
     final paidAmount = int.tryParse(paidAmountController.text.trim()) ?? 0;
+    final discount = int.tryParse(discountController.text.trim()) ?? 0;
     final description = descriptionController.text.trim();
 
-    if (paidAmount > amount) {
-      Get.snackbar('Error', 'Paid amount cannot exceed total amount.', snackPosition: SnackPosition.BOTTOM);
+    if ((paidAmount + discount) > amount) {
+      Get.snackbar('Error', 'Paid amount + discount cannot exceed total amount.', snackPosition: SnackPosition.BOTTOM);
       return;
     }
 
-    final dueAmount = amount - paidAmount;
-    final status = paidAmount >= amount ? 'paid' : (paidAmount > 0 ? 'partial' : 'due');
+    final dueAmount = amount - paidAmount - discount;
+    final status = (paidAmount + discount) >= amount ? 'paid' : ((paidAmount + discount) > 0 ? 'partial' : 'due');
 
     final firebaseService = FirebaseService();
     final sequenceService = Get.find<SequenceService>();
@@ -169,9 +225,9 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         duration: durationSeconds,
         rate: rate,
         amount: amount,
-        paidAmount: paidAmount,
+        paidAmount: paidAmount + discount,
         dueAmount: dueAmount > 0 ? dueAmount : 0,
-        receivedBy: paidAmount > 0 ? user.id : null,
+        receivedBy: (paidAmount + discount) > 0 ? user.id : null,
         description: description.isEmpty ? null : description,
         status: status,
         createdBy: user.id,
@@ -195,20 +251,30 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
 
   DataCacheService get cache => DataCacheService.instance;
 
+  List<String> get recentDescriptions {
+    final set = <String>{};
+    for (final a in cache.activities.values) {
+      final d = a.description?.trim();
+      if (d != null && d.isNotEmpty) set.add(d);
+    }
+    for (final s in cache.services.values) {
+      final d = s.description.trim();
+      if (d.isNotEmpty) set.add(d);
+    }
+    final list = set.toList();
+    list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final vehicles = cache.vehicles.values.toList();
-    final services = cache.services.values.toList();
+    final vehicles = availableVehicles;
+    final supported = supportedServices;
 
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 24),
-      title: const Row(
-        children: [
-          Icon(Icons.add_circle, color: Colors.green),
-          SizedBox(width: 8),
-          Text('Add Activity Manually'),
-        ],
-      ),
+      titlePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      title: Text('Add Activity Manually', textAlign: TextAlign.center,),
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       content: SingleChildScrollView(
         child: SizedBox(
@@ -280,42 +346,68 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                   const SizedBox(height: 12),
                 ],
 
-                // Vehicle
-                DropdownButtonFormField<String>(
-                  initialValue: selectedVehicleId,
-                  isExpanded: true,
-                  decoration: CustomDecoration.uInputDecoration(labelText: 'Vehicle'),
-                  items: [
-                    const DropdownMenuItem<String>(value: null, child: Text('Select Vehicle')),
-                    ...vehicles.map((v) => DropdownMenuItem(value: v.id, child: Text(v.number))),
+                Row(
+                  children: [
+                    Expanded(
+                      child: vehicles.length > 1
+                          ? DropdownButtonFormField<String>(
+                        initialValue: selectedVehicleId,
+                        isExpanded: true,
+                        decoration: CustomDecoration.uInputDecoration(labelText: 'Vehicle'),
+                        items: vehicles.map((v) => DropdownMenuItem(value: v.id, child: Text(v.number))).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            selectedVehicleId = val;
+                            if (val != null) {
+                              final v = cache.vehicles[val];
+                              if (v != null && v.serviceId != null) {
+                                selectedServiceId = v.serviceId;
+                                final s = cache.services[v.serviceId];
+                                if (s != null) {
+                                  rateController.text = s.rate.toString();
+                                  _recalculateAmount();
+                                }
+                              } else {
+                                selectedServiceId = null;
+                              }
+                            }
+                          });
+                        },
+                        validator: (v) => v == null ? 'Required' : null,
+                      )
+                          : CustomDecoration.uTextField(
+                        'Vehicle',
+                        vehicles.isNotEmpty ? vehicles.first.number : 'No Vehicle Assigned',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: supported.length > 1
+                          ? DropdownButtonFormField<String>(
+                        initialValue: supported.any((s) => s.id == selectedServiceId) ? selectedServiceId : null,
+                        isExpanded: true,
+                        decoration: CustomDecoration.uInputDecoration(labelText: 'Service'),
+                        items: supported.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            selectedServiceId = val;
+                            if (val != null) {
+                              final s = cache.services[val];
+                              if (s != null) {
+                                rateController.text = s.rate.toString();
+                                _recalculateAmount();
+                              }
+                            }
+                          });
+                        },
+                        validator: (v) => v == null ? 'Required' : null,
+                      )
+                          : CustomDecoration.uTextField(
+                        'Service',
+                        supported.isNotEmpty ? supported.first.name : '-',
+                      ),
+                    ),
                   ],
-                  onChanged: (val) => setState(() => selectedVehicleId = val),
-                  validator: (v) => v == null ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-
-                // Service
-                DropdownButtonFormField<String>(
-                  initialValue: selectedServiceId,
-                  isExpanded: true,
-                  decoration: CustomDecoration.uInputDecoration(labelText: 'Service'),
-                  items: [
-                    const DropdownMenuItem<String>(value: null, child: Text('Select Service')),
-                    ...services.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      selectedServiceId = val;
-                      if (val != null) {
-                        final s = services.firstWhereOrNull((item) => item.id == val);
-                        if (s != null) {
-                          rateController.text = s.rate.toString();
-                          _recalculateAmount();
-                        }
-                      }
-                    });
-                  },
-                  validator: (v) => v == null ? 'Required' : null,
                 ),
                 const SizedBox(height: 12),
 
@@ -323,12 +415,20 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextFormField(
-                        controller: durationMinutesController,
-                        keyboardType: TextInputType.number,
-                        decoration: CustomDecoration.uInputDecoration(labelText: 'Duration (Min)'),
-                        onChanged: (_) => _recalculateAmount(),
-                        validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextFormField(
+                            controller: durationMinutesController,
+                            keyboardType: TextInputType.number,
+                            decoration: CustomDecoration.uInputDecoration(labelText: 'Duration (Min)'),
+                            onChanged: (_) {
+                              _recalculateAmount();
+                              setState(() {});
+                            },
+                            validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -345,35 +445,65 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                 ),
                 const SizedBox(height: 12),
 
-                // Amount & Paid Amount
+                // Amount, Paid Amount & Discount on the same row
                 Row(
                   children: [
                     Expanded(
+                      flex: 3,
                       child: TextFormField(
                         controller: amountController,
                         keyboardType: TextInputType.number,
-                        decoration: CustomDecoration.uInputDecoration(labelText: 'Amount (रु)', prefixText: 'रु '),
+                        decoration: CustomDecoration.uInputDecoration(labelText: 'Amount', prefixText: 'रु '),
                         validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
+                      flex: 4,
                       child: TextFormField(
                         controller: paidAmountController,
                         keyboardType: TextInputType.number,
-                        decoration: CustomDecoration.uInputDecoration(labelText: 'Paid (रु)', prefixText: 'रु '),
+                        decoration: CustomDecoration.uInputDecoration(
+                          labelText: 'Paid',
+                          prefixText: 'रु ',
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.done_all, color: Colors.green, size: 18),
+                            tooltip: 'Pay Full Amount',
+                            onPressed: () {
+                              paidAmountController.text = amountController.text;
+                            },
+                          ),
+                        ),
                         validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      flex: 3,
+                      child: TextFormField(
+                        controller: discountController,
+                        keyboardType: TextInputType.datetime,
+                        decoration: CustomDecoration.uInputDecoration(labelText: 'Disc', prefixText: 'रु '),
+                        validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
+                        onChanged: (_) {
+                          final amount = int.tryParse(amountController.text.trim()) ?? 0;
+                          final discount = int.tryParse(discountController.text.trim()) ?? 0;
+                          // Paid amount auto adjust
+                          final newPaid = amount - discount;
+                          if (newPaid >= 0) {paidAmountController.text = newPaid.toString();}
+                        }
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // Description
-                TextFormField(
+                // Description with reusable DescriptionAutocomplete
+                DescriptionAutocomplete(
                   controller: descriptionController,
-                  maxLines: 2,
+                  recentDescriptions: recentDescriptions,
                   decoration: CustomDecoration.uInputDecoration(labelText: 'Description / Notes'),
+                  maxLines: 1,
                 ),
               ],
             ),

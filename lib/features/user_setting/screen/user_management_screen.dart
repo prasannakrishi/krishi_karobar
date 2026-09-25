@@ -33,15 +33,6 @@ class UserManagementScreen extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: controller.clearSelection,
-                  icon: const Icon(Icons.arrow_back),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
-                  ),
-                ),
                 SizedBox(
                   width: 32,
                   height: 48,
