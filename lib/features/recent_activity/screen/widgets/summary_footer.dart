@@ -12,9 +12,9 @@ class SummaryFooter extends StatelessWidget {
   });
 
   final int totalSeconds;
-  final double totalAmount;
-  final double totalPaid;
-  final double totalDue;
+  final int totalAmount;
+  final int totalPaid;
+  final int totalDue;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class SummaryFooter extends StatelessWidget {
       color: const Color(0xFFE8F5E9),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-          vertical: 16,
+          vertical: 5,
           horizontal: 10,
         ),
         child: Column(
@@ -78,16 +78,12 @@ class SummaryFooter extends StatelessWidget {
                 ),
               ],
             ),
-            const Divider(
-              height: 20,
-              thickness: 1,
-            ),
+            const Divider(height: 10,thickness: 1),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    ActivityController.instance
-                        .secondsToHHMMSS(totalSeconds),
+                    ActivityController.instance.secondsToHHMMSS(totalSeconds),
                     textAlign: TextAlign.left,
                     style: const TextStyle(
                       fontSize: 16,
@@ -97,7 +93,7 @@ class SummaryFooter extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    'रु ${totalAmount.toStringAsFixed(2)}',
+                    'रु ${totalAmount.toStringAsFixed(0)}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 16,
@@ -107,7 +103,7 @@ class SummaryFooter extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    'रु ${totalPaid.toStringAsFixed(2)}',
+                    'रु ${totalPaid.toStringAsFixed(0)}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 16,
@@ -117,7 +113,7 @@ class SummaryFooter extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    'रु ${totalDue.toStringAsFixed(2)}',
+                    'रु ${totalDue.toStringAsFixed(0)}',
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                       fontSize: 16,

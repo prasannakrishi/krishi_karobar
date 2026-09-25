@@ -36,7 +36,9 @@ class PaymentSlip extends StatelessWidget {
               _allocationTable(cache),
               const Divider(),
 
-              _row('Total Paid', _money(payment.amount), bold: true),
+              _row('Total Paid (Cash)', payment.amount.toString(), bold: true),
+              if (payment.discount > 0)
+                _row('Discount Given', payment.discount.toString(), bold: true),
               _row('Payment Method', _paymentMethodName(payment.paymentMethod)),
 
               _row('Received By', receiver?.fullname ?? '-'),
@@ -83,15 +85,12 @@ class PaymentSlip extends StatelessWidget {
       final service = activity == null ? null : cache.services[activity.serviceId];
 
       return [
-        _buildCell(Text(activity?.uId ?? '-'), 115),
-        _buildCell(Text(service?.name ?? '-'), 80),
-        _buildCell(Text(_money(allocation.previousDue)), 50),
-        _buildCell(Text(_money(80000)), 50),
-        _buildCell(Text(_money(allocation.remainingDue),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-          70,
-        ),
+        _buildCell(Text(activity?.uId ?? '-'), 95),
+        _buildCell(Text(service?.name ?? '-'), 70),
+        _buildCell(Text(allocation.previousDue.toString()), 45),
+        _buildCell(Text(allocation.paidAmount.toString()), 45),
+        _buildCell(Text(allocation.discount.toString()), 45),
+        _buildCell(Text(allocation.remainingDue.toString(), style: const TextStyle(fontWeight: FontWeight.w600)), 50),
       ];
     }).toList();
 
@@ -112,35 +111,42 @@ class PaymentSlip extends StatelessWidget {
                 'Activity',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              115,
+              95,
             ),
             _buildCell(
               const Text(
                 'Service',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              80,
+              70,
             ),
             _buildCell(
               const Text(
                 'Due',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              40,
+              45,
             ),
             _buildCell(
               const Text(
                 'Paid',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              50,
+              45,
+            ),
+            _buildCell(
+              const Text(
+                'Disc',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              45,
             ),
             _buildCell(
               const Text(
                 'Remain',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              70,
+              50,
             ),
           ],
           rowValues: rows,
@@ -148,7 +154,6 @@ class PaymentSlip extends StatelessWidget {
       ],
     );
   }
-
 
   Widget _row(String label, String value, {bool bold = false}) {
     final weight = bold ? FontWeight.bold : FontWeight.normal;
@@ -170,10 +175,6 @@ class PaymentSlip extends StatelessWidget {
     );
   }
 
-  String _money(double value) {
-    return '${value.toInt()}';
-  }
-
   String _paymentMethodName(String method) {
     switch (method) {
       case 'bankTransfer':
@@ -190,13 +191,7 @@ class PaymentSlip extends StatelessWidget {
   }
 
   String _formatDate(DateTime value) {
-    final local = value.toLocal();
-
-    return '${local.year}-'
-        '${local.month.toString().padLeft(2, '0')}-'
-        '${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
+    return formatNepaliDateTimeShort(value);
   }
 
   bool _hasText(String? value) {

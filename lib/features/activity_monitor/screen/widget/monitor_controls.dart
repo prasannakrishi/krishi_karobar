@@ -20,6 +20,23 @@ class MonitorControls extends GetView<MonitorController> {
             return _ViewOnlyBanner(startedBy: controller.startedByName(live));
           }
 
+          // THE FIX: derive "nothing is running" directly from the fresh
+          // cache-backed liveActivity, not from timerController.state.
+          // liveActivity updates the instant Firebase reports the activity
+          // as no longer live; timerController.state is only a manually
+          // managed mirror of that (reset by _onActivitiesCacheChanged) -
+          // if that side effect is ever a beat late, a viewer would
+          // otherwise stay stuck seeing PAUSE/STOP after the controller
+          // has already completed the activity.
+          if (live == null) {
+            return _button(
+              context,
+              'START',
+              Icons.play_arrow,
+              controller.startActivity,
+            );
+          }
+
           switch (controller.timerController.state.value) {
             case TimerState.initial:
               return _button(

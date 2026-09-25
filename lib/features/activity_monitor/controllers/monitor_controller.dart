@@ -40,6 +40,11 @@ class MonitorController extends GetxController {
   final isLoading = false.obs;
 
   final selectedCustomer = Rxn<CustomerModel>();
+  // Drives the collapsed "CUSTOMER INFO" summary line. Obx can only track
+  // Rx reads made synchronously in its own callback - it can't see
+  // TextEditingController changes directly, so this is kept in sync via
+  // listeners (see onInit) instead of being computed inline in the UI.
+  final customerSummary = ''.obs;
   final selectedVehicle = Rxn<VehicleModel>();
   late final selectedService = Rxn<ServiceModel>();
   final selectedDriver = Rxn<UserModel>();
@@ -107,14 +112,23 @@ class MonitorController extends GetxController {
           ? '-'
           : _userName(activity.startedByUserId);
 
+  List<String> get recentDescriptions {
+    final uniqueDescriptions = <String>{};
+
+    for (final activity in cache.activities.values) {
+      final desc = activity.description?.trim();
+      if (desc != null && desc.isNotEmpty) {
+        uniqueDescriptions.add(desc);
+      }
+    }
+
+    final list = uniqueDescriptions.toList();
+    list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
   final Map<String, Timer> _syncTimers = {};
 
-  /// Pushes a partial update to the live activity record (debounced per
-  /// [key] so unrelated fields don't cancel each other out) so every
-  /// viewer's `DataCacheService.activities` picks it up automatically -
-  /// but only when THIS device is the one controlling a live activity.
-  /// Silently does nothing otherwise (viewers' local edits, if any, must
-  /// never leak into the shared record).
   void _debouncedSync(String key, Map<String, dynamic> data) {
     final id = currentActivityId;
     if (id == null || !isController) return;
@@ -125,9 +139,6 @@ class MonitorController extends GetxController {
     });
   }
 
-  /// Background write for live-sync fields. A failure here must never
-  /// interrupt the running activity, but it still has to be classified and
-  /// logged rather than surfacing as an unhandled async error.
   void _background(String path, String id, Map<String, dynamic> data) {
     firebaseService.updateRecord(path, id, data).catchError((Object error) {
       debugPrint(
@@ -143,23 +154,20 @@ class MonitorController extends GetxController {
     super.onInit();
     loadDefaultVehicle();
 
-    // Live-sync edits made by the controller while an activity is running,
-    // so every viewer sees rate/description changes without waiting for a
-    // pause/resume/complete.
     rate.addListener(() => _debouncedSync('rate', {'rate': _rate}));
     description.addListener(() => _debouncedSync('description', {
       'description': description.text.trim().isEmpty
           ? null
           : description.text.trim(),
     }));
+    customerName.addListener(onCustomerChanged);
+    phone.addListener(onCustomerChanged);
 
-    // THE FIX: re-check the live activity for the selected vehicle every
-    // time the realtime cache changes - not just once when the vehicle was
-    // first selected. Without this, if the cache hasn't finished loading
-    // yet when onInit->loadDefaultVehicle->selectVehicle runs (very common
-    // on a fresh app start), the live activity is missed forever and the
-    // form fields never populate. This also keeps a viewer's fields synced
-    // whenever the controller changes something.
+    customerName.addListener(_updateCustomerSummary);
+    phone.addListener(_updateCustomerSummary);
+    ever(selectedCustomer, (_) => _updateCustomerSummary());
+    _updateCustomerSummary();
+
     ever(cache.activities, (_) => _onActivitiesCacheChanged());
     ever(cache.vehicles, (_) => _onSelectedVehicleCacheChanged());
   }
@@ -227,18 +235,36 @@ class MonitorController extends GetxController {
     return cache.users[userId]?.fullname ?? '';
   }
   void loadDefaultVehicle() {
-    final data = storage.read('default_vehicle');
+    final user = LoginController.loginUser;
 
-    if (data is! Map) {
+    final assignedIds = user.assignedVehicleIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    if (assignedIds.isEmpty) {
       clearVehicle();
       return;
     }
 
-    final storedVehicle = VehicleModel.fromMap(
-      Map<String, dynamic>.from(data),
+    final matchingVehicles = cache.vehicles.values.where(
+          (v) => v.isActive && assignedIds.contains(v.id),
     );
-    final vehicle = cache.vehicles[storedVehicle.id] ?? storedVehicle;
+
+    final VehicleModel? vehicle =
+    matchingVehicles.isEmpty ? null : matchingVehicles.first;
+
+    if (vehicle == null) {
+      clearVehicle();
+      return;
+    }
+
     selectVehicle(vehicle);
+
+    storage.write(
+      'default_vehicle_${user.id}',
+      vehicle.toMap(),
+    );
   }
 
   void resetForm() {
@@ -270,6 +296,11 @@ class MonitorController extends GetxController {
 
     serviceType.clear();
     rate.text = '0';
+
+    customerName.clear();
+    phone.clear();
+    address.clear();
+    selectedCustomer.value = null;
 
     filteredVehicles.clear();
     filteredServices.clear();
@@ -324,8 +355,7 @@ class MonitorController extends GetxController {
       return;
     }
     filteredServices.assignAll(
-      supportedServices.where(
-            (service) =>
+      supportedServices.where((service) =>
         service.name.toLowerCase().contains(value) ||
             service.description.toLowerCase().contains(value),
       ),
@@ -420,6 +450,21 @@ class MonitorController extends GetxController {
     driverWarning.value = false;
     supervisor.clear();
     description.clear();
+
+    // THE FIX: the customer section is per-vehicle draft data, exactly
+    // like driverWarning/supervisor/description above - it was just
+    // missing from this reset. Without this, switching from a vehicle
+    // with a live activity (or any vehicle you'd previously typed a
+    // customer for) straight to a different vehicle left the OLD
+    // customer's name/phone/selection sitting in the form. If the user
+    // then only edited the name (or nothing at all) before starting a
+    // new activity, saveCustomer() would silently reuse that stale
+    // customer - either directly (still selected) or by re-matching the
+    // old phone number that never got overwritten.
+    customerName.clear();
+    phone.clear();
+    address.clear();
+    selectedCustomer.value = null;
   }
   void _bindToLiveActivity(ActivityModel activity) {
     currentActivityId = activity.id;
@@ -443,10 +488,6 @@ class MonitorController extends GetxController {
       phone.text = customer.phone;
     }
 
-    // Rehydrate the ticking display for EVERYONE watching this vehicle -
-    // not just the controller - so Duration/Amount/Start Time populate and
-    // keep updating live for view-only users too (spec section 5/22).
-    // Only pause/resume/complete stay gated behind Authz.canControlActivity.
     timerController.rehydrate(
       startTime: activity.startTime,
       accumulated: Duration(seconds: activity.duration),
@@ -468,6 +509,9 @@ class MonitorController extends GetxController {
     serviceType.text = service.name;
     serviceSearch.text = service.name;
     rate.text = service.rate.toStringAsFixed(0);
+    if (description.text.trim().isEmpty ) {
+      description.text = service.description.trim();
+    }
     closeServiceSuggestions();
     timerController.computeAmount(service.rate);
 
@@ -497,9 +541,6 @@ class MonitorController extends GetxController {
 
     final vehicle = selectedVehicle.value;
     if (vehicle != null && vehicle.driverId != user.id) {
-      // Driver is a persistent vehicle assignment. Changing it from
-      // Vehicle Info replaces the previous assignment and remains in place
-      // until another driver is explicitly selected.
       vehicle.driverId = user.id;
       cache.vehicles[vehicle.id] = vehicle;
       storage.write('default_vehicle', vehicle.toMap());
@@ -546,15 +587,31 @@ class MonitorController extends GetxController {
   void onCustomerChanged() {
     final selected = selectedCustomer.value;
     // Only invalidate the match if the text actually diverged from the
-    // selected customer's name - guards against this firing when we set
-    // customerName.text programmatically (e.g. _bindToLiveActivity) right
-    // after also setting selectedCustomer.value, which would otherwise
-    // immediately null it back out.
+    // selected customer's name/phone - guards against this firing when we
+    // set customerName.text/phone.text programmatically (e.g.
+    // selectCustomer, _bindToLiveActivity) right after also setting
+    // selectedCustomer.value, which would otherwise immediately null it
+    // back out. Phone is checked too since saveCustomer() dedupes
+    // customers by phone, not name - editing just the phone after picking
+    // an existing customer must also be treated as a different customer.
     if (selected != null &&
-        customerName.text.trim() != selected.name.trim()) {
+        (customerName.text.trim() != selected.name.trim() ||
+            phone.text.trim() != selected.phone.trim())) {
       selectedCustomer.value = null;
     }
     _syncCustomer();
+  }
+
+  /// Recomputes the collapsed "CUSTOMER INFO" summary line. Falls back to
+  /// whatever is currently typed when no customer is selected yet, so the
+  /// summary reflects a brand-new customer's details live, not just an
+  /// existing one picked from suggestions.
+  void _updateCustomerSummary() {
+    final selected = selectedCustomer.value;
+    final name = selected?.name ?? customerName.text;
+    final subtitle = selected?.uId ?? phone.text;
+
+    customerSummary.value = '${name.padRight(20)}\n$subtitle';
   }
 
   void startActivity() {
@@ -619,6 +676,32 @@ class MonitorController extends GetxController {
 
     _isSavingActivity = true;
 
+    // Resolve (or create) the customer BEFORE the activity is built - a
+    // new customer typed into the customer section must actually be
+    // persisted here, so the activity is saved against that customer's
+    // real id, never a stale/previous selection. saveCustomer() already
+    // returns the existing match if one was picked from suggestions.
+    final customerIdsBeforeSave = cache.customers.keys.toSet();
+    CustomerModel? customer;
+
+    try {
+      if (!isCustomerEmpty) {
+        customer = await saveCustomer();
+      }
+    } catch (error) {
+      _isSavingActivity = false;
+      debugPrint('MonitorController.startActivity (customer): $error');
+      showMessage('Error', AppException.messageOf(error));
+      return;
+    }
+
+    // True only if saveCustomer() just created this record (as opposed to
+    // matching an existing one) - used below to roll it back if the
+    // activity itself fails to save, so a failed activity start never
+    // leaves an orphan customer with nothing pointing to it.
+    final customerIsNewlyCreated =
+        customer != null && !customerIdsBeforeSave.contains(customer.id);
+
     // The activity's uId depends on a Firebase sequence transaction and can
     // fail (bad vehicle uId prefix, sequence conflict, network/permission
     // error). This must be resolved - and the record actually persisted -
@@ -634,6 +717,9 @@ class MonitorController extends GetxController {
       );
     } catch (error) {
       _isSavingActivity = false;
+      if (customerIsNewlyCreated) {
+        await _rollbackNewCustomer(customer);
+      }
       debugPrint('MonitorController.startActivity (sequence): $error');
       showMessage('Error', AppException.messageOf(error));
       return;
@@ -644,7 +730,7 @@ class MonitorController extends GetxController {
     final activity = ActivityModel(
       id: id,
       uId: activityUId,
-      customerId: selectedCustomer.value?.id ?? '',
+      customerId: customer?.id ?? '',
       vehicleId: vehicle.id,
       serviceId: service.id,
       driverId: selectedDriver.value?.id,
@@ -672,6 +758,9 @@ class MonitorController extends GetxController {
       );
     } catch (error) {
       _isSavingActivity = false;
+      if (customerIsNewlyCreated) {
+        await _rollbackNewCustomer(customer);
+      }
       debugPrint('MonitorController.startActivity (save): $error');
       showMessage('Error', AppException.messageOf(error));
       return;
@@ -916,6 +1005,8 @@ class MonitorController extends GetxController {
     if (_isSavingActivity || _saveConfirmationPending) return;
 
     var customer = selectedCustomer.value;
+    final customerIdsBeforeSave = cache.customers.keys.toSet();
+    var customerIsNewlyCreated = false;
 
     if (selectedVehicle.value == null) {
       showMessage('Warning', 'Please select a vehicle.');
@@ -1049,6 +1140,7 @@ class MonitorController extends GetxController {
       }
 
       customer ??= await saveCustomer();
+      customerIsNewlyCreated = !customerIdsBeforeSave.contains(customer.id);
 
       timerController.computeAmount(_rate);
 
@@ -1096,6 +1188,9 @@ class MonitorController extends GetxController {
       }
       _syncTimers.clear();
     } catch (error) {
+      if (customerIsNewlyCreated && customer != null) {
+        await _rollbackNewCustomer(customer);
+      }
       debugPrint('MonitorController.saveActivity: $error');
       showMessage('Error', AppException.messageOf(error));
     } finally {
@@ -1111,7 +1206,14 @@ class MonitorController extends GetxController {
 
     final customerPhone = phone.text.trim();
 
-    final existing = cache.getRecordByValue<CustomerModel>(
+    // Only dedupe by phone when one was actually provided. Phone number is
+    // NOT enforced by the UI (no Form/validate() gates this screen), so
+    // several customers can genuinely have a blank phone - matching on ''
+    // would silently merge every new no-phone customer into whichever
+    // blank-phone customer happens to exist first in the cache.
+    final existing = customerPhone.isEmpty
+        ? null
+        : cache.getRecordByValue<CustomerModel>(
       'customers',
           (customer) => customer.phone.trim() == customerPhone,
     );
@@ -1155,7 +1257,21 @@ class MonitorController extends GetxController {
     return customer;
   }
 
-  double get _rate => double.tryParse(rate.text.trim()) ?? 0;
+  Future<void> _rollbackNewCustomer(CustomerModel customer) async {
+    try {
+      await firebaseService.deleteRecord('customers', customer.id);
+    } catch (error) {
+      debugPrint(
+        'MonitorController._rollbackNewCustomer(${customer.id}): $error',
+      );
+    }
+
+    if (selectedCustomer.value?.id == customer.id) {
+      selectedCustomer.value = null;
+    }
+  }
+
+  int get _rate => int.tryParse(rate.text.trim()) ?? 0;
 
   void showMessage(String title, String message) {
     Get.snackbar(title, message);

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
 import '../../../../services/data_cache_service.dart';
+import '../../../../utils/helper/nepali_date_time.dart';
 import '../../../../utils/theme/widget_themes/custom_decoration.dart';
 import '../../../payment/screen/widgets/payment_dialog.dart';
 import '../../controllers/activity_controller.dart';
@@ -87,46 +88,32 @@ class _DetailsCardFormState
   Widget build(BuildContext context) {
     final cache = DataCacheService.instance;
 
-    final vehicle =
-    cache.vehicles[widget.entry.vehicleId];
+    final vehicle =cache.vehicles[widget.entry.vehicleId];
 
-    final customer =
-    cache.customers[widget.entry.customerId];
+    final customer =cache.customers[widget.entry.customerId];
 
-    final service =
-    cache.services[widget.entry.serviceId];
+    final service =cache.services[widget.entry.serviceId];
 
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      color: const Color.fromARGB(
-        255,
-        228,
-        247,
-        248,
-      ),
+      color: const Color.fromARGB(255,228,247,248),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment:
           CrossAxisAlignment.stretch,
           children: [
-            _buildBasicInfo(
-              vehicle?.number ?? '-',
-              customer?.name ?? '-',
-            ),
+            _buildBasicInfo(vehicle?.number ?? '-',customer?.name ?? '-',customer?.uId ?? ''),
             const SizedBox(height: 8),
-            _buildServiceInfo(
-              service?.name ?? '-',
-              widget.entry.rate,
-            ),
+            _buildServiceInfo(customer?.address ?? '',service?.name ?? '-', widget.entry.rate),
             const SizedBox(height: 8),
             _buildTimeInfo(),
             const SizedBox(height: 8),
             _buildPaymentInfo(),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildDescription(),
             const SizedBox(height: 8),
             _buildPaymentButton(),
@@ -136,46 +123,35 @@ class _DetailsCardFormState
     );
   }
 
-  Widget _buildBasicInfo(
-      String vehicleNumber,
-      String customerName,
-      ) {
+  Widget _buildBasicInfo(String vehicleNumber,String customerName, String customerUId) {
     return Row(
       children: [
-        Expanded(
-          child: CustomDecoration.uTextField(
-            'Vehicle Number',
-            vehicleNumber,
-          ),
+        Flexible(
+          flex: 1,
+          child: CustomDecoration.uTextField('Vehicle Number',vehicleNumber, height: 35),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: CustomDecoration.uTextField(
-            'Customer Name',
-            customerName,
-          ),
+        const SizedBox(width: 5),
+        Flexible(
+          flex: 2,
+          child: CustomDecoration.uTextField('Customer Name', "${customerName}  (${customerUId})"),
         ),
       ],
     );
   }
 
-  Widget _buildServiceInfo(
-      String serviceName,
-      double rate,
-      ) {
+  Widget _buildServiceInfo(String customerAddress,String serviceName,int rate) {
     return Row(
       children: [
         Expanded(
-          child: CustomDecoration.uTextField(
-            'Service Type',
-            serviceName,
-          ),
+          child: CustomDecoration.uTextField('Customer Address',customerAddress, height: 35),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 5),
         Expanded(
-          child: CustomDecoration.uTextField(
-            'Rate / Hour',
-            'रु ${rate.toStringAsFixed(2)}',
+          child: CustomDecoration.uTextField('Service Type',serviceName, height: 35),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: CustomDecoration.uTextField('Rate / Hour','रु ${rate.toStringAsFixed(0)}', height: 35,
           ),
         ),
       ],
@@ -188,23 +164,20 @@ class _DetailsCardFormState
         Expanded(
           child: CustomDecoration.uTextField(
             'Start Time',
-            _formatTime(widget.entry.startTime),
+            _formatTime(widget.entry.startTime), height: 35
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'End Time',
-            _formatTime(widget.entry.endTime),
+            _formatTime(widget.entry.endTime), height: 35
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 5),
         Expanded(
-          child: CustomDecoration.uTextField(
-            'Duration',
-            widget.controller.secondsToHHMMSS(
-              widget.entry.duration,
-            ),
+          child: CustomDecoration.uTextField('Duration',
+            widget.controller.secondsToHHMMSS(widget.entry.duration), height: 35
           ),
         ),
       ],
@@ -217,21 +190,21 @@ class _DetailsCardFormState
         Expanded(
           child: CustomDecoration.uTextField(
             'Amount',
-            'रु ${widget.entry.amount.toStringAsFixed(2)}',
+            'रु ${widget.entry.amount.toStringAsFixed(2)}', height: 35
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'Paid',
-            'रु ${widget.entry.paidAmount.toStringAsFixed(2)}',
+            'रु ${widget.entry.paidAmount.toStringAsFixed(0)}', height: 35
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'Due',
-            'रु ${widget.entry.dueAmount.toStringAsFixed(2)}',
+            'रु ${widget.entry.dueAmount.toStringAsFixed(0)}', height: 35
           ),
         ),
       ],
@@ -242,14 +215,14 @@ class _DetailsCardFormState
     final hasDue = widget.entry.dueAmount > 0;
 
     return SizedBox(
-      height: 60,
+      height: 40,
       child: ElevatedButton.icon(
         onPressed: hasDue ? _openPayment : null,
         icon: const Icon(Icons.payments),
         label: Text(
           hasDue
               ? 'Collect Customer Payment'
-              : 'Fully Paid',
+              : 'View Bill',
         ),
       ),
     );
@@ -263,12 +236,7 @@ class _DetailsCardFormState
       maxLines: 1,
       decoration: CustomDecoration.uInputDecoration(
         labelText: 'Description',
-        fillColor: const Color.fromARGB(
-          73,
-          249,
-          251,
-          250,
-        ),
+        fillColor: const Color.fromARGB(73,249,251,250),
       ),
       onFieldSubmitted: (_) => _saveDescription(),
       onTapOutside: (_) =>
@@ -277,17 +245,6 @@ class _DetailsCardFormState
   }
 
   String _formatTime(DateTime value) {
-    final local = value.toLocal();
-
-    final hour = local.hour % 12 == 0
-        ? 12
-        : local.hour % 12;
-
-    final minute =
-    local.minute.toString().padLeft(2, '0');
-
-    final period = local.hour >= 12 ? 'PM' : 'AM';
-
-    return '$hour:$minute $period';
+    return formatNepaliTime(value);
   }
 }

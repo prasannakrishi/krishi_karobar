@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:get/get.dart';
 import '../../../utils/constants/enums.dart';
+import '../../../utils/helper/nepali_date_time.dart';
 
 class TimerController extends GetxController {
   Timer? _timer;
@@ -103,11 +104,14 @@ class TimerController extends GetxController {
     _stopTimer();
   }
 
-  void computeAmount(double ratePerHour) {
+  void computeAmount(int ratePerHour) {
     _updateElapsed();
 
-    final hours = elapsedMilliseconds.value / Duration.millisecondsPerHour;
-    final rawAmount = hours * ratePerHour;
+    final totalSeconds = elapsedMilliseconds.value / 1000;
+    final billableMinutes = (totalSeconds / 60).ceil();
+    final ratePerMinute = ratePerHour / 60;
+
+    final rawAmount = billableMinutes * ratePerMinute;
 
     amount.value = (rawAmount / 10).round() * 10.0;
   }
@@ -163,11 +167,7 @@ class TimerController extends GetxController {
   }
 
   String _formatTime(DateTime value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    final second = value.second.toString().padLeft(2, '0');
-
-    return '$hour:$minute:$second';
+    return formatNepaliTime(value, pattern: 'HH:mm:ss');
   }
 
   @override

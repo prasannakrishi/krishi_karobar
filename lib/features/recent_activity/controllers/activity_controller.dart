@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:intl/intl.dart';
+import 'package:nepali_utils/nepali_utils.dart';
 
 import '../../../models/models.dart';
+import '../../../features/authentication/controllers/login_controllers.dart';
 import '../../../services/data_cache_service.dart';
 import '../../../services/authorization_service.dart';
 import '../../../services/firebase_service.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
-import '../../../utils/helper/helper_method.dart';
+import '../../../utils/helper/nepali_date_time.dart';
+import '../screen/widgets/edit_activity_dialog.dart';
 
 class ActivityController extends GetxController {
   static ActivityController get instance => Get.find();
@@ -18,8 +20,8 @@ class ActivityController extends GetxController {
   final localStorage = GetStorage();
   final cache = DataCacheService.instance;
 
-  final filterStartDate = TextEditingController();
-  final filterEndDate = TextEditingController();
+  DateTime? _filterStart;
+  DateTime? _filterEnd;
 
   final activities = <ActivityModel>[].obs;
 
@@ -83,49 +85,83 @@ class ActivityController extends GetxController {
   }
 
   void _loadDefaultVehicle() {
-    final data = localStorage.read('default_vehicle');
+    final user = LoginController.loginUser;
+    final assignedIds = user.assignedVehicleIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
 
-    if (data == null) return;
-
-    try {
-      final vehicle = VehicleModel.fromMap(
-        Map<String, dynamic>.from(data),
-      );
-
-      if (vehicle.id.isNotEmpty) {
-        selectedVehicleIds.assignAll([vehicle.id]);
-      }
-    } catch (error) {
-      debugPrint('Default vehicle error: $error');
+    if (assignedIds.isEmpty) {
+      selectedVehicleIds.clear();
+      return;
     }
+
+    // The records filter must start with the logged-in user's assigned
+    // vehicle, not with a vehicle left by another login.
+    final assignedVehicle = vehicles.firstWhereOrNull(
+      (vehicle) =>
+          assignedIds.contains(vehicle.id) && vehicle.isActive,
+    );
+
+    if (assignedVehicle != null) {
+      selectedVehicleIds.assignAll([assignedVehicle.id]);
+      localStorage.write(
+        'default_vehicle_${user.id}',
+        assignedVehicle.toMap(),
+      );
+      return;
+    }
+
+    selectedVehicleIds.clear();
   }
 
   void setFilter(String filter) {
     selectedFilter.value = filter;
 
-    final now = DateTime.now();
+    // "Today"/"Week"/"Month" are always the Nepal Standard Time, Bikram
+    // Sambat calendar day/month - this app only operates in Nepal, so the
+    // device's own timezone or calendar never decides these boundaries.
+    final todayNepali = toNepaliCalendar(DateTime.now());
+    final todayCalendarDay = NepaliDateTime(
+      todayNepali.year,
+      todayNepali.month,
+      todayNepali.day,
+    ).toDateTime();
 
     switch (filter) {
       case 'Today':
-        filterStartDate.text = formatDate(now.dayStartTime);
-        filterEndDate.text = formatDate(now.dayEndTime);
+        _filterStart = nepalCalendarDayBoundary(todayCalendarDay);
+        _filterEnd = nepalCalendarDayBoundary(
+          todayCalendarDay,
+          endOfDay: true,
+        );
         break;
 
       case 'Week':
-        final start = now.subtract(const Duration(days: 6));
-        filterStartDate.text = formatDate(start.dayStartTime);
-        filterEndDate.text = formatDate(now.dayEndTime);
+        final start = todayCalendarDay.subtract(const Duration(days: 6));
+        _filterStart = nepalCalendarDayBoundary(start);
+        _filterEnd = nepalCalendarDayBoundary(
+          todayCalendarDay,
+          endOfDay: true,
+        );
         break;
 
       case 'Month':
-        final start = DateTime(now.year, now.month, 1);
-        filterStartDate.text = formatDate(start.dayStartTime);
-        filterEndDate.text = formatDate(now.dayEndTime);
+        final bsMonthStart = NepaliDateTime(
+          todayNepali.year,
+          todayNepali.month,
+          1,
+        ).toDateTime();
+        _filterStart = nepalCalendarDayBoundary(bsMonthStart);
+        _filterEnd = nepalCalendarDayBoundary(
+          todayCalendarDay,
+          endOfDay: true,
+        );
         break;
 
       case 'All':
-        filterStartDate.clear();
-        filterEndDate.clear();
+        _filterStart = null;
+        _filterEnd = null;
         break;
     }
 
@@ -133,26 +169,8 @@ class ActivityController extends GetxController {
   }
 
   void applyLocalFilters() {
-    DateTime? start;
-    DateTime? end;
-
-    try {
-      if (filterStartDate.text.isNotEmpty) {
-        start = DateFormat(
-          'yyyy-MM-dd HH:mm',
-        ).parse(filterStartDate.text);
-      }
-
-      if (filterEndDate.text.isNotEmpty) {
-        end = DateFormat(
-          'yyyy-MM-dd HH:mm',
-        ).parse(filterEndDate.text).add(
-          const Duration(seconds: 59),
-        );
-      }
-    } catch (error) {
-      debugPrint('Date filter error: $error');
-    }
+    final start = _filterStart;
+    final end = _filterEnd;
 
     final query = nameSearchQuery.value.trim().toLowerCase();
 
@@ -478,23 +496,15 @@ class ActivityController extends GetxController {
     return cache.users[userId]?.fullname ?? '-';
   }
 
-  double customerTotalDue(String customerId) {
-    return allActivities
-        .where(
-          (activity) =>
-      activity.customerId == customerId &&
-          activity.dueAmount > 0,
-    )
-        .fold(
-      0.0,
-          (sum, activity) => sum + activity.dueAmount,
-    );
+  int customerTotalDue(String customerId) {
+    return allActivities.where((activity) =>activity.customerId == customerId
+        &&activity.dueAmount > 0)
+        .fold(0,(sum, activity) => sum + activity.dueAmount);
   }
 
+  /// User-visible date - always Nepal Standard Time, Bikram Sambat.
   String formatDate(DateTime dateTime) {
-    return DateFormat(
-      'yyyy-MM-dd HH:mm',
-    ).format(dateTime);
+    return formatNepaliDateTime(dateTime);
   }
 
   String secondsToHHMMSS(int totalSeconds) {
@@ -508,37 +518,185 @@ class ActivityController extends GetxController {
   }
 
   int totalSecondsFor(List<ActivityModel> entries) {
-    return entries.fold(
-      0,
-          (sum, entry) => sum + entry.duration,
+    return entries.fold(0,(sum, entry) => sum + entry.duration);
+  }
+
+  int totalAmountFor(List<ActivityModel> entries) {
+    return entries.fold(0,(sum, entry) => (sum + entry.amount).toInt());
+  }
+
+  int totalPaidFor(List<ActivityModel> entries) {
+    return entries.fold(0,(sum, entry) => (sum + entry.paidAmount).toInt());
+  }
+
+  int totalDueFor(List<ActivityModel> entries) {
+    return entries.fold(0,(sum, entry) => (sum + entry.dueAmount).toInt());
+  }
+
+  List<String> get recentDescriptions {
+    final uniqueDescriptions = <String>{};
+
+    for (final activity in cache.activities.values) {
+      final desc = activity.description?.trim();
+      if (desc != null && desc.isNotEmpty) {
+        uniqueDescriptions.add(desc);
+      }
+    }
+
+    final list = uniqueDescriptions.toList();
+    list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
+  void showEditActivityDialog(ActivityModel activity) {
+    Get.dialog(
+      EditActivityDialog(
+        activity: activity,
+        controller: this,
+      ),
     );
   }
 
-  double totalAmountFor(List<ActivityModel> entries) {
-    return entries.fold(
-      0.0,
-          (sum, entry) => sum + entry.amount,
+  Future<bool> updateActivity({
+    required ActivityModel activity,
+    required String customerId,
+    required String vehicleId,
+    required String serviceId,
+    required int duration,
+    required int rate,
+    required int amount,
+    required int paidAmount,
+    required String description,
+  }) async {
+    final now = DateTime.now();
+    final dueAmount = (amount - paidAmount) > 0 ? (amount - paidAmount) : 0;
+
+    try {
+      Authz.requirePermission(Permissions.activityEdit);
+
+      final updateData = {
+        'customerId': customerId,
+        'vehicleId': vehicleId,
+        'serviceId': serviceId,
+        'duration': duration,
+        'rate': rate,
+        'amount': amount,
+        'paidAmount': paidAmount,
+        'dueAmount': dueAmount,
+        'description': description,
+        'updatedAt': now.toUtc().toIso8601String(),
+      };
+
+      await firebaseService.updateRecord(
+        'activities',
+        activity.id,
+        updateData,
+      );
+
+      activity.customerId = customerId;
+      activity.vehicleId = vehicleId;
+      activity.serviceId = serviceId;
+      activity.duration = duration;
+      activity.rate = rate;
+      activity.amount = amount;
+      activity.paidAmount = paidAmount;
+      activity.dueAmount = dueAmount;
+      activity.description = description;
+      activity.updatedAt = now;
+
+      final cached = cache.activities[activity.id];
+      if (cached != null) {
+        cached.customerId = customerId;
+        cached.vehicleId = vehicleId;
+        cached.serviceId = serviceId;
+        cached.duration = duration;
+        cached.rate = rate;
+        cached.amount = amount;
+        cached.paidAmount = paidAmount;
+        cached.dueAmount = dueAmount;
+        cached.description = description;
+        cached.updatedAt = now;
+        cache.activities[activity.id] = cached;
+      }
+
+      applyLocalFilters();
+      activities.refresh();
+
+      Get.snackbar(
+        'Success',
+        'Activity updated successfully',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF4CAF50),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      return true;
+    } catch (e) {
+      Get.snackbar(
+        'Activity',
+        AppException.messageOf(e),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      debugPrint('ActivityController updateActivity: $e');
+      return false;
+    }
+  }
+
+  void confirmDeleteActivity(ActivityModel activity) {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Delete Activity'),
+        content: Text(
+          'Are you sure you want to delete activity "${activity.uId}"? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Get.back();
+              await deleteActivity(activity);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 
-  double totalPaidFor(List<ActivityModel> entries) {
-    return entries.fold(
-      0.0,
-          (sum, entry) => sum + entry.paidAmount,
-    );
+  Future<bool> deleteActivity(ActivityModel activity) async {
+    try {
+      Authz.requirePermission(Permissions.activityEdit);
+
+      await firebaseService.deleteRecord('activities', activity.id);
+
+      applyLocalFilters();
+      selectedIndex.value = null;
+
+      Get.snackbar(
+        'Success',
+        'Activity deleted successfully',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF4CAF50),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      return true;
+    } catch (e) {
+      Get.snackbar(
+        'Activity',
+        AppException.messageOf(e),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      debugPrint('ActivityController deleteActivity: $e');
+      return false;
+    }
   }
 
-  double totalDueFor(List<ActivityModel> entries) {
-    return entries.fold(
-      0.0,
-          (sum, entry) => sum + entry.dueAmount,
-    );
-  }
-
-  @override
-  void onClose() {
-    filterStartDate.dispose();
-    filterEndDate.dispose();
-    super.onClose();
-  }
 }

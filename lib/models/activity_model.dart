@@ -31,10 +31,10 @@ class ActivityModel {
   DateTime startTime;
   DateTime endTime;
   int duration;
-  double rate;
-  double amount;
-  double paidAmount;
-  double dueAmount;
+  int rate;
+  int amount;
+  int paidAmount;
+  int dueAmount;
   String? receivedBy;
   String? monitorBy;
   DateTime? paidAt;
@@ -95,10 +95,10 @@ class ActivityModel {
       startTime: start,
       endTime: toDateTime(map['endTime']) ?? start,
       duration: toInt(map['duration']),
-      rate: toDouble(map['rate']),
-      amount: toDouble(map['amount']),
-      paidAmount: toDouble(map['paidAmount']),
-      dueAmount: toDouble(map['dueAmount']),
+      rate: toInt(map['rate']),
+      amount: toInt(map['amount']),
+      paidAmount: toInt(map['paidAmount']),
+      dueAmount: toInt(map['dueAmount']),
       receivedBy: map['receivedBy']?.toString(),
       monitorBy: map['monitorBy']?.toString(),
       paidAt: toDateTime(map['paidAt']),

@@ -274,6 +274,7 @@ class LoginController extends GetxController {
       localStorage.remove('userId');
       localStorage.remove('selectedOrganization');
       localStorage.remove('selectedVehicle');
+      localStorage.remove('default_vehicle');
 
       await _auth.signOut();
 
