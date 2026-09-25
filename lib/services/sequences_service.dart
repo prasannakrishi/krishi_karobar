@@ -44,10 +44,7 @@ class SequenceService extends GetxService {
     return result.snapshot.value.toString();
   }
 
-  Future<String> generateActivityUid({
-    required String serviceType,
-    required String vehicleUId,
-  }) async {
+  Future<String> generateActivityUid({required String serviceType,required String vehicleUId,}) async {
     final service = serviceType.trim();
     final vehicle = vehicleUId.trim();
 
@@ -65,7 +62,13 @@ class SequenceService extends GetxService {
       );
     }
 
-    final vehiclePart = vehicle.substring(1);
+    final parts = vehicle.split('-');
+    if (parts.length < 2) {
+      throw ArgumentError('Invalid vehicle UID: "$vehicle".');
+    }
+    final type = parts[0].substring(1, 2); // T or H
+    final seq = parts[1];                  // 02
+    final vehiclePart = '$type$seq';       // T02
 
     if (vehiclePart.isEmpty) {
       throw ArgumentError('Invalid vehicle UID: "$vehicle".');
@@ -73,11 +76,9 @@ class SequenceService extends GetxService {
 
     final serviceCode = service[0].toUpperCase();
     final now = DateTime.now();
-    final period =
-        '${now.year % 10}${now.month.toString().padLeft(2, '0')}';
+    final period ='${now.year % 10}${now.month.toString().padLeft(2, '0')}';
 
-    final ref =
-    _db.child('$_sequencePath/$_activitySequencePath/$period');
+    final ref =_db.child('$_sequencePath/$_activitySequencePath/$period');
 
     final result = await ref.runTransaction((data) {
       if (data == null) {
@@ -90,8 +91,7 @@ class SequenceService extends GetxService {
         return Transaction.abort();
       }
 
-      final currentNumber =
-      int.tryParse(current.substring(period.length));
+      final currentNumber = int.tryParse(current.substring(period.length));
 
       if (currentNumber == null) {
         return Transaction.abort();
@@ -99,9 +99,7 @@ class SequenceService extends GetxService {
 
       final nextNumber = currentNumber + 1;
 
-      return Transaction.success(
-        '$period${nextNumber.toString().padLeft(4, '0')}',
-      );
+      return Transaction.success('$period${nextNumber.toString().padLeft(4, '0')}');
     });
 
     if (!result.committed || result.snapshot.value == null) {
@@ -118,8 +116,7 @@ class SequenceService extends GetxService {
       );
     }
 
-    final sequenceNumber =
-    int.tryParse(storedValue.substring(period.length));
+    final sequenceNumber = int.tryParse(storedValue.substring(period.length));
 
     if (sequenceNumber == null) {
       throw StateError(

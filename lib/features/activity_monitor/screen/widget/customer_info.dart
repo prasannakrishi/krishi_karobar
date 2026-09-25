@@ -48,12 +48,49 @@ class CustomerForm extends StatelessWidget {
                       itemBuilder: (_, index) {
                         final customer = controller.filteredCustomers[index];
 
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.person_outline),
-                          title: Text(customer.name),
-                          subtitle: Text(customer.phone),
+                        return InkWell(
                           onTap: () => controller.selectCustomer(customer),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.person_outline, size: 18, color: Colors.grey),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        customer.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        customer.phone,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (customer.address.isNotEmpty)
+                                  Text(
+                                    customer.address,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    textAlign: TextAlign.right,
+                                  ),
+                              ],
+                            ),
+                          ),
                         );
                       },
                     ),

@@ -128,7 +128,7 @@ class _DetailsCardFormState
       children: [
         Flexible(
           flex: 1,
-          child: CustomDecoration.uTextField('Vehicle Number',vehicleNumber, height: 35),
+          child: CustomDecoration.uTextField('Vehicle Number',vehicleNumber),
         ),
         const SizedBox(width: 5),
         Flexible(
@@ -143,15 +143,15 @@ class _DetailsCardFormState
     return Row(
       children: [
         Expanded(
-          child: CustomDecoration.uTextField('Customer Address',customerAddress, height: 35),
+          child: CustomDecoration.uTextField('Customer Address',customerAddress),
         ),
         const SizedBox(width: 5),
         Expanded(
-          child: CustomDecoration.uTextField('Service Type',serviceName, height: 35),
+          child: CustomDecoration.uTextField('Service Type',serviceName),
         ),
         const SizedBox(width: 5),
         Expanded(
-          child: CustomDecoration.uTextField('Rate / Hour','रु ${rate.toStringAsFixed(0)}', height: 35,
+          child: CustomDecoration.uTextField('Rate / Hour','रु ${rate.toStringAsFixed(0)}',
           ),
         ),
       ],
@@ -164,20 +164,20 @@ class _DetailsCardFormState
         Expanded(
           child: CustomDecoration.uTextField(
             'Start Time',
-            _formatTime(widget.entry.startTime), height: 35
+            _formatTime(widget.entry.startTime)
           ),
         ),
         const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'End Time',
-            _formatTime(widget.entry.endTime), height: 35
+            _formatTime(widget.entry.endTime)
           ),
         ),
         const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField('Duration',
-            widget.controller.secondsToHHMMSS(widget.entry.duration), height: 35
+            widget.controller.secondsToHHMMSS(widget.entry.duration)
           ),
         ),
       ],
@@ -190,21 +190,21 @@ class _DetailsCardFormState
         Expanded(
           child: CustomDecoration.uTextField(
             'Amount',
-            'रु ${widget.entry.amount.toStringAsFixed(2)}', height: 35
+            'रु ${widget.entry.amount.toStringAsFixed(2)}'
           ),
         ),
         const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'Paid',
-            'रु ${widget.entry.paidAmount.toStringAsFixed(0)}', height: 35
+            'रु ${widget.entry.paidAmount.toStringAsFixed(0)}',
           ),
         ),
         const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
             'Due',
-            'रु ${widget.entry.dueAmount.toStringAsFixed(0)}', height: 35
+            'रु ${widget.entry.dueAmount.toStringAsFixed(0)}'
           ),
         ),
       ],
@@ -215,14 +215,17 @@ class _DetailsCardFormState
     final hasDue = widget.entry.dueAmount > 0;
 
     return SizedBox(
-      height: 40,
+      height: 50,
       child: ElevatedButton.icon(
         onPressed: hasDue ? _openPayment : null,
         icon: const Icon(Icons.payments),
         label: Text(
-          hasDue
-              ? 'Collect Customer Payment'
-              : 'View Bill',
+          hasDue ? 'Collect Customer Payment' : 'View Bill',
+        ),
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero, // 👈 vertical padding हटाइयो
+          minimumSize: const Size(0, 50), // height control
+          alignment: Alignment.center, // content center मा राख्न
         ),
       ),
     );

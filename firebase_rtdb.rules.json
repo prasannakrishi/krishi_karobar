@@ -1,0 +1,258 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "authUsers": {
+      "$authUid": {
+        ".read": "auth != null && auth.uid === $authUid",
+        ".write": false
+      }
+    },
+
+    "users": {
+      ".read": "auth != null",
+
+      "$userId": {
+        ".read": "auth != null",
+
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true)",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'nId', 'fullname', 'phone', 'assignedVehicleIds', 'roles', 'userType', 'status', 'createdAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $userId"
+        },
+
+        "userType": {
+          ".validate": "newData.val() === 'organization' || newData.val() === 'external' || newData.val() === 'guest' || newData.val() === 'system'"
+        },
+
+        "status": {
+          ".validate": "newData.val() === 'active' || newData.val() === 'inactive' || newData.val() === 'suspended'"
+        },
+
+        "phone": {
+          ".validate": "newData.isString()"
+        },
+
+        "fullname": {
+          ".validate": "newData.isString()"
+        }
+      }
+    },
+
+    "customers": {
+      ".read": "auth != null",
+
+      "$customerId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('accountant').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)"
+      }
+    },
+
+    "vehicles": {
+      ".read": "auth != null",
+
+      "$vehicleId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true)",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'name', 'number', 'vehicleType', 'ownerId', 'supportServiceIds', 'status', 'isActive', 'createdAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $vehicleId"
+        },
+
+        "ownerId": {
+          ".validate": "root.child('users').child(newData.val()).exists()"
+        },
+
+        "driverId": {
+          ".write": "auth != null && data.exists() && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)",
+          ".validate": "!newData.exists() || newData.val() === '' || root.child('users').child(newData.val()).exists()"
+        },
+
+        "supervisorId": {
+          ".write": "auth != null && data.exists() && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)",
+          ".validate": "!newData.exists() || newData.val() === '' || root.child('users').child(newData.val()).exists()"
+        },
+
+        "serviceId": {
+          ".validate": "!newData.exists() || newData.val() === '' || root.child('services').child(newData.val()).exists()"
+        }
+      }
+    },
+
+    "services": {
+      ".read": "auth != null",
+
+      "$serviceId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true)",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'name', 'description', 'rate', 'unit', 'isActive', 'createdAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $serviceId"
+        },
+
+        "rate": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      }
+    },
+
+    "activities": {
+      ".read": "auth != null",
+      ".indexOn": [
+        "vehicleId",
+        "customerId"
+      ],
+
+      "$activityId": {
+        ".write": "auth != null && ((root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true) || (!data.exists() && (root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true) && newData.child('startedByUserId').val() === root.child('authUsers').child(auth.uid).child('recordId').val()) || (data.exists() && data.child('startedByUserId').val() === root.child('authUsers').child(auth.uid).child('recordId').val() && (data.child('status').val() === 'running' || data.child('status').val() === 'paused')) || (data.exists() && (root.child('authUsers').child(auth.uid).child('roles').child('accountant').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true) && newData.child('vehicleId').val() === data.child('vehicleId').val() && newData.child('serviceId').val() === data.child('serviceId').val() && newData.child('amount').val() === data.child('amount').val() && newData.child('startedByUserId').val() === data.child('startedByUserId').val() && newData.child('startTime').val() === data.child('startTime').val() && (newData.child('status').val() === data.child('status').val() || newData.child('status').val() === 'due' || newData.child('status').val() === 'paid' || newData.child('status').val() === 'partial')))",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'customerId', 'vehicleId', 'serviceId', 'startTime', 'endTime', 'duration', 'rate', 'amount', 'paidAmount', 'dueAmount', 'status', 'createdBy', 'createdAt', 'updatedAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $activityId"
+        },
+
+        "vehicleId": {
+          ".validate": "root.child('vehicles').child(newData.val()).exists()"
+        },
+
+        "serviceId": {
+          ".validate": "root.child('services').child(newData.val()).exists()"
+        },
+
+        "customerId": {
+          ".validate": "newData.val() === '' || root.child('customers').child(newData.val()).exists()"
+        },
+
+        "driverId": {
+          ".validate": "!newData.exists() || newData.val() === '' || root.child('users').child(newData.val()).exists()"
+        },
+
+        "supervisorId": {
+          ".validate": "!newData.exists() || newData.val() === '' || root.child('users').child(newData.val()).exists()"
+        },
+
+        "startedByUserId": {
+          ".validate": "!data.exists() ? newData.val() === root.child('authUsers').child(auth.uid).child('recordId').val() : newData.val() === data.val()"
+        },
+
+        "status": {
+          ".validate": "newData.val() === 'pending' || newData.val() === 'running' || newData.val() === 'paused' || newData.val() === 'completed' || newData.val() === 'cancelled' || newData.val() === 'due' || newData.val() === 'paid' || newData.val() === 'partial'"
+        },
+
+        "amount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+
+        "paidAmount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+
+        "dueAmount": {
+          ".validate": "newData.isNumber()"
+        },
+
+        "receivedBy": {
+          ".validate": "!newData.exists() || newData.val() === root.child('authUsers').child(auth.uid).child('recordId').val() || root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true"
+        }
+      }
+    },
+
+    "payments": {
+      ".read": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('accountant').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)",
+
+      "$paymentId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('accountant').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'customerId', 'amount', 'discount', 'paymentMethod', 'receivedBy', 'paidAt', 'allocations', 'createdAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $paymentId"
+        },
+
+        "customerId": {
+          ".validate": "root.child('customers').child(newData.val()).exists()"
+        },
+
+        "amount": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+
+        "discount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+
+        "receivedBy": {
+          ".validate": "newData.val() === root.child('authUsers').child(auth.uid).child('recordId').val() || root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true"
+        },
+
+        "allocations": {
+          ".validate": "newData.exists()"
+        }
+      }
+    },
+
+    "expenses": {
+      ".read": "auth != null",
+
+      "$expenseId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)",
+
+        ".validate": "newData.hasChildren(['id', 'uId', 'expenseType', 'categoryId', 'categoryName', 'amount', 'paidAmount', 'dueAmount', 'date', 'status', 'createdAt', 'createdBy', 'updatedAt'])",
+
+        "id": {
+          ".validate": "newData.val() === $expenseId"
+        },
+
+        "amount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+
+        "paidAmount": {
+          ".validate": "newData.isNumber() && newData.val() >=0"
+        },
+
+        "dueAmount": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "expensecategories": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true)"
+    },
+
+    "audit_logs": {
+      ".read": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true)",
+
+      "$logId": {
+        ".write": "auth != null && !data.exists()"
+      }
+    },
+
+    "notification_queue": {
+      ".read": false,
+
+      "$id": {
+        ".write": "auth != null && !data.exists()"
+      }
+    },
+
+    "sequences": {
+      ".read": "auth != null",
+
+      "$sequenceKey": {
+        ".write": "auth != null",
+
+        "$period": {
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}

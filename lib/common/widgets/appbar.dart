@@ -33,23 +33,19 @@ class UAppBar extends StatelessWidget implements PreferredSizeWidget {
         toolbarHeight: USizes.appBarHeight,
         automaticallyImplyLeading: false,
         leading: showBackArrow ? IconButton(
-          onPressed: () => Get.back(), icon:
-          const Icon(Iconsax.arrow_left),color: dark ? UColors.white : UColors.dark ,) :
-          leadingIcon != null ?
-          IconButton(onPressed: leadingOnPressed, icon: Icon(leadingIcon)) : null,
-        title:Row(
+          onPressed: () => Get.back(),
+          icon: const Icon(Iconsax.arrow_left),
+          color: dark ? UColors.white : UColors.dark
+        ) :leadingIcon != null ?IconButton(onPressed: leadingOnPressed, icon: Icon(leadingIcon)) : null,
+        title: Row(
           children: [
-            titleWidget ?? Text(title ?? '',
-              style: TextStyle(color: dark ? UColors.white : UColors.dark,),
-            ),
+            titleWidget ?? Text(title ?? '', style: TextStyle(color: dark ? UColors.white : UColors.dark)),
             if (showUserName) ...[
               const Spacer(),
-              Text(LoginController.loginUser.fullname,
-                style: TextStyle(color: dark ? UColors.white : UColors.dark)
-              ),
+              Text(LoginController.loginUser.fullname, style: TextStyle(color: dark ? UColors.white : UColors.dark)),
             ],
           ],
-        ) ,
+        ),
         actions: actions,
       ),
     );
