@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../models/models.dart';
 import '../../../services/data_cache_service.dart';
+import '../../../utils/helper/nepali_date_time.dart';
 
 class PaymentHistoryController extends GetxController {
   static PaymentHistoryController get instance => Get.find();
@@ -36,21 +37,18 @@ class PaymentHistoryController extends GetxController {
     return list;
   }
 
-  double get totalCollected {
-    return filteredPayments.fold(
-      0.0,
-          (sum, payment) => sum + payment.amount,
-    );
+  int get totalCollected {
+    return filteredPayments.fold(0,(sum, payment) => sum + payment.amount);
   }
 
   int get paymentCount => filteredPayments.length;
 
-  double get cashTotal => _totalByMethod('cash');
+  int get cashTotal => _totalByMethod('cash');
 
-  double get bankTransferTotal =>
+  int get bankTransferTotal =>
       _totalByMethod('bankTransfer');
 
-  double get eSewaTotal => _totalByMethod('eSewa');
+  int get eSewaTotal => _totalByMethod('eSewa');
 
   @override
   void onInit() {
@@ -99,21 +97,12 @@ class PaymentHistoryController extends GetxController {
       fromDate.value = null;
       toDate.value = null;
     } else {
-      fromDate.value = DateTime(
-        range.start.year,
-        range.start.month,
-        range.start.day,
-      );
-
-      toDate.value = DateTime(
-        range.end.year,
-        range.end.month,
-        range.end.day,
-        23,
-        59,
-        59,
-        999,
-      );
+      // The range comes from the Bikram Sambat picker (see
+      // pickNepaliDateRange) - these are calendar days with no timezone
+      // attached, so anchor them to real Nepal Standard Time instants
+      // here rather than comparing them as device-local time.
+      fromDate.value = nepalCalendarDayBoundary(range.start);
+      toDate.value = nepalCalendarDayBoundary(range.end, endOfDay: true);
     }
 
     _applyFilters();
@@ -179,17 +168,11 @@ class PaymentHistoryController extends GetxController {
   }
 
   String formatDate(DateTime value) {
-    final date = value.toLocal();
-
-    return '${date.year}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')} '
-        '${date.hour.toString().padLeft(2, '0')}:'
-        '${date.minute.toString().padLeft(2, '0')}';
+    return formatNepaliDateTimeShort(value);
   }
 
-  String formatMoney(double value) {
-    return 'रु ${value.toStringAsFixed(2)}';
+  String formatMoney(int value) {
+    return 'रु ${value}';
   }
 
   void _applyFilters() {
@@ -206,7 +189,7 @@ class PaymentHistoryController extends GetxController {
         return false;
       }
 
-      final paidAt = payment.paidAt.toLocal();
+      final paidAt = payment.paidAt;
 
       if (fromDate.value != null &&
           paidAt.isBefore(fromDate.value!)) {
@@ -239,20 +222,14 @@ class PaymentHistoryController extends GetxController {
 
     filteredPayments.assignAll(result);
 
-    if (selectedIndex.value != null &&
-        selectedIndex.value! >= filteredPayments.length) {
+    if (selectedIndex.value != null && selectedIndex.value! >= filteredPayments.length)
+    {
       selectedIndex.value = null;
     }
   }
 
-  double _totalByMethod(String method) {
-    return filteredPayments
-        .where(
-          (payment) => payment.paymentMethod == method,
-    )
-        .fold(
-      0.0,
-          (sum, payment) => sum + payment.amount,
-    );
+  int _totalByMethod(String method) {
+    return filteredPayments.where((payment) => payment.paymentMethod == method)
+        .fold(0,(sum, payment) => sum + payment.amount);
   }
 }

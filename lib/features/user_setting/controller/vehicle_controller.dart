@@ -83,6 +83,11 @@ class VehicleController extends GetxController {
 
   static VehicleModel vehicle = VehicleModel.empty();
 
+  String get _defaultVehicleStorageKey {
+    final userId = LoginController.loginUser.id.trim();
+    return userId.isEmpty ? 'default_vehicle' : 'default_vehicle_$userId';
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -194,36 +199,90 @@ class VehicleController extends GetxController {
 
   // DEFAULT VEHICLE
 
+  /// Resolves the app-wide default vehicle for the current login.
+  ///
+  /// Login user's assigned vehicle always wins on a fresh session. The
+  /// persisted value is user-scoped so one user's selection can never leak
+  /// into another user's session.
   void loadDefaultVehicle() {
-    final data =
-    localStorage.read('default_vehicle');
+    final userId = LoginController.loginUser.id.trim();
 
-    if (data == null) return;
+    if (userId.isEmpty) {
+      clearDefaultVehicle();
+      return;
+    }
+
+    final assignedIds =
+        LoginController.loginUser.assignedVehicleIds
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+
+    final assignedVehicle = assignedIds.isEmpty
+        ? null
+        : cache.getCachedRecords<VehicleModel>('vehicles')
+            .cast<VehicleModel?>()
+            .firstWhere(
+              (v) => v != null && assignedIds.contains(v.id),
+              orElse: () => null,
+            );
+
+    if (assignedVehicle != null) {
+      setDefaultVehicle(
+        assignedVehicle,
+        showMessage: false,
+        persist: true,
+      );
+      return;
+    }
+
+    final data = localStorage.read(_defaultVehicleStorageKey);
+    if (data == null) {
+      clearDefaultVehicle();
+      return;
+    }
 
     try {
-      vehicle = VehicleModel.fromMap(
+      final stored = VehicleModel.fromMap(
         Map<String, dynamic>.from(data),
       );
 
-      selectedVehicle.value = vehicle;
+      final cached = cache.vehicles[stored.id] ?? stored;
+      if (cached.id.isEmpty) {
+        clearDefaultVehicle();
+        return;
+      }
+
+      vehicle = cached;
+      selectedVehicle.value = cached;
     } catch (e) {
       debugPrint(
         'VehicleController: Error loading default vehicle: $e',
       );
+      clearDefaultVehicle();
     }
+  }
+
+  void clearDefaultVehicle() {
+    vehicle = VehicleModel.empty();
+    selectedVehicle.value = null;
+    localStorage.remove(_defaultVehicleStorageKey);
   }
 
   void setDefaultVehicle(
       VehicleModel v, {
         bool showMessage = true,
+        bool persist = true,
       }) {
     vehicle = v;
     selectedVehicle.value = v;
 
-    localStorage.write(
-      'default_vehicle',
-      v.toMap(),
-    );
+    if (persist) {
+      localStorage.write(
+        _defaultVehicleStorageKey,
+        v.toMap(),
+      );
+    }
 
     if (Get.isRegistered<MonitorController>()) {
       Get.find<MonitorController>().selectVehicle(v);
@@ -262,21 +321,40 @@ class VehicleController extends GetxController {
         .toList();
   }
 
-  /// If the logged-in user has exactly one vehicle assigned to them
-  /// (as owner or driver) and no default vehicle has been picked yet,
-  /// that single vehicle automatically becomes the default.
+  /// The logged-in user's assigned vehicle is the app-wide default.
+  ///
+  /// This intentionally does not respect a vehicle left by a previous login.
+  /// A user with multiple assigned vehicles gets the first valid assigned
+  /// vehicle as the initial default; the user may still change the selection
+  /// afterwards where the UI permits it.
   void ensureDefaultVehicleForCurrentUser() {
-    final userId = LoginController.loginUser.id;
-    if (userId.isEmpty) return;
-
-    // Respect an already-persisted default vehicle.
-    if (vehicle.id.isNotEmpty) return;
-
-    final assigned = assignedVehiclesForUser(userId);
-
-    if (assigned.length == 1) {
-      setDefaultVehicle(assigned.first, showMessage: false);
+    final userId = LoginController.loginUser.id.trim();
+    if (userId.isEmpty) {
+      clearDefaultVehicle();
+      return;
     }
+
+    final assignedIds =
+        LoginController.loginUser.assignedVehicleIds
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+
+    final assigned = vehiclesList
+        .where((v) => assignedIds.contains(v.id) && v.isActive)
+        .toList();
+
+    if (assigned.isNotEmpty) {
+      setDefaultVehicle(
+        assigned.first,
+        showMessage: false,
+        persist: true,
+      );
+      return;
+    }
+
+    // No assigned vehicle: do not carry a previous user's vehicle.
+    clearDefaultVehicle();
   }
 
   // INITIALIZE FORM
@@ -563,11 +641,9 @@ class VehicleController extends GetxController {
 
       await loadVehicles();
 
-      // Newly registered vehicle becomes the app-wide default vehicle.
-      setDefaultVehicle(
-        newVehicle,
-        showMessage: false,
-      );
+      // A newly registered vehicle is not automatically the login user's
+      // default. The default is driven by the user's assigned vehicle.
+      ensureDefaultVehicleForCurrentUser();
 
       clearRowSelection();
 

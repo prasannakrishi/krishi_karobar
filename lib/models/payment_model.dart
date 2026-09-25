@@ -1,22 +1,25 @@
 class PaymentAllocationModel {
   final String activityId;
-  final double previousDue;
-  final double paidAmount;
-  final double remainingDue;
+  final int previousDue;
+  final int paidAmount;
+  final int discount;
+  final int remainingDue;
 
   const PaymentAllocationModel({
     required this.activityId,
     required this.previousDue,
     required this.paidAmount,
+    this.discount = 0,
     required this.remainingDue,
   });
 
   factory PaymentAllocationModel.fromMap(Map<String, dynamic> map) {
     return PaymentAllocationModel(
       activityId: map['activityId']?.toString() ?? '',
-      previousDue: _toDouble(map['previousDue']),
-      paidAmount: _toDouble(map['paidAmount']),
-      remainingDue: _toDouble(map['remainingDue']),
+      previousDue: _toInt(map['previousDue']),
+      paidAmount: _toInt(map['paidAmount']),
+      discount: _toInt(map['discount']),
+      remainingDue: _toInt(map['remainingDue']),
     );
   }
 
@@ -25,13 +28,14 @@ class PaymentAllocationModel {
       'activityId': activityId,
       'previousDue': previousDue,
       'paidAmount': paidAmount,
+      'discount': discount,
       'remainingDue': remainingDue,
     };
   }
 
-  static double _toDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+  static int _toInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -39,7 +43,8 @@ class PaymentModel {
   final String id;
   final String uId;
   final String customerId;
-  final double amount;
+  final int amount;
+  final int discount;
   final String paymentMethod;
   final String? referenceNo;
   final String receivedBy;
@@ -53,6 +58,7 @@ class PaymentModel {
     required this.uId,
     required this.customerId,
     required this.amount,
+    this.discount = 0,
     required this.paymentMethod,
     this.referenceNo,
     required this.receivedBy,
@@ -80,7 +86,8 @@ class PaymentModel {
       id: map['id']?.toString() ?? map['guid']?.toString() ?? '',
       uId: map['uId']?.toString() ?? map['uid']?.toString() ?? '',
       customerId: map['customerId']?.toString() ?? '',
-      amount: _toDouble(map['amount']),
+      amount: _toInt(map['amount']),
+      discount: _toInt(map['discount']),
       paymentMethod: map['paymentMethod']?.toString() ?? 'cash',
       referenceNo: _nullableString(map['referenceNo']),
       receivedBy: map['receivedBy']?.toString() ?? '',
@@ -97,6 +104,7 @@ class PaymentModel {
       'uId': uId,
       'customerId': customerId,
       'amount': amount,
+      'discount': discount,
       'paymentMethod': paymentMethod,
       'referenceNo': referenceNo,
       'receivedBy': receivedBy,
@@ -107,9 +115,9 @@ class PaymentModel {
     };
   }
 
-  static double _toDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+  static int _toInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static String? _nullableString(dynamic value) {

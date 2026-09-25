@@ -30,7 +30,7 @@ class ActivityForm extends StatelessWidget {
                   decimal: true,
                 ),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'),),
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Rate / Hour',
@@ -38,20 +38,16 @@ class ActivityForm extends StatelessWidget {
                 ),
               ),
             ),
-
           ],
         ),
         const SizedBox(height: 10),
 
-        TextFormField(
-          controller: controller.description,
-          maxLines: 1,
-          decoration: const InputDecoration(labelText: 'Description'),
-        ),
+        _DescriptionAutocomplete(controller: controller),
         const SizedBox(height: 10),
+
         // Start and End Time
         Obx(
-              () => Row(
+          () => Row(
             children: [
               Expanded(
                 child: TextFormField(
@@ -61,8 +57,8 @@ class ActivityForm extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
-                      labelText: 'Start Time',
-                      contentPadding: EdgeInsets.all(8)
+                    labelText: 'Start Time',
+                    contentPadding: EdgeInsets.all(8),
                   ),
                 ),
               ),
@@ -75,8 +71,8 @@ class ActivityForm extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   decoration: const InputDecoration(
-                      labelText: 'End Time',
-                      contentPadding: EdgeInsets.all(8)
+                    labelText: 'End Time',
+                    contentPadding: EdgeInsets.all(8),
                   ),
                 ),
               ),
@@ -85,20 +81,20 @@ class ActivityForm extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Obx(
-              () => Row(
+          () => Row(
             children: [
-              Expanded(child:
-              _InfoCard(
-                title: 'DURATION',
-                value: timer.duration.value,
-              ),
+              Expanded(
+                child: _InfoCard(
+                  title: 'DURATION',
+                  value: timer.duration.value,
+                ),
               ),
               const SizedBox(width: 8),
-              Expanded(child:
-              _InfoCard(
-                title: 'AMOUNT',
-                value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
-              ),
+              Expanded(
+                child: _InfoCard(
+                  title: 'AMOUNT',
+                  value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+                ),
               ),
             ],
           ),
@@ -112,7 +108,6 @@ class ActivityForm extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Container(
-              width: double.infinity,
               padding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 10,
@@ -135,7 +130,7 @@ class ActivityForm extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${isPaused ? 'PAUSED' : 'RUNNING'} · Started by '
-                          '${controller.startedByName(activity)}',
+                      '${controller.startedByName(activity)}',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -149,6 +144,124 @@ class ActivityForm extends StatelessWidget {
   }
 }
 
+class _DescriptionAutocomplete extends StatefulWidget {
+  const _DescriptionAutocomplete({required this.controller});
+
+  final MonitorController controller;
+
+  @override
+  State<_DescriptionAutocomplete> createState() =>
+      _DescriptionAutocompleteState();
+}
+
+class _DescriptionAutocompleteState extends State<_DescriptionAutocomplete> {
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<String>(
+      focusNode: _focusNode,
+      textEditingController: widget.controller.description,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final suggestions = widget.controller.recentDescriptions;
+        final query = textEditingValue.text.trim().toLowerCase();
+
+        if (query.isEmpty) {
+          return suggestions;
+        }
+
+        return suggestions.where(
+          (desc) => desc.toLowerCase().contains(query),
+        );
+      },
+      onSelected: (String selection) {
+        widget.controller.description.text = selection;
+        widget.controller.description.selection = TextSelection.collapsed(
+          offset: selection.length,
+        );
+      },
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          maxLines: 1,
+          decoration: InputDecoration(
+            labelText: 'Description',
+            hintText: 'Type or select previous description',
+            suffixIcon: PopupMenuButton<String>(
+              icon: const Icon(Icons.arrow_drop_down),
+              tooltip: 'Previous Descriptions',
+              onSelected: (String value) {
+                widget.controller.description.text = value;
+                widget.controller.description.selection =
+                    TextSelection.collapsed(offset: value.length);
+              },
+              itemBuilder: (BuildContext context) {
+                final suggestions = widget.controller.recentDescriptions;
+                if (suggestions.isEmpty) {
+                  return const [
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Text('No previous descriptions found'),
+                    ),
+                  ];
+                }
+                return suggestions.map((desc) {
+                  return PopupMenuItem<String>(
+                    value: desc,
+                    child: Text(desc),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          onFieldSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 350),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    title: Text(option),
+                    onTap: () {
+                      onSelected(option);
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ServiceSelector extends StatelessWidget {
   const _ServiceSelector({required this.controller});
 
@@ -157,27 +270,29 @@ class _ServiceSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() => DropdownButtonFormField<ServiceModel>(
-      initialValue: controller.selectedService.value,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Service'),
-      hint: Text(controller.selectedVehicle.value == null? 'Select vehicle first'
-          : 'Select service'),
-      items: controller.supportedServices
-          .map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
-      onChanged: controller.selectedVehicle.value == null ||
-          (controller.liveActivity != null && !controller.isController)
-          ? null
-          : (service) {
-        if (service != null) {
-          controller.selectService(service);
-        }
-      },
-    ));
+          initialValue: controller.selectedService.value,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Service'),
+          hint: Text(controller.selectedVehicle.value == null
+              ? 'Select vehicle first'
+              : 'Select service'),
+          items: controller.supportedServices
+              .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+              .toList(),
+          onChanged: controller.selectedVehicle.value == null ||
+                  (controller.liveActivity != null &&
+                      !controller.isController)
+              ? null
+              : (service) {
+                  if (service != null) {
+                    controller.selectService(service);
+                  }
+                },
+        ));
   }
 }
 
 class _InfoCard extends StatelessWidget {
-
   final String title;
   final String value;
 
@@ -185,7 +300,6 @@ class _InfoCard extends StatelessWidget {
     required this.title,
     required this.value,
   });
-
 
   @override
   Widget build(BuildContext context) {

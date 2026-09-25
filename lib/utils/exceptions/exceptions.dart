@@ -22,7 +22,7 @@ class HkExceptions implements Exception {
       case 'wrong-password':
         return const HkExceptions('Incorrect password. Please check your password and try again.');
       case 'INVALID_LOGIN_CREDENTIALS':
-        return const HkExceptions('Invalid login credentials. Please double-check your information.');
+        return const HkExceptions('Invalid login credentials. Please int-check your information.');
       case 'too-many-requests':
         return const HkExceptions('Too many requests. Please try again later.');
       case 'invalid-argument':

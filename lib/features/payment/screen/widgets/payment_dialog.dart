@@ -63,6 +63,8 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 const SizedBox(height: 12),
                 _amountField(),
                 const SizedBox(height: 12),
+                _discountField(),
+                const SizedBox(height: 12),
                 _methodField(),
                 const SizedBox(height: 12),
                 _descriptionField(),
@@ -121,10 +123,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
               ),
               120,
             ),
-            // _buildCell(
-            //   const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
-            //   100,
-            // ),
             _buildCell(
               const Text(
                 'Duration',
@@ -145,14 +143,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
             ...entries.map(
               (activity) => [
                 _buildCell(Text(activity.uId), 120),
-                // _buildCell(
-                //   Text(
-                //     DateFormat(
-                //       'yyyy/MM/dd',
-                //     ).format(activity.createdAt.toLocal()),
-                //   ),
-                //   100,
-                // ),
                 _buildCell(Text('${activity.duration} min'), 80),
                 _buildCell(Text('रु ${activity.rate.toInt()}'), 70),
                 _buildCell(
@@ -172,7 +162,6 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 ),
                 110,
               ),
-              //_buildCell(const Text(''), 100),
               _buildCell(const Text(''), 80),
               _buildCell(const Text(''), 70),
               _buildCell(
@@ -204,6 +193,18 @@ class _PaymentDialogState extends State<PaymentDialog> {
           onPressed: controller.totalDue <= 0 ? null : controller.fillFullDue,
         ),
       ),
+    );
+  }
+
+  Widget _discountField() {
+    return TextField(
+      controller: controller.discountController,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'Discount',
+        prefixText: 'रु ',
+      ),
+      onChanged: controller.onDiscountChanged,
     );
   }
 

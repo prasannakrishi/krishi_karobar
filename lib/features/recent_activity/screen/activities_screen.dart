@@ -30,8 +30,7 @@ class ActivityScreen extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onHorizontalDragEnd: (details) {
                 final velocity = details.primaryVelocity ?? 0;
-                final navigationController =
-                Get.find<NavigationController>();
+                final navigationController = Get.find<NavigationController>();
 
                 if (velocity < 0) {
                   if (controller.currentPageIndex.value < 2) {
@@ -78,8 +77,7 @@ class ActivityScreen extends StatelessWidget {
                   label: controller.sections[index],
                   isSelected:
                   controller.currentPageIndex.value == index,
-                  onTap: () =>
-                      controller.changePageIndex(index),
+                  onTap: () =>controller.changePageIndex(index),
                 ),
               );
             },
@@ -124,7 +122,7 @@ class ActivityScreen extends StatelessWidget {
             controller,
             sectionEntries,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           SummaryFooter(
             totalSeconds: totalSeconds,
             totalAmount: totalAmount,
@@ -147,123 +145,195 @@ class ActivityScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildActivityTable(
-      ActivityController controller,
-      List<ActivityModel> entries,
-      ) {
-    return Stack(
-      children: [
-        uDataTable(
-          columns: [
-            _buildCell(
-              FilterHeader(
-                title: 'Activity ID',
-                isActive:
-                controller.selectedVehicleIds.isNotEmpty ||
-                    controller.selectedServiceFilter.value !=
-                        'All',
-                onTap: controller.showAIdFilters,
-              ),
-              100,
-            ),
-            _buildCell(
-              FilterHeader(
-                title: 'Customer',
-                isActive:
-                controller.nameSearchQuery.value.isNotEmpty,
-                onTap: controller.showNameSearch,
-              ),
-              120,
-            ),
-            _buildCell(
-              const Center(
-                child: Text(
-                  'Duration',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              80,
-            ),
-            _buildCell(
-              const Align(
-                alignment: Alignment.center,
-                child: Text(
-                  'Amount',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              80,
-            ),
-            _buildCell(
-              FilterHeader(
-                title: 'Created On',
-                isActive:
-                controller.selectedFilter.value != 'All',
-                onTap: controller.showDateFilter,
-              ),
-              130,
-            ),
-          ],
-          rowValues: entries.map(
-                (activity) {
-              return [
+  void _showContextMenu(BuildContext context,ActivityController controller,ActivityModel activity,TapUpDetails? details) {
+    final RenderBox? overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+
+    final position = details != null
+        ? RelativeRect.fromRect(
+            details.globalPosition & const Size(40, 40),
+            Offset.zero & overlay.size,
+          )
+        : RelativeRect.fromLTRB(
+            overlay.size.width * 0.5,
+            overlay.size.height * 0.4,
+            overlay.size.width * 0.5,
+            overlay.size.height * 0.4,
+          );
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        const PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+              SizedBox(width: 8),
+              Text('Edit Activity'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, color: Colors.red, size: 20),
+              SizedBox(width: 8),
+              Text('Delete Activity', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'edit') {
+        controller.showEditActivityDialog(activity);
+      } else if (value == 'delete') {
+        controller.confirmDeleteActivity(activity);
+      }
+    });
+  }
+
+  Widget _buildActivityTable(ActivityController controller, List<ActivityModel> entries) {
+    return Builder(
+      builder: (context) {
+        return Stack(
+          children: [
+            uDataTable(
+              columns: [
                 _buildCell(
-                  Text(activity.uId),
+                  FilterHeader(
+                    title: 'Activity ID',
+                    isActive:
+                        controller.selectedVehicleIds.isNotEmpty ||
+                            controller.selectedServiceFilter.value != 'All',
+                    onTap: controller.showAIdFilters,
+                  ),
                   100,
                 ),
                 _buildCell(
-                  Text(
-                    controller.customerName(
-                      activity.customerId,
-                    ),
+                  FilterHeader(
+                    title: 'Customer',
+                    isActive: controller.nameSearchQuery.value.isNotEmpty,
+                    onTap: controller.showNameSearch,
                   ),
                   120,
                 ),
                 _buildCell(
-                  Center(
-                    child: Text(
-                      controller.secondsToHHMMSS(
-                        activity.duration,
-                      ),
-                    ),
+                  const Center(
+                    child: Text('Duration', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   80,
                 ),
                 _buildCell(
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'रु ${activity.amount.toStringAsFixed(2)}',
-                    ),
+                  const Align(
+                    alignment: Alignment.center,
+                    child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   80,
                 ),
                 _buildCell(
-                  Text(
-                    controller.formatDate(
-                      activity.createdAt,
-                    ),
+                  FilterHeader(
+                    title: 'Created On',
+                    isActive: controller.selectedFilter.value != 'All',
+                    onTap: controller.showDateFilter,
                   ),
                   130,
                 ),
-              ];
-            },
-          ).toList(),
-          selectedIndex:
-          controller.selectedIndex.value,
-          onRowSelect: controller.selectIndex,
-        ),
-        if (entries.isEmpty)
-          const Center(
-            child: Text(
-              'No records found for this section',
+                _buildCell(
+                  const Center(
+                    child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  80,
+                ),
+              ],
+              rowValues: entries.map(
+                (activity) {
+                  return [
+                    _buildCell(
+                      Text(activity.uId),
+                      100,
+                    ),
+                    _buildCell(
+                      Text(
+                        controller.customerName(
+                          activity.customerId,
+                        ),
+                      ),
+                      120,
+                    ),
+                    _buildCell(
+                      Center(
+                        child: Text(
+                          controller.secondsToHHMMSS(
+                            activity.duration,
+                          ),
+                        ),
+                      ),
+                      80,
+                    ),
+                    _buildCell(
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'रु ${activity.amount.toStringAsFixed(0)}',
+                        ),
+                      ),
+                      80,
+                    ),
+                    _buildCell(
+                      Text(
+                        controller.formatDate(
+                          activity.createdAt,
+                        ),
+                      ),
+                      130,
+                    ),
+                    _buildCell(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Edit',
+                            onPressed: () => controller.showEditActivityDialog(activity),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Delete',
+                            onPressed: () => controller.confirmDeleteActivity(activity),
+                          ),
+                        ],
+                      ),
+                      80,
+                    ),
+                  ];
+                },
+              ).toList(),
+              selectedIndex: controller.selectedIndex.value,
+              onRowSelect: controller.selectIndex,
+              onRowLongPress: (index) {
+                if (index >= 0 && index < entries.length) {
+                  _showContextMenu(context, controller, entries[index], null);
+                }
+              },
             ),
-          ),
-      ],
+            if (entries.isEmpty)
+              const Center(
+                child: Text(
+                  'No records found for this section',
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -278,7 +348,7 @@ class ActivityScreen extends StatelessWidget {
 
     return Column(
       children: [
-        const SizedBox(height: 12),
+        const SizedBox(height: 5),
         DetailsCardForm(
           key: ValueKey(entries[index].id),
           entry: entries[index],
@@ -294,8 +364,11 @@ class ActivityScreen extends StatelessWidget {
       ) {
     return SizedBox(
       width: width,
-      child: MarqueeWidget(
-        child: child,
+      height: 32,
+      child: Center(
+        child: MarqueeWidget(
+          child: child,
+        ),
       ),
     );
   }

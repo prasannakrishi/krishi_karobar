@@ -7,7 +7,7 @@ class HkPlatformException implements Exception {
   String get message {
     switch (code) {
       case 'INVALID_LOGIN_CREDENTIALS':
-        return 'Invalid login credentials. Please double-check your information.';
+        return 'Invalid login credentials. Please int-check your information.';
       case 'too-many-requests':
         return 'Too many requests. Please try again later.';
       case 'invalid-argument':

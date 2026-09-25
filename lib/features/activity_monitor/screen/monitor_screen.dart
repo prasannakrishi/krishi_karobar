@@ -36,10 +36,10 @@ class MonitorScreen extends GetView<MonitorController> {
             Obx(
               () => _Section(
                 title: 'CUSTOMER INFO',
-                summary:"${controller.selectedCustomer.value?.name.padRight(20)}\n${controller.selectedCustomer.value?.uId}",
                 collapsed: controller.customerCollapsed.value,
                 onTap: controller.customerCollapsed.toggle,
                 child: CustomerForm(controller: controller),
+                summary: controller.customerSummary.value,
               ),
             ),
             const SizedBox(height: 5),

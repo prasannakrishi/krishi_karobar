@@ -1,14 +1,12 @@
-import 'package:intl/intl.dart';
-
-double toDouble(
+int toDouble(
     dynamic value, {
-      double defaultValue = 0.0,
+      int defaultValue = 0,
     }) {
   if (value == null) return defaultValue;
-  if (value is double) return value;
-  if (value is int) return value.toDouble();
+  if (value is int) return value;
+  if (value is int) return value;
 
-  return double.tryParse(value.toString()) ?? defaultValue;
+  return int.tryParse(value.toString()) ?? defaultValue;
 }
 
 int toInt(
@@ -16,8 +14,8 @@ int toInt(
       int defaultValue = 0,
     }) {
   if (value == null) return defaultValue;
-  if (value is int) return value;
-  if (value is double) return value.toInt();
+  if (value is int) return value.toInt();
+  if (value is int) return value.toInt();
 
   return int.tryParse(value.toString()) ?? defaultValue;
 }
@@ -60,13 +58,6 @@ DateTime? toDateTime(dynamic value) {
   if (value is DateTime) return value;
 
   return DateTime.tryParse(value.toString());
-}
-
-String getFormattedDate(
-    DateTime date, {
-      String format = 'dd MMM yyyy',
-    }) {
-  return DateFormat(format).format(date);
 }
 
 List<T> removeDuplicates<T>(List<T> list) {

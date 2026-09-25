@@ -32,9 +32,7 @@ class PaymentHistorySummary extends StatelessWidget {
                 Expanded(
                   child: _item(
                     'Total Collected',
-                    controller.formatMoney(
-                      controller.totalCollected,
-                    ),
+                    controller.formatMoney(controller.totalCollected),
                   ),
                 ),
               ],

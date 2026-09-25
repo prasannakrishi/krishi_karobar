@@ -44,6 +44,7 @@ class Permissions {
   static const settingsEdit = 'settings.edit';
 
   static const auditView = 'audit.view';
+  static const paymentCreate = 'payment.create';
 }
 
 /// Role -> permission matrix (spec sections 5 & 7, trimmed to modules that
@@ -67,6 +68,7 @@ class _RolePermissions {
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView, Permissions.settingsEdit,
       Permissions.auditView,
+      Permissions.paymentCreate
     },
     UserRoles.admin: {
       Permissions.userView, Permissions.userCreate, Permissions.userEdit,
@@ -81,6 +83,7 @@ class _RolePermissions {
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView, Permissions.settingsEdit,
+      Permissions.paymentCreate,
     },
     UserRoles.manager: {
       Permissions.userView,
@@ -91,12 +94,14 @@ class _RolePermissions {
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView,
+      Permissions.paymentCreate
     },
     UserRoles.accountant: {
       Permissions.userView,
       Permissions.vehicleView,
       Permissions.serviceView,
       Permissions.activityView,
+      Permissions.paymentCreate
       // finance.* intentionally omitted - no finance module yet.
     },
     UserRoles.supervisor: {
@@ -105,12 +110,15 @@ class _RolePermissions {
       Permissions.serviceView,
       Permissions.activityView, Permissions.activityStart,
       Permissions.activityEdit, Permissions.activityComplete,
+      Permissions.paymentCreate
     },
     UserRoles.driver: {
+      Permissions.userView,
       Permissions.vehicleView,
       Permissions.serviceView,
       Permissions.activityView, Permissions.activityStart,
-      Permissions.activityComplete,
+      Permissions.activityEdit, Permissions.activityComplete,
+      Permissions.paymentCreate
     },
     UserRoles.vehicleOwner: {
       Permissions.vehicleView,
@@ -257,10 +265,10 @@ class Authz {
   /// Record-scope guard. [allowed] is the outcome of the matching `can*`
   /// check; [recordType]/[recordId] are debug-only context.
   static void requireRecordAccess(
-    bool allowed, {
-    String? recordType,
-    String? recordId,
-  }) {
+      bool allowed, {
+        String? recordType,
+        String? recordId,
+      }) {
     if (allowed) return;
 
     throw RecordAccessException(
@@ -269,10 +277,10 @@ class Authz {
   }
 
   static void requireVehicleAccess(
-    VehicleModel vehicle, {
-    String permission = Permissions.vehicleView,
-    UserModel? actor,
-  }) {
+      VehicleModel vehicle, {
+        String permission = Permissions.vehicleView,
+        UserModel? actor,
+      }) {
     requirePermission(permission, actor: actor);
 
     requireRecordAccess(
@@ -283,10 +291,10 @@ class Authz {
   }
 
   static void requireActivityAccess(
-    ActivityModel activity, {
-    VehicleModel? vehicle,
-    UserModel? actor,
-  }) {
+      ActivityModel activity, {
+        VehicleModel? vehicle,
+        UserModel? actor,
+      }) {
     requirePermission(Permissions.activityView, actor: actor);
 
     requireRecordAccess(
@@ -298,9 +306,9 @@ class Authz {
 
   /// Only the user who started an activity may control it.
   static void requireActivityControl(
-    ActivityModel activity, {
-    UserModel? actor,
-  }) {
+      ActivityModel activity, {
+        UserModel? actor,
+      }) {
     requireActiveUser(actor: actor);
 
     requireRecordAccess(
@@ -325,6 +333,7 @@ class Authz {
     if (user.isExternal) return true;
 
     return user.hasRole(UserRoles.driver) ||
+        user.hasRole(UserRoles.supervisor) ||
         user.hasRole(UserRoles.vehicleOwner);
   }
 
@@ -354,10 +363,10 @@ class Authz {
   /// Drivers/Vehicle Owners may only act on activities tied to a vehicle
   /// they're scoped to; everyone else with the base permission can proceed.
   static bool canManageActivity(
-    String permission, {
-    String? vehicleId,
-    UserModel? actor,
-  }) {
+      String permission, {
+        String? vehicleId,
+        UserModel? actor,
+      }) {
     if (!can(permission, actor: actor)) return false;
     if (vehicleId == null) return true;
 
@@ -405,10 +414,10 @@ class Authz {
   /// Anyone with activity.view + the normal vehicle data-scope check can see
   /// a running/paused Activity live - this does NOT grant control.
   static bool canViewActivity(
-    ActivityModel activity,
-    VehicleModel? vehicle, {
-    UserModel? actor,
-  }) {
+      ActivityModel activity,
+      VehicleModel? vehicle, {
+        UserModel? actor,
+      }) {
     if (!can(Permissions.activityView, actor: actor)) return false;
 
     final user = _resolve(actor);
@@ -426,9 +435,9 @@ class Authz {
   }
 
   static bool canEditActivity(
-    ActivityModel activity, {
-    UserModel? actor,
-  }) {
+      ActivityModel activity, {
+        UserModel? actor,
+      }) {
     if (!can(Permissions.activityEdit, actor: actor)) return false;
 
     return canManageActivity(
@@ -464,8 +473,8 @@ class Authz {
 
     switch (path.trim().toLowerCase()) {
       case 'users':
-        // Always loaded, but filtered per record: a session without
-        // user.view only keeps itself and the people on its vehicles.
+      // Always loaded, but filtered per record: a session without
+      // user.view only keeps itself and the people on its vehicles.
         return true;
       case 'vehicles':
         return can(Permissions.vehicleView, actor: user);

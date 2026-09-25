@@ -16,6 +16,7 @@ class PaymentController extends GetxController {
   final selectedCustomerId = ''.obs;
   final selectedPaymentMethod = 'cash'.obs;
   final paymentAmountController = TextEditingController();
+  final discountController = TextEditingController();
   final referenceController = TextEditingController();
   final descriptionController = TextEditingController();
 
@@ -25,17 +26,16 @@ class PaymentController extends GetxController {
   final isLoadingActivities = false.obs;
   final isSaving = false.obs;
 
-  double get totalDue {
-    return _money(
-      customerActivities.fold(
-        0.0,
-        (sum, activity) => sum + _activityDue(activity),
-      ),
-    );
+  int get totalDue {
+    return customerActivities.fold(0,(sum, activity) => sum + _activityDue(activity));
   }
 
-  double get enteredAmount {
-    return double.tryParse(paymentAmountController.text.trim()) ?? 0;
+  int get enteredAmount {
+    return int.tryParse(paymentAmountController.text.trim()) ?? 0;
+  }
+
+  int get enteredDiscount {
+    return int.tryParse(discountController.text.trim()) ?? 0;
   }
 
   List<ActivityModel> get dueActivities {
@@ -53,6 +53,7 @@ class PaymentController extends GetxController {
     selectedCustomer.value = cache.customers[customerId];
 
     paymentAmountController.clear();
+    discountController.clear();
     referenceController.clear();
     descriptionController.clear();
 
@@ -85,8 +86,8 @@ class PaymentController extends GetxController {
           activityData['id'] ??= entry.key?.toString();
 
           final activity = ActivityModel.fromMap(activityData);
-          final paid = _money(activity.paidAmount);
-          final due = _money(activity.amount - paid);
+          final paid = activity.paidAmount;
+          final due = activity.amount - paid;
 
           if (due <= 0) {
             continue;
@@ -119,17 +120,25 @@ class PaymentController extends GetxController {
     }
   }
 
+  void onDiscountChanged(String value) {
+    final discount = int.tryParse(value.trim()) ?? 0;
+    final netAmount = (totalDue - discount).clamp(0, totalDue);
+    paymentAmountController.text = netAmount.toString();
+  }
+
   void fillFullDue() {
-    paymentAmountController.text = totalDue.toStringAsFixed(2);
+    discountController.text = '0';
+    paymentAmountController.text = totalDue.toStringAsFixed(0);
     update();
   }
 
-  List<PaymentAllocationModel> _buildAllocations(double amount) {
-    var remaining = _money(amount);
+  List<PaymentAllocationModel> _buildAllocations(int cashAmount, int discountAmount) {
+    var remainingCash = cashAmount;
+    var remainingDiscount = discountAmount;
     final allocations = <PaymentAllocationModel>[];
 
     for (final activity in dueActivities) {
-      if (remaining <= 0) {
+      if (remainingCash <= 0 && remainingDiscount <= 0) {
         break;
       }
 
@@ -139,13 +148,20 @@ class PaymentController extends GetxController {
         continue;
       }
 
-      final paidNow = _money(
-        remaining >= previousDue ? previousDue : remaining,
-      );
+      final discountForThis = remainingDiscount >= previousDue
+          ? previousDue
+          : remainingDiscount;
 
-      final remainingDue = _money(previousDue - paidNow);
+      final dueAfterDiscount = previousDue - discountForThis;
 
-      if (paidNow <= 0) {
+      final cashForThis = remainingCash >= dueAfterDiscount
+          ? dueAfterDiscount
+          : remainingCash;
+
+      final totalPaidForThis = cashForThis + discountForThis;
+      final remainingDue = previousDue - totalPaidForThis;
+
+      if (totalPaidForThis <= 0) {
         continue;
       }
 
@@ -153,12 +169,14 @@ class PaymentController extends GetxController {
         PaymentAllocationModel(
           activityId: activity.id,
           previousDue: previousDue,
-          paidAmount: paidNow,
+          paidAmount: cashForThis,
+          discount: discountForThis,
           remainingDue: remainingDue,
         ),
       );
 
-      remaining = _money(remaining - paidNow);
+      remainingCash -= cashForThis;
+      remainingDiscount -= discountForThis;
     }
 
     return allocations;
@@ -170,7 +188,7 @@ class PaymentController extends GetxController {
     }
 
     try {
-      Authz.requirePermission(Permissions.activityEdit);
+      Authz.requirePermission(Permissions.paymentCreate);
     } on AppException catch (e) {
       _showError(e.message);
       return null;
@@ -186,11 +204,17 @@ class PaymentController extends GetxController {
       return null;
     }
 
-    final amount = _money(enteredAmount);
+    final amount = enteredAmount;
+    final discount = enteredDiscount;
     final customerDue = totalDue;
 
-    if (amount <= 0) {
-      _showError('Payment amount must be greater than zero.');
+    if (amount < 0 || discount < 0) {
+      _showError('Amount and discount cannot be negative.');
+      return null;
+    }
+
+    if ((amount + discount) <= 0) {
+      _showError('Payment amount or discount must be greater than zero.');
       return null;
     }
 
@@ -199,8 +223,8 @@ class PaymentController extends GetxController {
       return null;
     }
 
-    if (amount > customerDue) {
-      _showError('Payment cannot be greater than customer due.');
+    if ((amount + discount) > customerDue) {
+      _showError('Total payment and discount cannot be greater than customer due.');
       return null;
     }
 
@@ -218,18 +242,19 @@ class PaymentController extends GetxController {
       return null;
     }
 
-    final allocations = _buildAllocations(amount);
+    final allocations = _buildAllocations(amount, discount);
 
     if (allocations.isEmpty) {
       _showError('No outstanding activity due found.');
       return null;
     }
 
-    final allocatedAmount = _money(
-      allocations.fold(0.0, (sum, item) => sum + item.paidAmount),
+    final allocatedTotal = allocations.fold(
+      0,
+      (sum, item) => sum + item.paidAmount + item.discount,
     );
 
-    if (allocatedAmount != amount) {
+    if (allocatedTotal != (amount + discount)) {
       _showError('Payment could not be fully allocated.');
       return null;
     }
@@ -246,6 +271,7 @@ class PaymentController extends GetxController {
         uId: paymentUid,
         customerId: selectedCustomerId.value,
         amount: amount,
+        discount: discount,
         paymentMethod: paymentMethod,
         referenceNo: referenceNo.isEmpty ? null : referenceNo,
         receivedBy: LoginController.loginUser.id,
@@ -270,16 +296,17 @@ class PaymentController extends GetxController {
         }
 
         final activity = customerActivities[activityIndex];
-        final oldPaid = _money(activity.paidAmount);
-        final activityAmount = _money(activity.amount);
-        final newPaid = _money(oldPaid + allocation.paidAmount);
+        final oldPaid = activity.paidAmount;
+        final activityAmount = activity.amount;
+        final settlementForActivity = allocation.paidAmount + allocation.discount;
+        final newPaid = oldPaid + settlementForActivity;
 
         if (newPaid > activityAmount) {
           _showError('Payment exceeds activity amount.');
           return null;
         }
 
-        final newDue = _money(activityAmount - newPaid);
+        final newDue = activityAmount - newPaid;
         final status = _paymentStatus(newPaid, activityAmount);
         final activityPath = 'activities/${activity.id}';
 
@@ -326,9 +353,10 @@ class PaymentController extends GetxController {
 
       final activity = customerActivities[index];
 
-      activity.paidAmount = _money(activity.paidAmount + allocation.paidAmount);
+      final settlement = allocation.paidAmount + allocation.discount;
+      activity.paidAmount = activity.paidAmount + settlement;
 
-      activity.dueAmount = _money(activity.amount - activity.paidAmount);
+      activity.dueAmount = activity.amount - activity.paidAmount;
 
       activity.status = _paymentStatus(activity.paidAmount, activity.amount);
 
@@ -354,11 +382,11 @@ class PaymentController extends GetxController {
     customerActivities.removeWhere((activity) => _activityDue(activity) <= 0);
   }
 
-  double _activityDue(ActivityModel activity) {
-    return _money(activity.amount - activity.paidAmount);
+  int _activityDue(ActivityModel activity) {
+    return activity.amount - activity.paidAmount;
   }
 
-  String _paymentStatus(double paid, double amount) {
+  String _paymentStatus(int paid, int amount) {
     if (paid <= 0) {
       return 'due';
     }
@@ -369,11 +397,7 @@ class PaymentController extends GetxController {
 
     return 'partial';
   }
-
-  double _money(double value) {
-    return double.parse(value.toStringAsFixed(2));
-  }
-
+  
   void _showError(String message) {
     Get.snackbar('Payment Error', message, snackPosition: SnackPosition.BOTTOM);
   }
@@ -385,6 +409,7 @@ class PaymentController extends GetxController {
     customerActivities.clear();
 
     paymentAmountController.clear();
+    discountController.clear();
     referenceController.clear();
     descriptionController.clear();
   }
@@ -392,6 +417,7 @@ class PaymentController extends GetxController {
   @override
   void onClose() {
     paymentAmountController.dispose();
+    discountController.dispose();
     referenceController.dispose();
     descriptionController.dispose();
     super.onClose();

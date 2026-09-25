@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../../utils/helper/nepali_date_time.dart';
 import '../../controllers/payment_history_controller.dart';
 
 class HistoryFilterForm extends StatelessWidget {
@@ -74,7 +75,7 @@ class HistoryFilterForm extends StatelessWidget {
               () => InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: () async {
-              final range = await showDateRangePicker(
+              final range = await pickNepaliDateRange(
                 context: context,
                 firstDate: DateTime(2020),
                 lastDate: DateTime(2050),
@@ -129,12 +130,6 @@ class HistoryFilterForm extends StatelessWidget {
       return 'All Dates';
     }
 
-    return '${_formatDate(from)} - ${_formatDate(to)}';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
+    return '${formatNepaliDateShort(from)} - ${formatNepaliDateShort(to)}';
   }
 }

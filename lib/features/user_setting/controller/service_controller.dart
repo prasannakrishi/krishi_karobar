@@ -163,7 +163,7 @@ class ServiceController extends GetxController {
     editingService = null;
   }
 
-  String _formatRate(double rate) {
+  String _formatRate(int rate) {
     return rate == rate.roundToDouble()
         ? rate.toStringAsFixed(0)
         : rate.toString();
@@ -188,7 +188,7 @@ class ServiceController extends GetxController {
       return false;
     }
 
-    final rate = double.tryParse(rateText);
+    final rate = int.tryParse(rateText);
     if (rate == null || rate <= 0) {
       _error('Enter a valid rate.');
       return false;
@@ -210,7 +210,7 @@ class ServiceController extends GetxController {
   Future<bool> _createService({
     required String name,
     required String description,
-    required double rate,
+    required int rate,
   }) async {
     isLoading.value = true;
 
@@ -253,7 +253,7 @@ class ServiceController extends GetxController {
   Future<bool> _updateService({
     required String name,
     required String description,
-    required double rate,
+    required int rate,
   }) async {
     final service = editingService;
     if (service == null) return false;

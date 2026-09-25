@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:intl/intl.dart';
 
 import '../constants/colors.dart';
+import 'nepali_date_time.dart';
 
 
   Color? getColor(String value) {
@@ -183,7 +183,7 @@ import '../constants/colors.dart';
         GestureDetector(
           onTap: () async {
             final now = DateTime.now();
-            final picked = await showDatePicker(
+            final picked = await pickNepaliDate(
               context: context,
               initialDate: now,
               firstDate: DateTime(2020),
@@ -197,7 +197,7 @@ import '../constants/colors.dart';
                 now.hour,
                 now.minute,
               );
-              controller.text = DateFormat('yyyy-MM-dd HH:mm').format(withTime);
+              controller.text = formatNepaliDateTime(withTime);
             }
           },
           child: Container(
@@ -210,7 +210,7 @@ import '../constants/colors.dart';
             child: Text(
               controller.text.isNotEmpty
                   ? controller.text
-                  : DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now()),
+                  : formatNepaliDateTime(DateTime.now()),
               style: const TextStyle(fontSize: 14),
             ),
           ),
@@ -307,6 +307,8 @@ import '../constants/colors.dart';
     required List<List<Widget>> rowValues,
     int? selectedIndex,
     void Function(int? index)? onRowSelect,
+    void Function(int index)? onRowLongPress,
+    void Function(int index, TapUpDetails details)? onRowSecondaryTap,
   }) {
     return SingleChildScrollView(
       child: SingleChildScrollView(
@@ -328,9 +330,18 @@ import '../constants/colors.dart';
                 }
               },
               cells: rowValues[rowIndex].map((widget) => DataCell(
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 1),
-                  child: widget,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: onRowLongPress != null
+                      ? () => onRowLongPress(rowIndex)
+                      : null,
+                  onSecondaryTapUp: onRowSecondaryTap != null
+                      ? (details) => onRowSecondaryTap(rowIndex, details)
+                      : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 1),
+                    child: widget,
+                  ),
                 ),
               )).toList(),
             );
