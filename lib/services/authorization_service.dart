@@ -45,6 +45,10 @@ class Permissions {
 
   static const auditView = 'audit.view';
   static const paymentCreate = 'payment.create';
+  static const expenseView = 'expense.view';
+  static const expenseCreate = 'expense.create';
+  static const expenseEdit = 'expense.edit';
+  static const expenseDelete = 'expense.delete';
 }
 
 /// Role -> permission matrix (spec sections 5 & 7, trimmed to modules that
@@ -68,7 +72,9 @@ class _RolePermissions {
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView, Permissions.settingsEdit,
       Permissions.auditView,
-      Permissions.paymentCreate
+      Permissions.paymentCreate,
+      Permissions.expenseView, Permissions.expenseCreate,
+      Permissions.expenseEdit, Permissions.expenseDelete,
     },
     UserRoles.admin: {
       Permissions.userView, Permissions.userCreate, Permissions.userEdit,
@@ -84,6 +90,8 @@ class _RolePermissions {
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView, Permissions.settingsEdit,
       Permissions.paymentCreate,
+      Permissions.expenseView, Permissions.expenseCreate,
+      Permissions.expenseEdit, Permissions.expenseDelete,
     },
     UserRoles.manager: {
       Permissions.userView,
@@ -94,14 +102,17 @@ class _RolePermissions {
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
       Permissions.settingsView,
-      Permissions.paymentCreate
+      Permissions.paymentCreate,
+      Permissions.expenseView, Permissions.expenseCreate,
+      Permissions.expenseEdit,
     },
     UserRoles.accountant: {
       Permissions.userView,
       Permissions.vehicleView,
       Permissions.serviceView,
       Permissions.activityView,
-      Permissions.paymentCreate
+      Permissions.paymentCreate,
+      Permissions.expenseView,
       // finance.* intentionally omitted - no finance module yet.
     },
     UserRoles.supervisor: {
@@ -110,7 +121,8 @@ class _RolePermissions {
       Permissions.serviceView,
       Permissions.activityView, Permissions.activityStart,
       Permissions.activityEdit, Permissions.activityComplete,
-      Permissions.paymentCreate
+      Permissions.paymentCreate,
+      Permissions.expenseView, Permissions.expenseCreate,
     },
     UserRoles.driver: {
       Permissions.userView,
@@ -118,12 +130,14 @@ class _RolePermissions {
       Permissions.serviceView,
       Permissions.activityView, Permissions.activityStart,
       Permissions.activityEdit, Permissions.activityComplete,
-      Permissions.paymentCreate
+      Permissions.paymentCreate,
+      Permissions.expenseView, Permissions.expenseCreate,
     },
     UserRoles.vehicleOwner: {
       Permissions.vehicleView,
       Permissions.serviceView,
       Permissions.activityView,
+      Permissions.expenseView,
     },
     UserRoles.viewer: {
       Permissions.userView,
@@ -131,6 +145,7 @@ class _RolePermissions {
       Permissions.serviceView,
       Permissions.activityView,
       Permissions.settingsView,
+      Permissions.expenseView,
     },
   };
 
@@ -486,6 +501,9 @@ class Authz {
       case 'payments':
         return user.isOrganization &&
             can(Permissions.activityView, actor: user);
+      case 'expenses':
+      case 'expensecategories':
+        return can(Permissions.expenseView, actor: user);
       default:
         return false;
     }

@@ -32,6 +32,8 @@ class DataCacheService extends GetxController {
   final services = <String, ServiceModel>{}.obs;
   final activities = <String, ActivityModel>{}.obs;
   final payments = <String, PaymentModel>{}.obs;
+  final expenses = <String, ExpenseModel>{}.obs;
+  final expenseCategories = <String, ExpenseCategoryModel>{}.obs;
 
   final List<StreamSubscription<DatabaseEvent>> _listeners = [];
 
@@ -118,6 +120,19 @@ class DataCacheService extends GetxController {
           path: 'payments',
           cache: payments,
           fromMap: PaymentModel.fromMap,
+        ),
+        _setupCache<ExpenseModel>(
+          user: user,
+          path: 'expenses',
+          cache: expenses,
+          fromMap: ExpenseModel.fromMap,
+          limitToLast: 100,
+        ),
+        _setupCache<ExpenseCategoryModel>(
+          user: user,
+          path: 'expensecategories',
+          cache: expenseCategories,
+          fromMap: ExpenseCategoryModel.fromMap,
         ),
       ]);
 

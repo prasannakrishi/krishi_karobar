@@ -12,6 +12,8 @@ import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/nepali_date_time.dart';
 import '../screen/widgets/edit_activity_dialog.dart';
+import '../screen/widgets/expense_form_dialog.dart';
+import '../screen/widgets/activity_form_dialog.dart';
 
 class ActivityController extends GetxController {
   static ActivityController get instance => Get.find();
@@ -40,7 +42,7 @@ class ActivityController extends GetxController {
 
   final isLoading = false.obs;
 
-  final sections = ['Paid', 'Due', 'Partial'];
+  final sections = ['Paid', 'Due', 'Expenses'];
 
   List<ActivityModel> get allActivities =>
       cache.activities.values.toList();
@@ -241,18 +243,124 @@ class ActivityController extends GetxController {
     return activities.where((activity) {
       final amount = activity.amount;
       final paid = activity.paidAmount;
+      final due = amount - paid;
 
       switch (section) {
         case PaymentStatus.payed:
-          return amount > 0 && paid >= amount;
+          return amount > 0 && due <= 0;
 
         case PaymentStatus.due:
-          return amount > 0 && paid <= 0;
+          return amount > 0 && due > 0;
 
         case PaymentStatus.partial:
-          return amount > 0 && paid > 0 && paid < amount;
+          return false;
       }
     }).toList();
+  }
+
+  final selectedExpenseTypeFilter = 'All'.obs;
+
+  void showExpenseTypeFilter() {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Filter by Expense Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: ['All', 'General', 'Vehicle', 'Activity Related'].map((type) {
+            return ListTile(
+              title: Text(type),
+              trailing: selectedExpenseTypeFilter.value == type ? const Icon(Icons.check) : null,
+              onTap: () {
+                selectedExpenseTypeFilter.value = type;
+                Get.back();
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  List<ExpenseModel> get expensesList {
+    final start = _filterStart;
+    final end = _filterEnd;
+    final query = nameSearchQuery.value.trim().toLowerCase();
+    final typeFilter = selectedExpenseTypeFilter.value;
+
+    final list = cache.expenses.values.where((exp) {
+      if (exp.status == 'cancelled') return false;
+      if (start != null && exp.createdAt.isBefore(start)) return false;
+      if (end != null && exp.createdAt.isAfter(end)) return false;
+
+      if (typeFilter != 'All' && exp.expenseType != typeFilter) return false;
+
+      if (query.isNotEmpty) {
+        if (!exp.uId.toLowerCase().contains(query) &&
+            !exp.categoryName.toLowerCase().contains(query) &&
+            !(exp.description?.toLowerCase().contains(query) ?? false)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  void showAddExpenseDialog() {
+    Get.dialog(const ExpenseFormDialog());
+  }
+
+  void showAddActivityDialog() {
+    if (!Authz.can(Permissions.activityCreate)) {
+      Get.snackbar('Permission Denied', 'You do not have permission to create activities.', snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+    Get.dialog(const ActivityFormDialog());
+  }
+
+  void showEditExpenseDialog(ExpenseModel expense) {
+    if (!Authz.can(Permissions.expenseEdit)) {
+      Get.snackbar('Permission Denied', 'You do not have permission to edit expenses.', snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+    Get.dialog(ExpenseFormDialog(expense: expense));
+  }
+
+  Future<void> confirmDeleteExpense(ExpenseModel expense) async {
+    if (!Authz.can(Permissions.expenseDelete)) {
+      Get.snackbar('Permission Denied', 'Only Admin can delete expenses.', snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text('Are you sure you want to cancel/delete expense "${expense.uId}"?'),
+        actions: [
+          TextButton(onPressed: Get.back, child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Get.back();
+              try {
+                await firebaseService.updateRecord('expenses', expense.id, {
+                  'status': 'cancelled',
+                  'updatedAt': DateTime.now().toUtc().toIso8601String(),
+                  'updatedBy': LoginController.loginUser.id,
+                });
+                Get.snackbar('Success', 'Expense cancelled successfully.', snackPosition: SnackPosition.BOTTOM);
+              } catch (e) {
+                Get.snackbar('Error', AppException.messageOf(e), snackPosition: SnackPosition.BOTTOM);
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
   List<ActivityModel> filteredActivities() {
       return activities.toList();
