@@ -12,16 +12,11 @@ class VehicleForm extends StatelessWidget {
     final controller = Get.find<VehicleController>();
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: 24,
-      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 760,
-        ),
+        constraints: const BoxConstraints(maxWidth: 760),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           child: SingleChildScrollView(
             child: Obx(
               () => Column(
@@ -35,22 +30,20 @@ class VehicleForm extends StatelessWidget {
                           controller.isEditMode.value
                               ? controller.editingVehicle?.number ?? 'Vehicle'
                               : 'New Vehicle',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       IconButton(
                         onPressed: () {
+                          Navigator.of(context).pop();
                           controller.clearVehicle();
-                          Get.back();
                         },
                         icon: const Icon(Icons.close),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
@@ -62,7 +55,7 @@ class VehicleForm extends StatelessWidget {
                           capitalization: TextCapitalization.characters,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _DropdownField<String>(
                           label: 'Vehicle Type',
@@ -83,7 +76,7 @@ class VehicleForm extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
@@ -94,7 +87,7 @@ class VehicleForm extends StatelessWidget {
                           fieldKey: 'vehicleName',
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _TextField(
                           controller: controller.vModelController,
@@ -106,16 +99,9 @@ class VehicleForm extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 5),
                   const Divider(),
-                  const SizedBox(height: 14),
-                  // Owner is a plain user, but the dropdown only lists users
-                  // who already carry the owner role, so whoever is picked
-                  // is automatically assigned as owner.
-                  // NOTE: There is no "Driver" field here - the driver of a
-                  // vehicle is dynamic (tied to whichever activity is
-                  // currently running on it) and is set automatically when
-                  // an activity starts, not during vehicle registration.
+                  const SizedBox(height: 5),
                   _UserDropdown(
                     label: 'Owner',
                     value: controller.selectedOwner.value,
@@ -124,61 +110,89 @@ class VehicleForm extends StatelessWidget {
                     warning: controller.warningField.value == 'owner',
                     onChanged: controller.selectOwner,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _SupportedServices(
-                    services: controller.services.toList(),
+                    services: controller.services.where((s) {
+                      final selectedVType = controller.vTypeController.text
+                          .trim()
+                          .toLowerCase();
+                      final rawSType =
+                          (s.vehicleType as dynamic)?.toString() ?? 'All';
+                      final serviceVType = rawSType.trim().toLowerCase();
+                      return selectedVType.isEmpty ||
+                          serviceVType.isEmpty ||
+                          serviceVType == 'all' ||
+                          serviceVType == selectedVType;
+                    }).toList(),
                     selectedServiceIds: controller.selectedServiceIds.toList(),
                     warning: controller.warningField.value == 'services',
                     onToggle: controller.toggleService,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _TextField(
                     controller: controller.vNotesController,
                     label: 'Notes (Optional)',
-                    maxLines: 2,
+                    maxLines: 1,
                     fieldKey: 'vehicleNote',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      OutlinedButton(
-                        onPressed: controller.isLoading.value
-                            ? null
-                            : () {
-                                controller.clearVehicle();
-                                Get.back();
-                              },
-                        child: const Text('Cancel'),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: controller.isLoading.value
+                              ? null
+                              : () {
+                            Navigator.of(context).pop();
+                            controller.clearVehicle();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Colors.grey),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: controller.isLoading.value
-                            ? null
-                            : () async {
-                                final saved = await controller.saveVehicle();
-
-                                if (saved && context.mounted) {
-                                  controller.clearVehicle();
-                                  Get.back();
-                                }
-                              },
-                        child: controller.isLoading.value
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                controller.isEditMode.value
-                                    ? 'Update'
-                                    : 'Save',
-                              ),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: controller.isLoading.value
+                              ? null
+                              : () async {
+                            final saved = await controller.saveVehicle();
+                            if (saved && context.mounted) {
+                              Navigator.of(context).pop();
+                              controller.clearVehicle();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: Colors.green,
+                          ),
+                          child: controller.isLoading.value
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                              : Text(
+                            controller.isEditMode.value ? 'Update' : 'Save',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),
@@ -294,7 +308,6 @@ class _UserDropdown extends StatelessWidget {
   final ValueChanged<UserModel?> onChanged;
   final bool required;
   final bool warning;
-  final bool showUnassigned;
 
   const _UserDropdown({
     required this.label,
@@ -303,7 +316,6 @@ class _UserDropdown extends StatelessWidget {
     required this.onChanged,
     this.required = false,
     this.warning = false,
-    this.showUnassigned = false,
   });
 
   @override
@@ -321,14 +333,6 @@ class _UserDropdown extends StatelessWidget {
         warning: warning,
       ),
       items: [
-        if (showUnassigned)
-          const DropdownMenuItem<String>(
-            value: '',
-            child: Text(
-              'Not Assigned',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
         ...users.map(
           (user) => DropdownMenuItem<String>(
             value: user.id,
@@ -380,13 +384,17 @@ class _SupportedServices extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       onTap: () => _showServiceSelector(context),
       child: InputDecorator(
-        decoration: _inputDecoration(
-          'Supported Services *',
-          hasValue: selectedServiceIds.isNotEmpty,
-          warning: warning,
-        ).copyWith(
-          suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-        ),
+        decoration:
+            _inputDecoration(
+              'Supported Services *',
+              hasValue: selectedServiceIds.isNotEmpty,
+              warning: warning,
+            ).copyWith(
+              suffixIcon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 20,
+              ),
+            ),
         child: selectedServices.isEmpty
             ? const Text(
                 'Select supported services',
@@ -413,6 +421,8 @@ class _SupportedServices extends StatelessWidget {
   }
 
   void _showServiceSelector(BuildContext context) {
+    final vehicleController = Get.find<VehicleController>();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -421,53 +431,47 @@ class _SupportedServices extends StatelessWidget {
       ),
       builder: (_) {
         return SafeArea(
-          child: StatefulBuilder(
-            builder: (context, setState) {
-              return Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Supported Services',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+          child: Obx(() {
+            return Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Supported Services',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: services.map((service) {
+                        final selected = vehicleController.selectedServiceIds
+                            .contains(service.id);
+                        return CheckboxListTile(
+                          dense: true,
+                          value: selected,
+                          title: Text(service.name),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (_) {
+                            onToggle(service.id);
+                          },
+                        );
+                      }).toList(),
                     ),
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: services.map((service) {
-                          final selected =
-                              selectedServiceIds.contains(service.id);
-                          return CheckboxListTile(
-                            dense: true,
-                            value: selected,
-                            title: Text(service.name),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            onChanged: (_) {
-                              onToggle(service.id);
-                              setState(() {});
-                            },
-                          );
-                        }).toList(),
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Get.back(),
+                      child: const Text('Done'),
                     ),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Get.back(),
-                        child: const Text('Done'),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                  ),
+                ],
+              ),
+            );
+          }),
         );
       },
     );

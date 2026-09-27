@@ -21,10 +21,6 @@ class VehicleManagementScreen extends StatelessWidget {
       return const AccessDeniedScreen(title: 'Vehicles');
     }
 
-    controller.loadVehicles();
-    controller.fetchUsers();
-    controller.fetchServices();
-
     return UAppScaffold(
       transparentBackground: false,
       extendBodyBehindAppBar: false,

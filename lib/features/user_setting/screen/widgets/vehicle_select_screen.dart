@@ -13,7 +13,6 @@ class VehicleSelectScreen extends StatelessWidget {
     final controller = Get.isRegistered<VehicleController>()
         ? Get.find<VehicleController>()
         : Get.put(VehicleController(), permanent: true);
-    controller.loadVehicles();
 
     return UAppScaffold(
       transparentBackground: true,

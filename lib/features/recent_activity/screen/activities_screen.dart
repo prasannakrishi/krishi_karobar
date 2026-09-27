@@ -354,7 +354,7 @@ class ActivityScreen extends StatelessWidget {
                 isActive: controller.selectedExpenseTypeFilter.value != 'All',
                 onTap: controller.showExpenseTypeFilter,
               ),
-              80,
+              70,
             ),
             _buildCell(const Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)), 70),
             _buildCell(const Text('Paid', style: TextStyle(fontWeight: FontWeight.bold)), 70),
@@ -378,7 +378,7 @@ class ActivityScreen extends StatelessWidget {
             return [
               _buildCell(Text(expense.uId), 60),
               _buildCell(Align(alignment: Alignment.centerLeft, child: Text(expenseName, maxLines: 1, overflow: TextOverflow.ellipsis)), 180),
-              _buildCell(Align(alignment: Alignment.centerLeft, child: Text(expense.expenseType)), 80),
+              _buildCell(Align(alignment: Alignment.centerLeft, child: Text(expense.expenseType)), 70),
               _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.amount}')), 70),
               _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.paidAmount}')), 70),
               _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.dueAmount}', style: TextStyle(color: expense.dueAmount > 0 ? Colors.red : null))), 70),

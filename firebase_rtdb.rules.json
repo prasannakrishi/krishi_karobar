@@ -88,7 +88,7 @@
       "$serviceId": {
         ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true)",
 
-        ".validate": "newData.hasChildren(['id', 'uId', 'name', 'description', 'rate', 'unit', 'isActive', 'createdAt'])",
+        ".validate": "newData.hasChildren(['id', 'name', 'rate', 'isActive'])",
 
         "id": {
           ".validate": "newData.val() === $serviceId"

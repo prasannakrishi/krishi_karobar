@@ -33,6 +33,13 @@ class ServiceController extends GetxController {
   final descriptionController = TextEditingController();
   final rateController = TextEditingController();
 
+  static const List<String> vehicleTypes = [
+    'All',
+    'Tractor',
+    'Harvester',
+  ];
+
+  final selectedVehicleType = 'All'.obs;
   final selectedUnit = 'hour'.obs;
   final selectedStatus = 'active'.obs;
 
@@ -146,8 +153,14 @@ class ServiceController extends GetxController {
     descriptionController.text = service.description;
     rateController.text = _formatRate(service.rate);
 
+    final String vType = (service.vehicleType as dynamic)?.toString() ?? 'All';
+    selectedVehicleType.value =
+        vehicleTypes.contains(vType) ? vType : 'All';
+
+    final String uVal = (service.unit as dynamic)?.toString() ?? 'hour';
     selectedUnit.value =
-        units.contains(service.unit) ? service.unit : units.first;
+        units.contains(uVal) ? uVal : units.first;
+
     selectedStatus.value = service.isActive ? 'active' : 'inactive';
   }
 
@@ -156,6 +169,7 @@ class ServiceController extends GetxController {
     descriptionController.clear();
     rateController.clear();
 
+    selectedVehicleType.value = 'All';
     selectedUnit.value = units.first;
     selectedStatus.value = 'active';
 
@@ -226,6 +240,7 @@ class ServiceController extends GetxController {
         description: description,
         rate: rate,
         unit: selectedUnit.value,
+        vehicleType: selectedVehicleType.value,
         isActive: selectedStatus.value == 'active',
         createdAt: now,
         createdBy: LoginController.loginUser.id,
@@ -263,20 +278,31 @@ class ServiceController extends GetxController {
     try {
       final now = DateTime.now().toUtc();
 
-      final updatedData = {
-        'name': name,
-        'description': description,
-        'rate': rate,
-        'unit': selectedUnit.value,
-        'isActive': selectedStatus.value == 'active',
-        'updatedAt': now.toIso8601String(),
-        'updatedBy': LoginController.loginUser.id,
-      };
+      // Ensure service.uId exists for legacy records missing uId
+      String uId = service.uId;
+      if (uId.trim().isEmpty) {
+        uId = await sequenceService.generateSequence('S');
+      }
 
-      await firebaseService.updateRecord(
+      final updatedService = ServiceModel(
+        id: service.id,
+        uId: uId,
+        name: name,
+        description: description,
+        rate: rate,
+        unit: selectedUnit.value,
+        vehicleType: selectedVehicleType.value,
+        isActive: selectedStatus.value == 'active',
+        createdAt: service.createdAt,
+        createdBy: service.createdBy ?? LoginController.loginUser.id,
+        updatedAt: now,
+        updatedBy: LoginController.loginUser.id,
+      );
+
+      await firebaseService.saveRecord(
         'services',
-        service.id,
-        updatedData,
+        updatedService.id,
+        updatedService.toMap(),
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 300));

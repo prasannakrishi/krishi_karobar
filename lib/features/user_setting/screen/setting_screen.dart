@@ -142,12 +142,24 @@ class SettingsScreen extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: controller.logout,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red),
-                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.redAccent, width: 1.2),
+                  foregroundColor: Colors.redAccent,
+                  backgroundColor: Colors.black12,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                child: const Text('Logout'),
+                child: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
-            ),
+            )
           ],
         ),
       ),

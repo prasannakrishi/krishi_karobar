@@ -92,6 +92,10 @@ class VehicleController extends GetxController {
   void onInit() {
     super.onInit();
 
+    ever(cache.vehicles, (_) => loadVehicles());
+    ever(cache.users, (_) => fetchUsers());
+    ever(cache.services, (_) => fetchServices());
+
     loadDefaultVehicle();
     _bootstrap();
   }
