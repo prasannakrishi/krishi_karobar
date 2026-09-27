@@ -6,6 +6,7 @@ import '../../../../models/models.dart';
 import '../../../../services/services.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
+import 'package:krishi_karobar/utils/helper/nepali_date_time.dart';
 import '../../../authentication/controllers/login_controllers.dart';
 
 class ExpenseFormDialog extends StatefulWidget {
@@ -26,11 +27,12 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
   late TextEditingController paidController;
   late TextEditingController descriptionController;
   late TextEditingController referenceController;
+  late TextEditingController createdAtController;
 
+  DateTime selectedCreatedAt = DateTime.now();
   String? selectedVehicleId;
   String? selectedActivityId;
   String paymentMethod = 'cash';
-  DateTime expenseDate = DateTime.now();
 
   final List<String> expenseTypes = ['General', 'Vehicle', 'Activity Related'];
 
@@ -83,7 +85,10 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     selectedVehicleId = exp?.vehicleId;
     selectedActivityId = exp?.activityId;
     paymentMethod = exp?.paymentMethod ?? 'cash';
-    expenseDate = exp?.date ?? DateTime.now();
+    selectedCreatedAt = exp?.createdAt ?? DateTime.now();
+    createdAtController = TextEditingController(
+      text: formatNepaliDateTime(selectedCreatedAt),
+    );
   }
 
   @override
@@ -92,7 +97,37 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     paidController.dispose();
     descriptionController.dispose();
     referenceController.dispose();
+    createdAtController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickCreatedAt() async {
+    final date = await pickNepaliDate(
+      context: context,
+      initialDate: selectedCreatedAt,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (date == null) return;
+
+    if (!mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(selectedCreatedAt),
+    );
+    if (time == null) return;
+
+    setState(() {
+      selectedCreatedAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+      createdAtController.text = formatNepaliDateTime(selectedCreatedAt);
+    });
   }
 
   List<String> get availableCategories {
@@ -124,7 +159,8 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         Authz.requirePermission(Permissions.expenseEdit);
       }
 
-      final now = DateTime.now();
+      final createdTime = selectedCreatedAt;
+      final currentTime = DateTime.now();
       final id = widget.expense?.id ?? const Uuid().v4();
       final uId = widget.expense?.uId ?? await sequenceService.generateSequence('E');
 
@@ -137,16 +173,16 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         amount: amount,
         paidAmount: paidAmount,
         dueAmount: dueAmount,
-        date: expenseDate,
+        date: createdTime,
         description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(),
         vehicleId: selectedVehicleId,
         activityId: selectedActivityId,
         paymentMethod: paymentMethod,
         referenceNo: referenceController.text.trim().isEmpty ? null : referenceController.text.trim(),
         status: status,
-        createdAt: widget.expense?.createdAt ?? now,
+        createdAt: widget.expense?.createdAt ?? createdTime,
         createdBy: widget.expense?.createdBy ?? user.id,
-        updatedAt: now,
+        updatedAt: currentTime,
         updatedBy: user.id,
       );
 
@@ -233,7 +269,17 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
                       child: TextFormField(
                         controller: paidController,
                         keyboardType: TextInputType.number,
-                        decoration: CustomDecoration.uInputDecoration(labelText: 'Paid Amount (रु)', prefixText: 'रु '),
+                        decoration: CustomDecoration.uInputDecoration(
+                          labelText: 'Paid Amount (रु)',
+                          prefixText: 'रु ',
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.done_all, color: Colors.green, size: 18),
+                            tooltip: 'Pay Full Amount',
+                            onPressed: () {
+                              paidController.text = amountController.text;
+                            },
+                          ),
+                        ),
                         validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid amount' : null,
                       ),
                     ),
@@ -303,6 +349,21 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
                   maxLines: 1,
                   decoration: CustomDecoration.uInputDecoration(labelText: 'Description / Notes'),
                 ),
+                const SizedBox(height: 12),
+
+                // Created At Date & Time Field (Nepali Date Picker)
+                TextFormField(
+                  controller: createdAtController,
+                  readOnly: true,
+                  onTap: _pickCreatedAt,
+                  decoration: CustomDecoration.uInputDecoration(
+                    labelText: 'Created At Date & Time',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      onPressed: _pickCreatedAt,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -314,11 +375,10 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
           onPressed: Get.back,
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            backgroundColor: Colors.grey
+            backgroundColor: Colors.grey,
           ),
           child: const Text('Cancel'),
         ),
-
         ElevatedButton(
           onPressed: _submit,
           style: ElevatedButton.styleFrom(
@@ -326,7 +386,6 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
           ),
           child: const Text('Save Expense'),
         ),
-
       ],
     );
   }

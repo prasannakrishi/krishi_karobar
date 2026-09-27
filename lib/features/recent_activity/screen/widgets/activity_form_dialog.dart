@@ -9,6 +9,7 @@ import '../../../../common/widgets/description_autocomplete.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 import 'package:krishi_karobar/utils/validators/validation.dart';
+import 'package:krishi_karobar/utils/helper/nepali_date_time.dart';
 import '../../../authentication/controllers/login_controllers.dart';
 
 class ActivityFormDialog extends StatefulWidget {
@@ -35,7 +36,9 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
   late TextEditingController paidAmountController;
   late TextEditingController discountController;
   late TextEditingController descriptionController;
+  late TextEditingController createdAtController;
 
+  DateTime selectedCreatedAt = DateTime.now();
   bool showNewCustomerFields = false;
 
   @override
@@ -51,6 +54,9 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     paidAmountController = TextEditingController(text: '');
     discountController = TextEditingController(text: '');
     descriptionController = TextEditingController();
+    createdAtController = TextEditingController(
+      text: formatNepaliDateTime(selectedCreatedAt),
+    );
 
     _loadDefaultVehicleAndService();
   }
@@ -66,7 +72,37 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     paidAmountController.dispose();
     discountController.dispose();
     descriptionController.dispose();
+    createdAtController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickCreatedAt() async {
+    final date = await pickNepaliDate(
+      context: context,
+      initialDate: selectedCreatedAt,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (date == null) return;
+
+    if (!mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(selectedCreatedAt),
+    );
+    if (time == null) return;
+
+    setState(() {
+      selectedCreatedAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+      createdAtController.text = formatNepaliDateTime(selectedCreatedAt);
+    });
   }
 
   List<VehicleModel> get availableVehicles {
@@ -152,7 +188,8 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
       return existing;
     }
 
-    final now = DateTime.now();
+    final createdTime = selectedCreatedAt;
+    final currentTime = DateTime.now();
     final uId = await sequenceService.generateSequence('C');
 
     final customer = CustomerModel(
@@ -161,9 +198,9 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
       name: name,
       phone: phone,
       address: address,
-      createdAt: now,
+      createdAt: createdTime,
       createdBy: LoginController.loginUser.id,
-      updatedAt: now,
+      updatedAt: currentTime,
       updatedBy: LoginController.loginUser.id,
     );
 
@@ -205,7 +242,8 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
 
       final customer = await _resolveCustomer();
 
-      final now = DateTime.now();
+      final createdTime = selectedCreatedAt;
+      final currentTime = DateTime.now();
       final id = const Uuid().v4();
       final uId = await sequenceService.generateActivityUid(
         serviceType: cache.services[selectedServiceId]?.name ?? 'Activity',
@@ -220,8 +258,8 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         serviceId: selectedServiceId!,
         supervisorId: user.id,
         startedByUserId: user.id,
-        startTime: now.subtract(Duration(minutes: minutes)),
-        endTime: now,
+        startTime: createdTime.subtract(Duration(minutes: minutes)),
+        endTime: createdTime,
         duration: durationSeconds,
         rate: rate,
         amount: amount,
@@ -231,8 +269,8 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         description: description.isEmpty ? null : description,
         status: status,
         createdBy: user.id,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: createdTime,
+        updatedAt: currentTime,
       );
 
       await firebaseService.saveRecord('activities', id, activity.toMap());
@@ -274,7 +312,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 24),
       titlePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      title: Text('Add Activity Manually', textAlign: TextAlign.center,),
+      title: const Text('Add Activity Manually', textAlign: TextAlign.center),
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       content: SingleChildScrollView(
         child: SizedBox(
@@ -474,7 +512,6 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                             },
                           ),
                         ),
-                        validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -482,16 +519,16 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                       flex: 3,
                       child: TextFormField(
                         controller: discountController,
-                        keyboardType: TextInputType.datetime,
+                        keyboardType: TextInputType.number,
                         decoration: CustomDecoration.uInputDecoration(labelText: 'Disc', prefixText: 'रु '),
-                        validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid' : null,
                         onChanged: (_) {
                           final amount = int.tryParse(amountController.text.trim()) ?? 0;
                           final discount = int.tryParse(discountController.text.trim()) ?? 0;
-                          // Paid amount auto adjust
                           final newPaid = amount - discount;
-                          if (newPaid >= 0) {paidAmountController.text = newPaid.toString();}
-                        }
+                          if (newPaid >= 0) {
+                            paidAmountController.text = newPaid.toString();
+                          }
+                        },
                       ),
                     ),
                   ],
@@ -504,6 +541,21 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
                   recentDescriptions: recentDescriptions,
                   decoration: CustomDecoration.uInputDecoration(labelText: 'Description / Notes'),
                   maxLines: 1,
+                ),
+                const SizedBox(height: 12),
+
+                // Created At Date & Time Picker
+                TextFormField(
+                  controller: createdAtController,
+                  readOnly: true,
+                  onTap: _pickCreatedAt,
+                  decoration: CustomDecoration.uInputDecoration(
+                    labelText: 'Created At Date & Time',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      onPressed: _pickCreatedAt,
+                    ),
+                  ),
                 ),
               ],
             ),

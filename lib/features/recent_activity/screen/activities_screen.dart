@@ -266,7 +266,7 @@ class ActivityScreen extends StatelessWidget {
                 ),
                 _buildCell(
                   const Align(
-                    alignment: Alignment.center,
+                    alignment: Alignment.centerRight,
                     child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   80,
@@ -279,77 +279,44 @@ class ActivityScreen extends StatelessWidget {
                   ),
                   130,
                 ),
-                _buildCell(
-                  const Center(
-                    child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  80,
-                ),
               ],
               rowValues: entries.map(
                 (activity) {
                   return [
                     _buildCell(
-                      Text(activity.uId),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(activity.uId),
+                      ),
                       100,
                     ),
                     _buildCell(
-                      Text(
-                        controller.customerName(
-                          activity.customerId,
-                        ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(controller.customerName(activity.customerId,))
                       ),
                       120,
                     ),
                     _buildCell(
-                      Center(
-                        child: Text(
-                          controller.secondsToHHMMSS(
-                            activity.duration,
-                          ),
-                        ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: Text(controller.secondsToHHMMSS(activity.duration)),
+                    ),
+                    80,
+                    ),
+                    _buildCell(
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text('रु ${activity.amount.toStringAsFixed(0)}'),
                       ),
                       80,
                     ),
                     _buildCell(
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Text(
-                          'रु ${activity.amount.toStringAsFixed(0)}',
-                        ),
-                      ),
-                      80,
-                    ),
-                    _buildCell(
-                      Text(
-                        controller.formatDate(
-                          activity.createdAt,
-                        ),
+                        child:Text(controller.formatDate(activity.createdAt))
                       ),
                       130,
-                    ),
-                    _buildCell(
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            tooltip: 'Edit',
-                            onPressed: () => controller.showEditActivityDialog(activity),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            tooltip: 'Delete',
-                            onPressed: () => controller.confirmDeleteActivity(activity),
-                          ),
-                        ],
-                      ),
-                      80,
                     ),
                   ];
                 },
@@ -379,17 +346,17 @@ class ActivityScreen extends StatelessWidget {
       children: [
         uDataTable(
           columns: [
-            _buildCell(const Text('Expense ID', style: TextStyle(fontWeight: FontWeight.bold)), 100),
-            _buildCell(const Text('Expense Name', style: TextStyle(fontWeight: FontWeight.bold)), 130),
+            _buildCell(const Text('Exp. ID', style: TextStyle(fontWeight: FontWeight.bold)), 60),
+            _buildCell(const Text('Expense Name', style: TextStyle(fontWeight: FontWeight.bold)), 150),
             _buildCell(
               FilterHeader(
                 title: 'Type',
                 isActive: controller.selectedExpenseTypeFilter.value != 'All',
                 onTap: controller.showExpenseTypeFilter,
               ),
-              110,
+              80,
             ),
-            _buildCell(const Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)), 80),
+            _buildCell(const Text('Amount', style: TextStyle(fontWeight: FontWeight.bold)), 70),
             _buildCell(const Text('Paid', style: TextStyle(fontWeight: FontWeight.bold)), 70),
             _buildCell(const Text('Due', style: TextStyle(fontWeight: FontWeight.bold)), 70),
             _buildCell(
@@ -400,7 +367,6 @@ class ActivityScreen extends StatelessWidget {
               ),
               130,
             ),
-            _buildCell(const Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)), 80),
           ],
           rowValues: expenses.map((expense) {
             final canEdit = Authz.can(Permissions.expenseEdit);
@@ -410,38 +376,14 @@ class ActivityScreen extends StatelessWidget {
                 : expense.categoryName;
 
             return [
-              _buildCell(Text(expense.uId), 100),
-              _buildCell(Text(expenseName, maxLines: 1, overflow: TextOverflow.ellipsis), 130),
-              _buildCell(Text(expense.expenseType), 110),
-              _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.amount}')), 80),
+              _buildCell(Text(expense.uId), 60),
+              _buildCell(Align(alignment: Alignment.centerLeft, child: Text(expenseName, maxLines: 1, overflow: TextOverflow.ellipsis)), 180),
+              _buildCell(Align(alignment: Alignment.centerLeft, child: Text(expense.expenseType)), 80),
+              _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.amount}')), 70),
               _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.paidAmount}')), 70),
               _buildCell(Align(alignment: Alignment.centerRight, child: Text('रु ${expense.dueAmount}', style: TextStyle(color: expense.dueAmount > 0 ? Colors.red : null))), 70),
               _buildCell(Text(controller.formatDate(expense.createdAt)), 130),
-              _buildCell(
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (canEdit)
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Edit',
-                        onPressed: () => controller.showEditExpenseDialog(expense),
-                      ),
-                    if (canEdit && canDelete) const SizedBox(width: 6),
-                    if (canDelete)
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Delete',
-                        onPressed: () => controller.confirmDeleteExpense(expense),
-                      ),
-                  ],
-                ),
-                80,
-              ),
+
             ];
           }).toList(),
         ),
@@ -514,11 +456,9 @@ class ActivityScreen extends StatelessWidget {
   Widget _buildCell(Widget child,double width) {
     return SizedBox(
       width: width,
-      height: 32,
-      child: Center(
-        child: MarqueeWidget(
-          child: child,
-        ),
+      height: 30,
+      child: MarqueeWidget(
+        child: child,
       ),
     );
   }

@@ -316,8 +316,10 @@ import 'nepali_date_time.dart';
         child: DataTable(
           showCheckboxColumn: false,
           columnSpacing: 2,
-          horizontalMargin: 1,
+          horizontalMargin: 0,
           headingRowHeight: 25,
+          dataRowMaxHeight: 38.0,
+          dataRowMinHeight: 30.0,
 
           columns: columns.map((c) => DataColumn(label: c)).toList(),
           rows: List.generate(rowValues.length, (rowIndex) {
@@ -339,7 +341,7 @@ import 'nepali_date_time.dart';
                       ? (details) => onRowSecondaryTap(rowIndex, details)
                       : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 1),
                     child: widget,
                   ),
                 ),
