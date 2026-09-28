@@ -241,6 +241,50 @@ class NetworkException extends AppException {
         );
 }
 
+/// GPS/Location services exception.
+class LocationException extends AppException {
+  const LocationException(
+    super.message, {
+    super.code,
+    super.details,
+  });
+
+  const LocationException.permissionDenied({Object? details})
+      : this(
+          'Location permission denied. Please grant location permission to proceed.',
+          code: 'permission-denied',
+          details: details,
+        );
+
+  const LocationException.permissionPermanentlyDenied({Object? details})
+      : this(
+          'Location permission permanently denied. Please enable location permissions in device settings.',
+          code: 'permission-permanently-denied',
+          details: details,
+        );
+
+  const LocationException.serviceDisabled({Object? details})
+      : this(
+          'Location service is disabled. Please enable GPS/location on your device.',
+          code: 'service-disabled',
+          details: details,
+        );
+
+  const LocationException.acquisitionFailed({String? message, Object? details})
+      : this(
+          message ?? 'Failed to acquire GPS location. Please try again.',
+          code: 'acquisition-failed',
+          details: details,
+        );
+
+  LocationException.poorAccuracy({double? accuracy, Object? details})
+      : super(
+          'Location accuracy is too poor${accuracy != null ? ' (${accuracy.toStringAsFixed(1)}m)' : ''}. Please move to an open area with clear sky view.',
+          code: 'poor-accuracy',
+          details: details,
+        );
+}
+
 /// Any other Firebase/server failure.
 class FirebaseOperationException extends AppException {
   const FirebaseOperationException({String? code, Object? details})

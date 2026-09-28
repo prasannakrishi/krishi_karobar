@@ -13,6 +13,38 @@ class ActivityStatus {
   static const List<String> liveStates = [running, paused];
 }
 
+class ActivityLocationModel {
+  final double latitude;
+  final double longitude;
+  final double accuracy;
+  final DateTime capturedAt;
+
+  ActivityLocationModel({
+    required this.latitude,
+    required this.longitude,
+    required this.accuracy,
+    required this.capturedAt,
+  });
+
+  factory ActivityLocationModel.fromMap(Map<String, dynamic> map) {
+    return ActivityLocationModel(
+      latitude: toDouble(map['latitude']),
+      longitude: toDouble(map['longitude']),
+      accuracy: toDouble(map['accuracy']),
+      capturedAt: toDateTime(map['capturedAt']) ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy': accuracy,
+      'capturedAt': capturedAt.toUtc().toIso8601String(),
+    };
+  }
+}
+
 class ActivityModel {
   final String id;
   final String uId;
@@ -43,6 +75,8 @@ class ActivityModel {
   String? cancelledBy;
   DateTime? cancelledAt;
   String? cancellationReason;
+  ActivityLocationModel? startLocation;
+  ActivityLocationModel? stopLocation;
   final String createdBy;
   final DateTime createdAt;
   DateTime updatedAt;
@@ -73,6 +107,8 @@ class ActivityModel {
     this.cancelledBy,
     this.cancelledAt,
     this.cancellationReason,
+    this.startLocation,
+    this.stopLocation,
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
@@ -107,6 +143,16 @@ class ActivityModel {
       cancelledBy: map['cancelledBy']?.toString(),
       cancelledAt: toDateTime(map['cancelledAt']),
       cancellationReason: map['cancellationReason']?.toString(),
+      startLocation: map['startLocation'] != null && map['startLocation'] is Map
+          ? ActivityLocationModel.fromMap(
+              Map<String, dynamic>.from(map['startLocation'] as Map),
+            )
+          : null,
+      stopLocation: map['stopLocation'] != null && map['stopLocation'] is Map
+          ? ActivityLocationModel.fromMap(
+              Map<String, dynamic>.from(map['stopLocation'] as Map),
+            )
+          : null,
       createdBy: toStringValue(map['createdBy']),
       createdAt: toDateTime(map['createdAt']) ?? DateTime.now(),
       updatedAt: toDateTime(map['updatedAt']) ?? DateTime.now(),
@@ -143,7 +189,7 @@ class ActivityModel {
   bool get isLive => ActivityStatus.liveStates.contains(status);
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'id': id,
       'uId': uId,
       'customerId': customerId,
@@ -173,5 +219,8 @@ class ActivityModel {
       'createdAt': createdAt.toUtc().toIso8601String(),
       'updatedAt': updatedAt.toUtc().toIso8601String(),
     };
+    if (startLocation != null) map['startLocation'] = startLocation!.toMap();
+    if (stopLocation != null) map['stopLocation'] = stopLocation!.toMap();
+    return map;
   }
 }

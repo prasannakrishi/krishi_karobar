@@ -34,6 +34,7 @@ class DataCacheService extends GetxController {
   final payments = <String, PaymentModel>{}.obs;
   final expenses = <String, ExpenseModel>{}.obs;
   final expenseCategories = <String, ExpenseCategoryModel>{}.obs;
+  final Map<String, Map<String, dynamic>> _activityLocations = {};
 
   final List<StreamSubscription<DatabaseEvent>> _listeners = [];
 
@@ -135,6 +136,10 @@ class DataCacheService extends GetxController {
           fromMap: ExpenseCategoryModel.fromMap,
         ),
       ]);
+
+      if (Authz.canCachePath('activity_locations', actor: user)) {
+        await _setupActivityLocationsCache();
+      }
 
       _currentUser = user;
       _isInitialized = true;
@@ -307,6 +312,20 @@ class DataCacheService extends GetxController {
       return;
     }
 
+    if (record is ActivityModel && _activityLocations.containsKey(id)) {
+      final locs = _activityLocations[id]!;
+      if (locs['startLocation'] != null && locs['startLocation'] is Map) {
+        record.startLocation = ActivityLocationModel.fromMap(
+          Map<String, dynamic>.from(locs['startLocation'] as Map),
+        );
+      }
+      if (locs['stopLocation'] != null && locs['stopLocation'] is Map) {
+        record.stopLocation = ActivityLocationModel.fromMap(
+          Map<String, dynamic>.from(locs['stopLocation'] as Map),
+        );
+      }
+    }
+
     cache[id] = record;
   }
 
@@ -372,6 +391,68 @@ class DataCacheService extends GetxController {
     services.clear();
     activities.clear();
     payments.clear();
+    _activityLocations.clear();
+  }
+
+  Future<void> _setupActivityLocationsCache() async {
+    try {
+      final query = _firebaseService.getQuery(
+        'activity_locations',
+        limitToLast: 50,
+      );
+      final snapshot = await query.get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final value = Map<Object?, Object?>.from(snapshot.value as Map);
+        for (final entry in value.entries) {
+          if (entry.value is! Map) continue;
+          final id = entry.key?.toString().trim();
+          if (id == null || id.isEmpty) continue;
+          final data = Map<String, dynamic>.from(entry.value as Map);
+          _activityLocations[id] = data;
+          _mergeLocationToActivity(id, data);
+        }
+      }
+
+      _listeners.add(
+        query.onChildAdded.listen((event) {
+          final id = event.snapshot.key?.trim();
+          if (id == null || id.isEmpty || event.snapshot.value is! Map) return;
+          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+          _activityLocations[id] = data;
+          _mergeLocationToActivity(id, data);
+        }),
+      );
+
+      _listeners.add(
+        query.onChildChanged.listen((event) {
+          final id = event.snapshot.key?.trim();
+          if (id == null || id.isEmpty || event.snapshot.value is! Map) return;
+          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+          _activityLocations[id] = data;
+          _mergeLocationToActivity(id, data);
+        }),
+      );
+    } catch (error) {
+      _logError('loading', 'activity_locations', error);
+    }
+  }
+
+  void _mergeLocationToActivity(String id, Map<String, dynamic> data) {
+    final activity = activities[id];
+    if (activity != null) {
+      if (data['startLocation'] != null && data['startLocation'] is Map) {
+        activity.startLocation = ActivityLocationModel.fromMap(
+          Map<String, dynamic>.from(data['startLocation'] as Map),
+        );
+      }
+      if (data['stopLocation'] != null && data['stopLocation'] is Map) {
+        activity.stopLocation = ActivityLocationModel.fromMap(
+          Map<String, dynamic>.from(data['stopLocation'] as Map),
+        );
+      }
+      activities[id] = activity;
+      activities.refresh();
+    }
   }
 
   Future<void> _cancelListeners() async {

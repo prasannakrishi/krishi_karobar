@@ -1,12 +1,11 @@
-int toDouble(
+double toDouble(
     dynamic value, {
-      int defaultValue = 0,
+      double defaultValue = 0.0,
     }) {
   if (value == null) return defaultValue;
-  if (value is int) return value;
-  if (value is int) return value;
+  if (value is num) return value.toDouble();
 
-  return int.tryParse(value.toString()) ?? defaultValue;
+  return double.tryParse(value.toString()) ?? defaultValue;
 }
 
 int toInt(

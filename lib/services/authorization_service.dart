@@ -39,6 +39,7 @@ class Permissions {
   static const activityStart = 'activity.start';
   static const activityComplete = 'activity.complete';
   static const activityCancel = 'activity.cancel';
+  static const activityViewGps = 'activity.viewGps';
 
   static const settingsView = 'settings.view';
   static const settingsEdit = 'settings.edit';
@@ -70,6 +71,7 @@ class _RolePermissions {
       Permissions.activityView, Permissions.activityCreate,
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
+      Permissions.activityViewGps,
       Permissions.settingsView, Permissions.settingsEdit,
       Permissions.auditView,
       Permissions.paymentCreate,
@@ -88,6 +90,7 @@ class _RolePermissions {
       Permissions.activityView, Permissions.activityCreate,
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
+      Permissions.activityViewGps,
       Permissions.settingsView, Permissions.settingsEdit,
       Permissions.paymentCreate,
       Permissions.expenseView, Permissions.expenseCreate,
@@ -428,6 +431,10 @@ class Authz {
   static bool canDeleteService(ServiceModel service, {UserModel? actor}) =>
       can(Permissions.serviceDelete, actor: actor);
 
+  /// Only Admins (and Super Admins) can view or navigate to saved Activity GPS location.
+  static bool canViewActivityGps({UserModel? actor}) =>
+      can(Permissions.activityViewGps, actor: actor);
+
   /// Anyone with activity.view + the normal vehicle data-scope check can see
   /// a running/paused Activity live - this does NOT grant control.
   static bool canViewActivity(
@@ -500,6 +507,8 @@ class Authz {
       case 'activities':
       case 'customers':
         return can(Permissions.activityView, actor: user);
+      case 'activity_locations':
+        return canViewActivityGps(actor: user);
       case 'payments':
         return user.isOrganization &&
             can(Permissions.activityView, actor: user);

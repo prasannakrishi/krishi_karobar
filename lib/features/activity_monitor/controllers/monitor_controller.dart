@@ -702,6 +702,20 @@ class MonitorController extends GetxController {
     final customerIsNewlyCreated =
         customer != null && !customerIdsBeforeSave.contains(customer.id);
 
+    // Capture GPS Start Location before creating activity
+    ActivityLocationModel? startLoc;
+    try {
+      startLoc = await LocationService.instance.captureCurrentLocation();
+    } catch (error) {
+      _isSavingActivity = false;
+      if (customerIsNewlyCreated) {
+        await _rollbackNewCustomer(customer);
+      }
+      debugPrint('MonitorController.startActivity (location): $error');
+      showMessage('Location Error', AppException.messageOf(error));
+      return;
+    }
+
     // The activity's uId depends on a Firebase sequence transaction and can
     // fail (bad vehicle uId prefix, sequence conflict, network/permission
     // error). This must be resolved - and the record actually persisted -
@@ -745,6 +759,7 @@ class MonitorController extends GetxController {
       rate: _rate,
       amount: 0,
       status: ActivityStatus.running,
+      startLocation: startLoc,
       createdBy: LoginController.loginUser.id,
       createdAt: now,
       updatedAt: now,
@@ -756,6 +771,7 @@ class MonitorController extends GetxController {
         id,
         activity.toMap(),
       );
+      await LocationService.instance.saveStartLocation(id, startLoc);
     } catch (error) {
       _isSavingActivity = false;
       if (customerIsNewlyCreated) {
@@ -1142,6 +1158,21 @@ class MonitorController extends GetxController {
       customer ??= await saveCustomer();
       customerIsNewlyCreated = !customerIdsBeforeSave.contains(customer.id);
 
+      ActivityLocationModel stopLoc;
+      try {
+        stopLoc = await LocationService.instance.captureCurrentLocation();
+      } catch (error) {
+        if (customerIsNewlyCreated) {
+          await _rollbackNewCustomer(customer);
+        }
+        _isSavingActivity = false;
+        _isFinalizingActivity = false;
+        isLoading.value = false;
+        debugPrint('MonitorController.saveActivity (location): $error');
+        showMessage('Location Error', AppException.messageOf(error));
+        return;
+      }
+
       timerController.computeAmount(_rate);
 
       final now = DateTime.now();
@@ -1165,6 +1196,8 @@ class MonitorController extends GetxController {
         activityId,
         updatedData,
       );
+
+      await LocationService.instance.saveStopLocation(activityId, stopLoc);
 
       await AuditService.instance.log(
         action: 'activity_completed',
