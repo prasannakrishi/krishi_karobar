@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
-import '../../../../services/data_cache_service.dart';
+import '../../../../services/services.dart';
 import '../../../../utils/helper/nepali_date_time.dart';
 import '../../../../utils/theme/widget_themes/custom_decoration.dart';
 import '../../../payment/screen/widgets/payment_dialog.dart';
@@ -115,6 +115,10 @@ class _DetailsCardFormState
             _buildPaymentInfo(),
             const SizedBox(height: 8),
             _buildDescription(),
+            if (Authz.canViewActivityGps())...[
+              const SizedBox(height: 8),
+              _buildGpsInfo(),
+            ],
             const SizedBox(height: 8),
             _buildPaymentButton(),
           ],
@@ -133,7 +137,7 @@ class _DetailsCardFormState
         const SizedBox(width: 5),
         Flexible(
           flex: 2,
-          child: CustomDecoration.uTextField('Customer Name', "${customerName}  (${customerUId})"),
+          child: CustomDecoration.uTextField('Customer Name', "$customerName  ($customerUId)"),
         ),
       ],
     );
@@ -244,6 +248,105 @@ class _DetailsCardFormState
       onFieldSubmitted: (_) => _saveDescription(),
       onTapOutside: (_) =>
           _descriptionFocusNode.unfocus(),
+    );
+  }
+
+  Widget _buildGpsInfo() {
+    final startLoc = widget.entry.startLocation;
+    final stopLoc = widget.entry.stopLocation;
+
+    if (startLoc == null && stopLoc == null) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white70,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text(
+          'GPS Location: Not available for this activity',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.location_on, size: 16, color: Colors.blue),
+              SizedBox(width: 4),
+              Text(
+                'Activity GPS Locations (Admin Only)',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (startLoc != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Start: ${startLoc.latitude.toStringAsFixed(6)}, ${startLoc.longitude.toStringAsFixed(6)} (±${startLoc.accuracy.toStringAsFixed(0)}m)',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => LocationService.instance.openMap(
+                      startLoc.latitude,
+                      startLoc.longitude,
+                    ),
+                    icon: const Icon(Icons.map, size: 14),
+                    label: const Text('Open Map', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (stopLoc != null)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Stop: ${stopLoc.latitude.toStringAsFixed(6)}, ${stopLoc.longitude.toStringAsFixed(6)} (±${stopLoc.accuracy.toStringAsFixed(0)}m)',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => LocationService.instance.openMap(
+                    stopLoc.latitude,
+                    stopLoc.longitude,
+                  ),
+                  icon: const Icon(Icons.map, size: 14),
+                  label: const Text('Open Map', style: TextStyle(fontSize: 11)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
