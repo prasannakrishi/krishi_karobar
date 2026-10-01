@@ -18,7 +18,10 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.put(SettingsController());
+    final controller = Get.isRegistered<SettingsController>()
+        ? Get.find<SettingsController>()
+        : Get.put(SettingsController(), permanent: true);
+
     final vehicleController = Get.isRegistered<VehicleController>()
         ? Get.find<VehicleController>()
         : Get.put(VehicleController(), permanent: true);

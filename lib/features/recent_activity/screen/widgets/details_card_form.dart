@@ -23,11 +23,10 @@ class DetailsCardForm extends StatefulWidget {
       _DetailsCardFormState();
 }
 
-class _DetailsCardFormState
-    extends State<DetailsCardForm> {
+class _DetailsCardFormState extends State<DetailsCardForm> {
   late TextEditingController descriptionController;
-
   final FocusNode _descriptionFocusNode = FocusNode();
+  String? _placeName;
 
   @override
   void initState() {
@@ -37,6 +36,8 @@ class _DetailsCardFormState
       text: widget.entry.description ?? '',
     );
 
+    _fetchPlaceName();
+
     _descriptionFocusNode.addListener(() {
       if (!_descriptionFocusNode.hasFocus) {
         _saveDescription();
@@ -45,14 +46,49 @@ class _DetailsCardFormState
   }
 
   @override
-  void didUpdateWidget(
-      DetailsCardForm oldWidget,
-      ) {
+  void didUpdateWidget(DetailsCardForm oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.entry.id != widget.entry.id) {
-      descriptionController.text =
-          widget.entry.description ?? '';
+    if (oldWidget.entry.id != widget.entry.id ||
+        oldWidget.entry.startLocation != widget.entry.startLocation) {
+      descriptionController.text = widget.entry.description ?? '';
+      _fetchPlaceName();
+    }
+  }
+
+  void _fetchPlaceName() async {
+    ActivityLocationModel? startLoc = widget.entry.startLocation;
+
+    if (startLoc == null) {
+      try {
+        final locData = await LocationService.instance.getActivityLocations(widget.entry.id);
+        if (locData != null && locData['startLocation'] != null && locData['startLocation'] is Map) {
+          startLoc = ActivityLocationModel.fromMap(
+            Map<String, dynamic>.from(locData['startLocation'] as Map),
+          );
+          widget.entry.startLocation = startLoc;
+        }
+      } catch (e) {
+        debugPrint('DetailsCardForm.getActivityLocations error: $e');
+      }
+    }
+
+    if (startLoc != null) {
+      final name = await LocationService.instance.getAddressFromCoordinates(
+        startLoc.latitude,
+        startLoc.longitude,
+      );
+      if (mounted) {
+        setState(() {
+          _placeName = name;
+        });
+      }
+    } else {
+      if (mounted && _placeName != null) {
+        setState(() {
+          _placeName = null;
+        });
+      }
     }
   }
 
@@ -115,10 +151,8 @@ class _DetailsCardFormState
             _buildPaymentInfo(),
             const SizedBox(height: 8),
             _buildDescription(),
-            if (Authz.canViewActivityGps())...[
-              const SizedBox(height: 8),
-              _buildGpsInfo(),
-            ],
+            const SizedBox(height: 8),
+            _buildGpsInfo(),
             const SizedBox(height: 8),
             _buildPaymentButton(),
           ],
@@ -253,101 +287,110 @@ class _DetailsCardFormState
 
   Widget _buildGpsInfo() {
     final startLoc = widget.entry.startLocation;
-    final stopLoc = widget.entry.stopLocation;
+    final isAdmin = Authz.canViewActivityGps();
 
-    if (startLoc == null && stopLoc == null) {
+    final locationText = _placeName ??
+        (startLoc != null
+            ? '${startLoc.latitude.toStringAsFixed(4)}, ${startLoc.longitude.toStringAsFixed(4)} (Fetching place name...)'
+            : 'Location not captured');
+
+    if (startLoc == null) {
       return Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white70,
+          color: const Color.fromARGB(73, 249, 251, 250),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
         ),
-        child: const Text(
-          'GPS Location: Not available for this activity',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+        child: const Row(
+          children: [
+            Icon(Icons.location_off_outlined, size: 18, color: Colors.grey),
+            SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Location not captured',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // Admin View: 1-line interactive row displaying Icon + Place Name, opens Google Maps on tap
+    if (isAdmin) {
+      return InkWell(
+        onTap: () => LocationService.instance.openMap(
+          startLoc.latitude,
+          startLoc.longitude,
+        ),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.shade300),
+          ),
+          child: Row(
             children: [
-              Icon(Icons.location_on, size: 16, color: Colors.blue),
-              SizedBox(width: 4),
-              Text(
-                'Activity GPS Locations (Admin Only)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Colors.blue,
+              const Icon(Icons.location_on, size: 18, color: Colors.blue),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  locationText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const Icon(Icons.open_in_new, size: 14, color: Colors.blue),
             ],
           ),
-          const SizedBox(height: 6),
-          if (startLoc != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Start: ${startLoc.latitude.toStringAsFixed(6)}, ${startLoc.longitude.toStringAsFixed(6)} (±${startLoc.accuracy.toStringAsFixed(0)}m)',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => LocationService.instance.openMap(
-                      startLoc.latitude,
-                      startLoc.longitude,
-                    ),
-                    icon: const Icon(Icons.map, size: 14),
-                    label: const Text('Open Map', style: TextStyle(fontSize: 11)),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ],
+        ),
+      );
+    }
+
+    // All other users: 1-line plain text view (Icon + Place Name, non-clickable)
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(73, 249, 251, 250),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.location_on_outlined, size: 18, color: Colors.grey),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              locationText,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade800,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          if (stopLoc != null)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Stop: ${stopLoc.latitude.toStringAsFixed(6)}, ${stopLoc.longitude.toStringAsFixed(6)} (±${stopLoc.accuracy.toStringAsFixed(0)}m)',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => LocationService.instance.openMap(
-                    stopLoc.latitude,
-                    stopLoc.longitude,
-                  ),
-                  icon: const Icon(Icons.map, size: 14),
-                  label: const Text('Open Map', style: TextStyle(fontSize: 11)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
+          ),
         ],
       ),
     );
+
+    /*
+    // Stop Location UI commented out per requirement for now
+    final stopLoc = widget.entry.stopLocation;
+    if (stopLoc != null) {
+      // Stop location display code preserved here for future use
+    }
+    */
   }
 
   String _formatTime(DateTime value) {

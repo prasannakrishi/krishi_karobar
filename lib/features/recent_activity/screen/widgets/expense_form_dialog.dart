@@ -33,6 +33,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
   String? selectedVehicleId;
   String? selectedActivityId;
   String paymentMethod = 'cash';
+  bool isLoading = false;
 
   final List<String> expenseTypes = ['General', 'Vehicle', 'Activity Related'];
 
@@ -135,6 +136,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
   }
 
   Future<void> _submit() async {
+    if (isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
     final amount = int.tryParse(amountController.text.trim()) ?? 0;
@@ -144,6 +146,10 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
       Get.snackbar('Error', 'Paid amount cannot exceed total amount.', snackPosition: SnackPosition.BOTTOM);
       return;
     }
+
+    setState(() {
+      isLoading = true;
+    });
 
     final dueAmount = amount - paidAmount;
     final status = dueAmount <= 0 ? 'paid' : 'due';
@@ -163,6 +169,14 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
       final currentTime = DateTime.now();
       final id = widget.expense?.id ?? const Uuid().v4();
       final uId = widget.expense?.uId ?? await sequenceService.generateSequence('E');
+
+      // Capture GPS location at creation time for expense
+      ActivityLocationModel? expenseLoc;
+      try {
+        expenseLoc = await LocationService.instance.captureCurrentLocation();
+      } catch (e) {
+        debugPrint('Expense location capture notice: $e');
+      }
 
       final expense = ExpenseModel(
         id: id,
@@ -188,6 +202,18 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
 
       await firebaseService.saveRecord('expenses', id, expense.toMap());
 
+      if (expenseLoc != null) {
+        await firebaseService.updateRecord(
+          'expense_locations',
+          id,
+          {
+            'id': id,
+            'location': expenseLoc.toMap(),
+            'updatedAt': currentTime.toUtc().toIso8601String(),
+          },
+        );
+      }
+
       Get.back();
       Get.snackbar(
         'Success',
@@ -196,6 +222,11 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         backgroundColor: Colors.green.shade100,
       );
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
       Get.snackbar('Error', AppException.messageOf(e), snackPosition: SnackPosition.BOTTOM);
     }
   }
@@ -208,7 +239,8 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
 
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 24),
-      title: Text(widget.expense == null ? 'Add Expense' : 'Edit Expense (${widget.expense!.uId})'),
+      titlePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      title: Text(widget.expense == null ? 'Add Expense' : 'Edit Expense (${widget.expense!.uId})', textAlign: TextAlign.center),
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       content: SingleChildScrollView(
         child: SizedBox(
@@ -372,7 +404,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
       actionsAlignment: MainAxisAlignment.center,
       actions: [
         ElevatedButton(
-          onPressed: Get.back,
+          onPressed: isLoading ? null : Get.back,
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             backgroundColor: Colors.grey,
@@ -380,11 +412,20 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _submit,
+          onPressed: isLoading ? null : _submit,
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
-          child: const Text('Save Expense'),
+          child: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Save Expense'),
         ),
       ],
     );

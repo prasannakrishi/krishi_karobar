@@ -235,6 +235,14 @@
       }
     },
 
+    "expense_locations": {
+      ".read": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true)",
+
+      "$expenseId": {
+        ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('manager').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('supervisor').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('driver').val() === true)"
+      }
+    },
+
     "audit_logs": {
       ".read": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true)",
 

@@ -5,6 +5,7 @@ import 'package:krishi_karobar/features/activity_monitor/screen/monitor_screen.d
 import 'package:krishi_karobar/features/home/screen/home_screen.dart';
 import 'package:krishi_karobar/features/recent_activity/screen/activities_screen.dart';
 import 'package:krishi_karobar/features/user_setting/screen/setting_screen.dart';
+import 'package:krishi_karobar/features/controllers.dart';
 
 class NavigationController extends GetxController {
   final selectedIndex = 0.obs;
@@ -22,6 +23,12 @@ class NavigationController extends GetxController {
   void onInit() {
     super.onInit();
     pageController = PageController(initialPage: selectedIndex.value);
+    if (!Get.isRegistered<SettingsController>()) {
+      Get.put(SettingsController(), permanent: true);
+    }
+    if (!Get.isRegistered<VehicleController>()) {
+      Get.put(VehicleController(), permanent: true);
+    }
   }
 
   @override

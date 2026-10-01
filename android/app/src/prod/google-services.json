@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1062624758266",
+    "firebase_url": "https://krishi-karobar-8a470-default-rtdb.firebaseio.com",
+    "project_id": "krishi-karobar-8a470",
+    "storage_bucket": "krishi-karobar-8a470.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062624758266:android:353fc5f3fa20f32b037c43",
+        "android_client_info": {
+          "package_name": "com.example.krishi_karobar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsXsxKQiop5f80godBCxOqc4KV7o87M3Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

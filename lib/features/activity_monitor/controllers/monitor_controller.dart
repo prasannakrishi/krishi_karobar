@@ -49,6 +49,8 @@ class MonitorController extends GetxController {
   late final selectedService = Rxn<ServiceModel>();
   final selectedDriver = Rxn<UserModel>();
   String? currentActivityId;
+  ActivityLocationModel? _capturedStopLocation;
+  final _finalizingActivityIds = <String>{};
   final driverWarning = false.obs;
   bool _isSavingActivity = false;
   bool _saveConfirmationPending = false;
@@ -94,7 +96,10 @@ class MonitorController extends GetxController {
     if (vehicle == null) return null;
 
     final matches = cache.activities.values
-        .where((a) => a.vehicleId == vehicle.id && a.isLive)
+        .where((a) =>
+            a.vehicleId == vehicle.id &&
+            a.isLive &&
+            !_finalizingActivityIds.contains(a.id))
         .toList();
 
     return matches.isEmpty ? null : matches.first;
@@ -205,7 +210,10 @@ class MonitorController extends GetxController {
     if (vehicle == null) return;
 
     final matches = cache.activities.values
-        .where((a) => a.vehicleId == vehicle.id && a.isLive)
+        .where((a) =>
+            a.vehicleId == vehicle.id &&
+            a.isLive &&
+            !_finalizingActivityIds.contains(a.id))
         .toList();
     final live = matches.isEmpty ? null : matches.first;
 
@@ -702,20 +710,6 @@ class MonitorController extends GetxController {
     final customerIsNewlyCreated =
         customer != null && !customerIdsBeforeSave.contains(customer.id);
 
-    // Capture GPS Start Location before creating activity
-    ActivityLocationModel? startLoc;
-    try {
-      startLoc = await LocationService.instance.captureCurrentLocation();
-    } catch (error) {
-      _isSavingActivity = false;
-      if (customerIsNewlyCreated) {
-        await _rollbackNewCustomer(customer);
-      }
-      debugPrint('MonitorController.startActivity (location): $error');
-      showMessage('Location Error', AppException.messageOf(error));
-      return;
-    }
-
     // The activity's uId depends on a Firebase sequence transaction and can
     // fail (bad vehicle uId prefix, sequence conflict, network/permission
     // error). This must be resolved - and the record actually persisted -
@@ -759,7 +753,6 @@ class MonitorController extends GetxController {
       rate: _rate,
       amount: 0,
       status: ActivityStatus.running,
-      startLocation: startLoc,
       createdBy: LoginController.loginUser.id,
       createdAt: now,
       updatedAt: now,
@@ -771,7 +764,6 @@ class MonitorController extends GetxController {
         id,
         activity.toMap(),
       );
-      await LocationService.instance.saveStartLocation(id, startLoc);
     } catch (error) {
       _isSavingActivity = false;
       if (customerIsNewlyCreated) {
@@ -783,11 +775,15 @@ class MonitorController extends GetxController {
     }
 
     // Only now that the activity is confirmed persisted do we commit local
-    // state and start the visible timer.
+    // state and start the visible timer immediately.
     currentActivityId = id;
     _isSavingActivity = false;
     supervisor.text = LoginController.loginUser.fullname;
     timerController.start();
+
+    // Capture GPS Start Location asynchronously while activity is running.
+    // The activity start / timer calculation is NOT blocked or stopped.
+    _captureStartLocationInBackground(id);
 
     await AuditService.instance.log(
       action: 'activity_started',
@@ -797,6 +793,22 @@ class MonitorController extends GetxController {
     );
 
     await _markVehicleActive();
+  }
+
+  void _captureStartLocationInBackground(String activityId) {
+    LocationService.instance.captureStartLocationWithRetry().then((startLoc) {
+      if (startLoc != null) {
+        LocationService.instance.saveStartLocation(activityId, startLoc);
+        final activity = cache.activities[activityId];
+        if (activity != null) {
+          activity.startLocation = startLoc;
+          cache.activities[activityId] = activity;
+          cache.activities.refresh();
+        }
+      }
+    }).catchError((error) {
+      debugPrint('MonitorController background start location notice: $error');
+    });
   }
 
   Future<void> _markVehicleActive() async {
@@ -1015,6 +1027,14 @@ class MonitorController extends GetxController {
 
     timerController.stop();
     timerController.computeAmount(_rate);
+
+    // Track Stop Location IMMEDIATELY when Stop button is pressed
+    _capturedStopLocation = null;
+    LocationService.instance.captureCurrentLocation().then((stopLoc) {
+      _capturedStopLocation = stopLoc;
+    }).catchError((error) {
+      debugPrint('MonitorController stop location capture error: $error');
+    });
   }
 
   Future<void> saveActivity() async {
@@ -1022,7 +1042,6 @@ class MonitorController extends GetxController {
 
     var customer = selectedCustomer.value;
     final customerIdsBeforeSave = cache.customers.keys.toSet();
-    var customerIsNewlyCreated = false;
 
     if (selectedVehicle.value == null) {
       showMessage('Warning', 'Please select a vehicle.');
@@ -1073,9 +1092,9 @@ class MonitorController extends GetxController {
         final cachedLive = cache.activities.values
             .where(
               (activity) =>
-          activity.vehicleId == vehicle.id &&
-              ActivityStatus.liveStates.contains(activity.status),
-        )
+                  activity.vehicleId == vehicle.id &&
+                  ActivityStatus.liveStates.contains(activity.status),
+            )
             .toList();
 
         if (cachedLive.isNotEmpty) {
@@ -1092,9 +1111,9 @@ class MonitorController extends GetxController {
         final cachedLive = cache.activities.values
             .where(
               (activity) =>
-          activity.vehicleId == vehicle.id &&
-              ActivityStatus.liveStates.contains(activity.status),
-        )
+                  activity.vehicleId == vehicle.id &&
+                  ActivityStatus.liveStates.contains(activity.status),
+            )
             .toList();
 
         if (cachedLive.isNotEmpty) {
@@ -1110,8 +1129,6 @@ class MonitorController extends GetxController {
       );
       return;
     }
-
-    currentActivityId = activityId;
 
     _saveConfirmationPending = true;
 
@@ -1130,10 +1147,61 @@ class MonitorController extends GetxController {
 
     if (confirmed != true) return;
 
-    isLoading.value = true;
-    _isSavingActivity = true;
-    _isFinalizingActivity = true;
+    // Capture memory snapshot for background save task
+    final targetActivityId = activityId;
+    _finalizingActivityIds.add(targetActivityId);
 
+    final finalDriverId = selectedDriver.value?.id;
+    final finalDuration = timerController.durationSeconds;
+    final finalRate = _rate;
+    final finalAmount = timerController.amount.value.toInt();
+    final finalDescription =
+        description.text.trim().isEmpty ? null : description.text.trim();
+    final preCapturedStopLoc = _capturedStopLocation;
+
+    // Clean form and reset local timer IMMEDIATELY so new activity can start right away
+    _isFinalizingActivity = true;
+    currentActivityId = null;
+    _capturedStopLocation = null;
+    timerController.reset();
+    resetForm();
+    _isFinalizingActivity = false;
+
+    for (final timer in _syncTimers.values) {
+      timer.cancel();
+    }
+    _syncTimers.clear();
+
+    showMessage(
+      'Success',
+      'Activity is saving in background. Ready for new activity.',
+    );
+
+    // Execute background save task asynchronously
+    _saveActivityInBackground(
+      activityId: targetActivityId,
+      customer: customer,
+      customerIdsBeforeSave: customerIdsBeforeSave,
+      driverId: finalDriverId,
+      duration: finalDuration,
+      rate: finalRate,
+      amount: finalAmount,
+      description: finalDescription,
+      preCapturedStopLoc: preCapturedStopLoc,
+    );
+  }
+
+  void _saveActivityInBackground({
+    required String activityId,
+    CustomerModel? customer,
+    required Set<String> customerIdsBeforeSave,
+    String? driverId,
+    required int duration,
+    required int rate,
+    required int amount,
+    String? description,
+    ActivityLocationModel? preCapturedStopLoc,
+  }) async {
     try {
       final latest = await firebaseService.getRecordById(
         'activities',
@@ -1142,51 +1210,28 @@ class MonitorController extends GetxController {
 
       final latestStatus = latest?['status']?.toString();
 
-      if (latest == null ||
-          !ActivityStatus.liveStates.contains(latestStatus)) {
-        currentActivityId = null;
-        timerController.reset();
-        resetForm();
-
-        showMessage(
-          'Warning',
-          'This activity has already been completed or cancelled.',
-        );
-        return;
-      }
-
       customer ??= await saveCustomer();
-      customerIsNewlyCreated = !customerIdsBeforeSave.contains(customer.id);
 
-      ActivityLocationModel stopLoc;
-      try {
-        stopLoc = await LocationService.instance.captureCurrentLocation();
-      } catch (error) {
-        if (customerIsNewlyCreated) {
-          await _rollbackNewCustomer(customer);
-        }
-        _isSavingActivity = false;
-        _isFinalizingActivity = false;
-        isLoading.value = false;
-        debugPrint('MonitorController.saveActivity (location): $error');
-        showMessage('Location Error', AppException.messageOf(error));
-        return;
+      // Ensure stop location is available
+      ActivityLocationModel? stopLoc = preCapturedStopLoc;
+      if (stopLoc == null) {
+        try {
+          stopLoc = await LocationService.instance.captureCurrentLocation();
+        } catch (_) {}
       }
-
-      timerController.computeAmount(_rate);
 
       final now = DateTime.now();
 
       final updatedData = {
         'customerId': customer.id,
-        'driverId': selectedDriver.value?.id,
+        'driverId': driverId,
         'endTime': now.toUtc().toIso8601String(),
-        'duration': timerController.durationSeconds,
-        'rate': _rate,
-        'amount': timerController.amount.value,
+        'duration': duration,
+        'rate': rate,
+        'amount': amount,
         'paidAmount': 0,
-        'dueAmount': timerController.amount.value,
-        'description': description.text.trim().isEmpty? null: description.text.trim(),
+        'dueAmount': amount,
+        'description': description,
         'status': ActivityStatus.completed,
         'updatedAt': now.toUtc().toIso8601String(),
       };
@@ -1197,7 +1242,9 @@ class MonitorController extends GetxController {
         updatedData,
       );
 
-      await LocationService.instance.saveStopLocation(activityId, stopLoc);
+      if (stopLoc != null) {
+        await LocationService.instance.saveStopLocation(activityId, stopLoc);
+      }
 
       await AuditService.instance.log(
         action: 'activity_completed',
@@ -1208,28 +1255,11 @@ class MonitorController extends GetxController {
       );
 
       await _clearVehicleActive();
-
-      currentActivityId = null;
-
-      showMessage('Success', 'Activity saved successfully.');
-
-      timerController.reset();
-      resetForm();
-
-      for (final timer in _syncTimers.values) {
-        timer.cancel();
-      }
-      _syncTimers.clear();
+      debugPrint('MonitorController background save completed: $activityId');
     } catch (error) {
-      if (customerIsNewlyCreated && customer != null) {
-        await _rollbackNewCustomer(customer);
-      }
-      debugPrint('MonitorController.saveActivity: $error');
-      showMessage('Error', AppException.messageOf(error));
+      debugPrint('MonitorController _saveActivityInBackground error: $error');
     } finally {
-      _isFinalizingActivity = false;
-      _isSavingActivity = false;
-      isLoading.value = false;
+      _finalizingActivityIds.remove(activityId);
     }
   }
 

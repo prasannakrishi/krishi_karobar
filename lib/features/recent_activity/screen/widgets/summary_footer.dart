@@ -2,6 +2,88 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/activity_controller.dart';
 
+class SummaryItem {
+  final String label;
+  final String value;
+  final TextAlign alignment;
+  final Color? textColor;
+
+  const SummaryItem({
+    required this.label,
+    required this.value,
+    this.alignment = TextAlign.center,
+    this.textColor,
+  });
+}
+
+class UnifiedSummaryCard extends StatelessWidget {
+  const UnifiedSummaryCard({
+    super.key,
+    required this.items,
+    this.backgroundColor = const Color(0xFFE8F5E9),
+  });
+
+  final List<SummaryItem> items;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    assert(
+      items.length >= 3 && items.length <= 5,
+      'Summary items must be between 3 and 5 columns.',
+    );
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: backgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          vertical: 8,
+          horizontal: 10,
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: items.map((item) {
+                return Expanded(
+                  child: Text(
+                    item.label,
+                    textAlign: item.alignment,
+                    style: const TextStyle(
+                      color: Colors.teal,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const Divider(height: 10, thickness: 1),
+            Row(
+              children: items.map((item) {
+                return Expanded(
+                  child: Text(
+                    item.value,
+                    textAlign: item.alignment,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: item.textColor,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class SummaryFooter extends StatelessWidget {
   const SummaryFooter({
     super.key,
@@ -18,115 +100,30 @@ class SummaryFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      color: const Color(0xFFE8F5E9),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: 5,
-          horizontal: 10,
+    return UnifiedSummaryCard(
+      items: [
+        SummaryItem(
+          label: 'Duration',
+          value: ActivityController.instance.secondsToHHMMSS(totalSeconds),
+          alignment: TextAlign.left,
         ),
-        child: Column(
-          children: [
-            const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Duration',
-                    style: TextStyle(
-                      color: Colors.teal,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'Amount',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.teal,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'Paid',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.teal,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'Due',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: Colors.teal,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 10,thickness: 1),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    ActivityController.instance.secondsToHHMMSS(totalSeconds),
-                    textAlign: TextAlign.left,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'रु ${totalAmount.toStringAsFixed(0)}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'रु ${totalPaid.toStringAsFixed(0)}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'रु ${totalDue.toStringAsFixed(0)}',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        SummaryItem(
+          label: 'Amount',
+          value: 'रु ${totalAmount.toStringAsFixed(0)}',
+          alignment: TextAlign.center,
         ),
-      ),
+        SummaryItem(
+          label: 'Paid',
+          value: 'रु ${totalPaid.toStringAsFixed(0)}',
+          alignment: TextAlign.center,
+        ),
+        SummaryItem(
+          label: 'Due',
+          value: 'रु ${totalDue.toStringAsFixed(0)}',
+          alignment: TextAlign.right,
+          textColor: Colors.red,
+        ),
+      ],
     );
   }
 }

@@ -40,6 +40,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
 
   DateTime selectedCreatedAt = DateTime.now();
   bool showNewCustomerFields = false;
+  bool isLoading = false;
 
   @override
   void initState() {
@@ -210,6 +211,8 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
   }
 
   Future<void> _submit() async {
+    if (isLoading) return;
+
     if (!_formKey.currentState!.validate()) return;
 
     if (customerNameController.text.trim().isEmpty || selectedVehicleId == null || selectedServiceId == null) {
@@ -229,6 +232,10 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
       Get.snackbar('Error', 'Paid amount + discount cannot exceed total amount.', snackPosition: SnackPosition.BOTTOM);
       return;
     }
+
+    setState(() {
+      isLoading = true;
+    });
 
     final dueAmount = amount - paidAmount - discount;
     final status = (paidAmount + discount) >= amount ? 'paid' : ((paidAmount + discount) > 0 ? 'partial' : 'due');
@@ -250,6 +257,14 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         vehicleUId: cache.vehicles[selectedVehicleId]?.uId ?? 'V',
       );
 
+      // Capture GPS location at creation time for manual activity
+      ActivityLocationModel? startLoc;
+      try {
+        startLoc = await LocationService.instance.captureCurrentLocation();
+      } catch (e) {
+        debugPrint('Manual activity location capture notice: $e');
+      }
+
       final activity = ActivityModel(
         id: id,
         uId: uId,
@@ -268,12 +283,16 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         receivedBy: (paidAmount + discount) > 0 ? user.id : null,
         description: description.isEmpty ? null : description,
         status: status,
+        startLocation: startLoc,
         createdBy: user.id,
         createdAt: createdTime,
         updatedAt: currentTime,
       );
 
       await firebaseService.saveRecord('activities', id, activity.toMap());
+      if (startLoc != null) {
+        await LocationService.instance.saveStartLocation(id, startLoc);
+      }
 
       Get.back();
       Get.snackbar(
@@ -283,6 +302,11 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         backgroundColor: Colors.green.shade100,
       );
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
       Get.snackbar('Error', AppException.messageOf(e), snackPosition: SnackPosition.BOTTOM);
     }
   }
