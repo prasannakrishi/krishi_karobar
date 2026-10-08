@@ -1,42 +1,56 @@
 # Krishi Karobar
 
-**Krishi Karobar** is a Flutter application for recording and managing day-to-day agricultural-service operations. It helps a team keep vehicle, customer, service, activity, and payment information in one place.
+**Krishi Karobar** is a comprehensive Flutter mobile application designed for recording and managing day-to-day agricultural-service operations. It centralizes vehicle tracking, customer records, service management, activity monitoring, expense tracking, billing receipts, and periodic financial reporting into a single platform.
 
-The application is developed for **Prasanna Aadhunik Krishi Kendra** and is intended to support clearer operational records and easier follow-up on agricultural service activities.
+The application is developed for **Prasanna Aadhunik Krishi Kendra** to streamline agricultural service operations, real-time activity monitoring, and payment workflows.
 
-## Key features
+---
 
-- Phone-based user registration and login
-- User roles for Driver, Supervisor, Staff, and Admin
-- Vehicle registration, selection, and driver/supervisor assignment
-- Customer and service record management
-- Activity monitoring with vehicle, customer, driver, service, duration, and amount details
-- Payment tracking, including paid and due amounts
-- Activity history with filters for date, vehicle, customer, staff, and service
-- Real-time data synchronization with Firebase Realtime Database
-- Local data caching for faster access during normal use
+## 🚀 Key Features & Recent Updates
 
-## About Prasanna Aadhunik Krishi Kendra
+### 🚜 Vehicle & Activity Management
+- **Vehicle & Service Selection**: Assign vehicles, drivers, and supervisors with persistent user session caching (`recentVehicleIds`).
+- **GPS Location Tracking**: Capture start/stop GPS locations for activities with Admin-only access rules and reverse geocoding for place names.
+- **Manual GPS Tagging**: Support manual GPS tagging for both Activity and Expense creation forms.
+- **Activity State Management**: Real-time tracking of running, paused, and completed activities, with soft-reset/cancellation (`status = 'cancelled'`) preserving audit trails.
 
-Prasanna Aadhunik Krishi Kendra is the operating organization for this application. Krishi Karobar is built to organize the Kendra's service-related vehicle activities, customer records, service entries, and payment follow-up in a consistent digital system.
+### 👥 Customer & Search Enhancements
+- **Customer Search & Autocomplete**: Real-time search suggestions with auto-fill for customer names, phone numbers, and addresses across forms.
 
-## Technology
+### 💰 Financials, Billing & Expenses
+- **Discount & Due Calculation**: Dedicated discount tracking (`discountAmount`) across activities, expenses, and payments.
+- **View Bill & Multi-Activity Payment Slips**: Generate and view detailed payment receipts (`PaymentSlip`) supporting multi-activity payment allocations in a single transaction.
+- **Expense Table & Details**: Comprehensive expense management with row selection, type filters, and detail views.
 
-- [Flutter](https://flutter.dev/) and Dart
-- Firebase Authentication
-- Firebase Realtime Database
-- GetX for state management and navigation
-- Shared Preferences and Get Storage for local storage
+### 📊 Dashboard & Periodic Reporting
+- **Periodic Reports**: Daily, Weekly, Monthly (Bikram Sambat), and Yearly Income, Expense, and Net Profit/Loss summaries.
+- **Vehicle-Filtered Dashboards**: Dashboard reports automatically filter by the vehicle selected in Settings (or locked to the single assigned vehicle for normal users).
 
-## Getting started
+### 🔒 Security & Synchronization
+- **Role-Based Authorization**: Granular permissions for Admins, Managers, Supervisors, Drivers, and Accountants.
+- **Firebase Real-Time DB**: Real-time data synchronization with robust offline caching and session management.
+
+---
+
+## 🛠️ Technology Stack
+
+- [Flutter](https://flutter.dev/) & Dart
+- Firebase Authentication & Firebase Realtime Database
+- GetX (State Management & Navigation)
+- Get Storage & SharedPreferences (Local Caching)
+- Nepali Utils & Nepali Date Picker (Bikram Sambat & NPT support)
+
+---
+
+## 📦 Getting Started
 
 ### Prerequisites
 
 - Install the [Flutter SDK](https://docs.flutter.dev/get-started/install)
-- Set up an Android emulator/device or another supported Flutter target
-- Configure access to the project's Firebase instance
+- Set up an Android emulator/device or target
+- Configure Firebase credentials (`google-services.json`)
 
-### Run locally
+### Run Locally
 
 ```bash
 git clone https://github.com/prasannakrishi/krishi_karobar.git
@@ -45,23 +59,30 @@ flutter pub get
 flutter run
 ```
 
-## Project structure
+---
+
+## 📁 Project Structure
 
 ```text
 lib/
-├── features/       # Authentication, home, monitoring, history, and settings screens
-├── models/         # User, vehicle, customer, service, and activity data models
-├── services/       # Firebase and local cache services
+├── common/         # Shared widgets (Customer search, App scaffolds, etc.)
+├── features/       # Feature modules:
+│   ├── activity_monitor/ # Live activity timer, GPS tracking, vehicle/customer info
+│   ├── authentication/   # Login, session management, and auth gates
+│   ├── home/             # Dashboard periodic reporting & vehicle summaries
+│   ├── payment/          # Payment dialogs, allocations, and bill slips
+│   ├── payment_history/  # Historical payment records and summaries
+│   ├── recent_activity/  # Activity logs, tables, edit forms, and expenses
+│   └── user_setting/     # User, vehicle, customer, and service management screens
+├── models/         # Data models (Activity, Customer, Expense, Payment, Vehicle, User, etc.)
+├── offline/        # Offline sync adapters
+├── services/       # Firebase, caching, audit, and authorization services
 ├── utils/          # Themes, helpers, constants, validation, and exceptions
-└── widgets/        # Shared UI widgets
+└── widgets/        # Core UI building blocks
 ```
 
-## Development notes
+---
 
-- Do not commit private credentials, API keys, or environment files to the repository.
-- Review Firebase Authentication and Realtime Database rules before releasing the application.
-- Run `flutter analyze` and `flutter test` before creating a production build.
+## 📄 License
 
-## License
-
-This project is private and maintained for Prasanna Aadhunik Krishi Kendra.
+This project is private and maintained exclusively for **Prasanna Aadhunik Krishi Kendra**.
