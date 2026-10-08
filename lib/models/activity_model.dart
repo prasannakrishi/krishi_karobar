@@ -66,6 +66,7 @@ class ActivityModel {
   int rate;
   int amount;
   int paidAmount;
+  int discountAmount;
   int dueAmount;
   String? receivedBy;
   String? monitorBy;
@@ -98,6 +99,7 @@ class ActivityModel {
     required this.rate,
     required this.amount,
     this.paidAmount = 0,
+    this.discountAmount = 0,
     this.dueAmount = 0,
     this.receivedBy,
     this.monitorBy,
@@ -134,6 +136,7 @@ class ActivityModel {
       rate: toInt(map['rate']),
       amount: toInt(map['amount']),
       paidAmount: toInt(map['paidAmount']),
+      discountAmount: toInt(map['discountAmount']),
       dueAmount: toInt(map['dueAmount']),
       receivedBy: map['receivedBy']?.toString(),
       monitorBy: map['monitorBy']?.toString(),
@@ -206,6 +209,7 @@ class ActivityModel {
       'rate': rate,
       'amount': amount,
       'paidAmount': paidAmount,
+      'discountAmount': discountAmount,
       'dueAmount': dueAmount,
       'receivedBy': receivedBy,
       'monitorBy': monitorBy,

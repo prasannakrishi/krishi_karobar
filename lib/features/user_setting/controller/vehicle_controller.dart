@@ -209,62 +209,74 @@ class VehicleController extends GetxController {
   /// persisted value is user-scoped so one user's selection can never leak
   /// into another user's session.
   void loadDefaultVehicle() {
-    final userId = LoginController.loginUser.id.trim();
+    final user = LoginController.loginUser;
+    final userId = user.id.trim();
 
     if (userId.isEmpty) {
       clearDefaultVehicle();
       return;
     }
 
-    final assignedIds =
-        LoginController.loginUser.assignedVehicleIds
-            .map((id) => id.trim())
-            .where((id) => id.isNotEmpty)
-            .toList();
+    final assignedIds = user.assignedVehicleIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
 
-    final assignedVehicle = assignedIds.isEmpty
-        ? null
-        : cache.getCachedRecords<VehicleModel>('vehicles')
-            .cast<VehicleModel?>()
-            .firstWhere(
-              (v) => v != null && assignedIds.contains(v.id),
-              orElse: () => null,
-            );
+    VehicleModel? targetVehicle;
 
-    if (assignedVehicle != null) {
+    // 1. Check recentVehicleIds from user profile first
+    final recentId = user.recentVehicleIds?.trim();
+    if (recentId != null && recentId.isNotEmpty) {
+      final cached = cache.vehicles[recentId];
+      final hasAccess = user.hasAllVehicleAccess ||
+          user.id == cached?.ownerId ||
+          assignedIds.contains(recentId);
+
+      if (cached != null && hasAccess && cached.isActive) {
+        targetVehicle = cached;
+      }
+    }
+
+    // 2. Check local storage if not found in profile
+    if (targetVehicle == null) {
+      final data = localStorage.read(_defaultVehicleStorageKey);
+      if (data != null) {
+        try {
+          final stored = VehicleModel.fromMap(
+            Map<String, dynamic>.from(data),
+          );
+          final cached = cache.vehicles[stored.id] ?? stored;
+          final hasAccess = user.hasAllVehicleAccess ||
+              user.id == cached.ownerId ||
+              assignedIds.contains(cached.id);
+
+          if (cached.id.isNotEmpty && hasAccess && cached.isActive) {
+            targetVehicle = cached;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Fallback: First assigned vehicle
+    if (targetVehicle == null && assignedIds.isNotEmpty) {
+      targetVehicle = cache.getCachedRecords<VehicleModel>('vehicles')
+          .cast<VehicleModel?>()
+          .firstWhere(
+            (v) => v != null && assignedIds.contains(v.id) && v.isActive,
+            orElse: () => null,
+          );
+    }
+
+    if (targetVehicle != null) {
       setDefaultVehicle(
-        assignedVehicle,
+        targetVehicle,
         showMessage: false,
         persist: true,
       );
       return;
     }
 
-    final data = localStorage.read(_defaultVehicleStorageKey);
-    if (data == null) {
-      clearDefaultVehicle();
-      return;
-    }
-
-    try {
-      final stored = VehicleModel.fromMap(
-        Map<String, dynamic>.from(data),
-      );
-
-      final cached = cache.vehicles[stored.id] ?? stored;
-      if (cached.id.isEmpty) {
-        clearDefaultVehicle();
-        return;
-      }
-
-      vehicle = cached;
-      selectedVehicle.value = cached;
-    } catch (e) {
-      debugPrint(
-        'VehicleController: Error loading default vehicle: $e',
-      );
-      clearDefaultVehicle();
-    }
+    clearDefaultVehicle();
   }
 
   void clearDefaultVehicle() {
@@ -274,10 +286,10 @@ class VehicleController extends GetxController {
   }
 
   void setDefaultVehicle(
-      VehicleModel v, {
-        bool showMessage = true,
-        bool persist = true,
-      }) {
+    VehicleModel v, {
+    bool showMessage = true,
+    bool persist = true,
+  }) {
     vehicle = v;
     selectedVehicle.value = v;
 
@@ -286,6 +298,15 @@ class VehicleController extends GetxController {
         _defaultVehicleStorageKey,
         v.toMap(),
       );
+
+      final user = LoginController.loginUser;
+      if (user.id.isNotEmpty) {
+        user.recentVehicleIds = v.id;
+        firebaseService.setValue('users/${user.id}/recentVehicleIds', v.id).catchError((e) {
+          debugPrint('VehicleController: remote recentVehicleIds sync skipped: $e');
+          return false;
+        });
+      }
     }
 
     if (Get.isRegistered<MonitorController>()) {

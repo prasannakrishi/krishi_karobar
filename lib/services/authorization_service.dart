@@ -33,6 +33,11 @@ class Permissions {
   static const serviceActivate = 'service.activate';
   static const serviceDeactivate = 'service.deactivate';
 
+  static const customerView = 'customer.view';
+  static const customerCreate = 'customer.create';
+  static const customerEdit = 'customer.edit';
+  static const customerDelete = 'customer.delete';
+
   static const activityView = 'activity.view';
   static const activityCreate = 'activity.create';
   static const activityEdit = 'activity.edit';
@@ -68,6 +73,8 @@ class _RolePermissions {
       Permissions.serviceView, Permissions.serviceCreate,
       Permissions.serviceEdit, Permissions.serviceDelete,
       Permissions.serviceActivate, Permissions.serviceDeactivate,
+      Permissions.customerView, Permissions.customerCreate,
+      Permissions.customerEdit, Permissions.customerDelete,
       Permissions.activityView, Permissions.activityCreate,
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
@@ -87,6 +94,8 @@ class _RolePermissions {
       Permissions.serviceView, Permissions.serviceCreate,
       Permissions.serviceEdit, Permissions.serviceActivate,
       Permissions.serviceDeactivate,
+      Permissions.customerView, Permissions.customerCreate,
+      Permissions.customerEdit, Permissions.customerDelete,
       Permissions.activityView, Permissions.activityCreate,
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,
@@ -101,6 +110,8 @@ class _RolePermissions {
       Permissions.vehicleView, Permissions.vehicleEdit,
       Permissions.serviceView, Permissions.serviceCreate,
       Permissions.serviceEdit,
+      Permissions.customerView, Permissions.customerCreate,
+      Permissions.customerEdit, Permissions.customerDelete,
       Permissions.activityView, Permissions.activityCreate,
       Permissions.activityEdit, Permissions.activityStart,
       Permissions.activityComplete, Permissions.activityCancel,

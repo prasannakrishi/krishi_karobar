@@ -208,7 +208,7 @@ class ActivityController extends GetxController {
             customer?.name.toLowerCase() ?? '';
 
         final customerPhone =
-            customer?.phone.toLowerCase() ?? '';
+            customer?.phone?.toLowerCase() ?? '';
 
         if (!customerName.contains(query) &&
             !customerPhone.contains(query)) {
@@ -239,20 +239,20 @@ class ActivityController extends GetxController {
     }
   }
 
-  List<ActivityModel> activitiesForSection( PaymentStatus section) {
+  List<ActivityModel> activitiesForSection( ActivityState section) {
     return activities.where((activity) {
       final amount = activity.amount;
       final paid = activity.paidAmount;
       final due = amount - paid;
 
       switch (section) {
-        case PaymentStatus.payed:
+        case ActivityState.payed:
           return amount > 0 && due <= 0;
 
-        case PaymentStatus.due:
+        case ActivityState.due:
           return amount > 0 && due > 0;
 
-        case PaymentStatus.partial:
+        case ActivityState.expences:
           return false;
       }
     }).toList();
@@ -362,6 +362,7 @@ class ActivityController extends GetxController {
       ),
     );
   }
+
   List<ActivityModel> filteredActivities() {
       return activities.toList();
   }
@@ -636,6 +637,9 @@ class ActivityController extends GetxController {
   int totalPaidFor(List<ActivityModel> entries) {
     return entries.fold(0,(sum, entry) => (sum + entry.paidAmount).toInt());
   }
+  int totalDiscountFor(List<ActivityModel> entries) {
+      return entries.fold(0,(sum, entry) => (sum + entry.discountAmount).toInt());
+    }
 
   int totalDueFor(List<ActivityModel> entries) {
     return entries.fold(0,(sum, entry) => (sum + entry.dueAmount).toInt());

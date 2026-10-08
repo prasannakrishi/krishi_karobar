@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
+import '../../../authentication/controllers/login_controllers.dart';
 import '../../controller/user_controller.dart';
 
 class UserForm extends StatelessWidget {
@@ -298,20 +299,34 @@ class _RolesField extends StatelessWidget {
   }
 
   void _showRolesDialog(
-      BuildContext context,
-      UserController controller,
-      ) {
+    BuildContext context,
+    UserController controller,
+  ) {
+    final actor = LoginController.loginUser;
+    final isSuperAdmin = actor.hasRole(UserRoles.superAdmin);
+    final isAdmin = actor.hasRole(UserRoles.admin);
+
+    final allowedRoles = UserRoles.rolesFor(controller.selectedUserType.value)
+        .where((role) {
+          if (isSuperAdmin) return true;
+          if (isAdmin) {
+            return role != UserRoles.superAdmin;
+          }
+          return false;
+        })
+        .toList();
+
     showDialog(
       context: context,
       builder: (_) {
         return AlertDialog(
           title: const Text('Select Roles'),
           content: Obx(
-                () => SingleChildScrollView(
+            () => SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: UserRoles.values.map(
-                      (role) {
+                children: allowedRoles.map(
+                  (role) {
                     return CheckboxListTile(
                       dense: true,
                       value: controller.selectedRoles.contains(role),

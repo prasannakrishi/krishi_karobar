@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
-import '../../../../utils/helper/helper_widgets.dart';
+import '../../../../utils/helper/helpers.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 import 'payment_slip.dart';
 
@@ -32,9 +32,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       insetPadding: const EdgeInsets.symmetric(horizontal: 10),
       title: Obx(
-        () => Text(
-          'Collect Payment - ${controller.selectedCustomer.value?.name ?? '-'}',
-        ),
+        () => Text('${controller.selectedCustomer.value?.name ?? '-'}'),
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -60,13 +58,13 @@ class _PaymentDialogState extends State<PaymentDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _dueListTable(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 _amountField(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 _discountField(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 _methodField(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 _descriptionField(),
               ],
             ),
@@ -143,7 +141,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
             ...entries.map(
               (activity) => [
                 _buildCell(Text(activity.uId), 120),
-                _buildCell(Text('${activity.duration} min'), 80),
+                _buildCell(Text(secondsToHHMMSS(activity.duration)), 80),
                 _buildCell(Text('रु ${activity.rate.toInt()}'), 70),
                 _buildCell(
                   Text(
@@ -162,8 +160,16 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 ),
                 110,
               ),
+              _buildCell(
+                Text(secondsToHHMMSS(controller.totalDuration.toInt()),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                70,
+              ),
               _buildCell(const Text(''), 80),
-              _buildCell(const Text(''), 70),
               _buildCell(
                 Text(
                   'रु ${controller.totalDue.toInt()}',

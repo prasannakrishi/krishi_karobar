@@ -16,6 +16,7 @@ Future<void> initializeApp() async {
   await GetStorage.init();
 
   Get.put(NetworkManager(), permanent: true);
+  Get.put(SessionService(), permanent: true);
   Get.put(SequenceService(), permanent: true);
   Get.put(DataCacheService(), permanent: true);
 }

@@ -319,22 +319,21 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
                 ),
                 const SizedBox(height: 12),
 
-                // Vehicle selection (if vehicle or activity type)
-                if (expenseType == 'Vehicle' || expenseType == 'Activity Related') ...[
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedVehicleId != null && vehicles.any((v) => v.id == selectedVehicleId)
-                        ? selectedVehicleId
-                        : null,
-                    isExpanded: true,
-                    decoration: CustomDecoration.uInputDecoration(labelText: 'Vehicle'),
-                    items: [
-                      const DropdownMenuItem<String>(value: null, child: Text('Select Vehicle')),
-                      ...vehicles.map((v) => DropdownMenuItem(value: v.id, child: Text(v.number))),
-                    ],
-                    onChanged: (val) => setState(() => selectedVehicleId = val),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                // Vehicle selection (all expense types; the vehicle also
+                // scopes the Expense uId)
+                DropdownButtonFormField<String>(
+                  initialValue: selectedVehicleId != null && vehicles.any((v) => v.id == selectedVehicleId)
+                      ? selectedVehicleId
+                      : null,
+                  isExpanded: true,
+                  decoration: CustomDecoration.uInputDecoration(labelText: 'Vehicle'),
+                  items: [
+                    const DropdownMenuItem<String>(value: null, child: Text('Select Vehicle')),
+                    ...vehicles.map((v) => DropdownMenuItem(value: v.id, child: Text(v.number))),
+                  ],
+                  onChanged: (val) => setState(() => selectedVehicleId = val),
+                ),
+                const SizedBox(height: 12),
 
                 // Activity selection (if activity related)
                 if (expenseType == 'Activity Related') ...[

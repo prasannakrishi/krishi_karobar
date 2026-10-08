@@ -29,6 +29,9 @@ class PaymentController extends GetxController {
   int get totalDue {
     return customerActivities.fold(0,(sum, activity) => sum + _activityDue(activity));
   }
+  int get totalDuration {
+      return customerActivities.fold(0,(sum, activity) => sum + activity.duration);
+    }
 
   int get enteredAmount {
     return int.tryParse(paymentAmountController.text.trim()) ?? 0;
@@ -298,8 +301,9 @@ class PaymentController extends GetxController {
         final activity = customerActivities[activityIndex];
         final oldPaid = activity.paidAmount;
         final activityAmount = activity.amount;
-        final settlementForActivity = allocation.paidAmount + allocation.discount;
-        final newPaid = oldPaid + settlementForActivity;
+        final paidAmount = allocation.paidAmount;
+        final discountAmount = allocation.discount;
+        final newPaid = oldPaid + paidAmount + discountAmount;
 
         if (newPaid > activityAmount) {
           _showError('Payment exceeds activity amount.');
@@ -311,6 +315,7 @@ class PaymentController extends GetxController {
         final activityPath = 'activities/${activity.id}';
 
         updates['$activityPath/paidAmount'] = newPaid;
+        updates['$activityPath/discountAmount'] = discountAmount;
         updates['$activityPath/dueAmount'] = newDue;
         updates['$activityPath/status'] = status;
         updates['$activityPath/paidAt'] = now.toUtc().toIso8601String();

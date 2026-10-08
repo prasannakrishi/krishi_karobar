@@ -6,11 +6,13 @@ import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
 import '../../../common/widgets/settings_menu_title.dart';
 import '../../../features/user_setting/screen/user_management_screen.dart';
+import '../../../models/vehicle_model.dart';
 import '../../../services/services.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 import 'profile_screen.dart';
 import 'service_management_screen.dart';
 import 'vehicle_management_screen.dart';
+import 'customer_management_screen.dart';
 import 'widgets/user_profile.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -86,6 +88,16 @@ class SettingsScreen extends StatelessWidget {
                         subtitle: 'Manage available services',
                         onTap: () {
                           Get.to(() => ServiceManagementScreen());
+                        },
+                      ),
+                    if (Authz.can(Permissions.customerView) ||
+                        Authz.can(Permissions.activityView))
+                      USettingsMenuTile(
+                        icon: Iconsax.people,
+                        title: 'Customers',
+                        subtitle: 'Manage registered customers',
+                        onTap: () {
+                          Get.to(() => CustomerManagementScreen());
                         },
                       ),
                   ],
@@ -178,11 +190,10 @@ class _SelectedVehicleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      final user = LoginController.loginUser;
       final selectedVehicle = controller.selectedVehicle.value;
 
-      final assigned = controller.assignedVehiclesForUser(
-        LoginController.loginUser.id,
-      );
+      final assigned = controller.assignedVehiclesForUser(user.id);
 
       if (assigned.isEmpty) {
         return UDetailRow(
@@ -198,10 +209,16 @@ class _SelectedVehicleRow extends StatelessWidget {
         );
       }
 
-      final selected = selectedVehicle != null &&
-          assigned.any((v) => v.id == selectedVehicle.id)
-          ? selectedVehicle
-          : null;
+      // Resolve selected vehicle from controller or user's recentVehicleIds
+      VehicleModel? selected = selectedVehicle;
+
+      if (selected == null && user.recentVehicleIds != null) {
+        selected = assigned.firstWhereOrNull((v) => v.id == user.recentVehicleIds);
+      }
+
+      if (selected == null || !assigned.any((v) => v.id == selected!.id)) {
+        selected = assigned.first;
+      }
 
       return Row(
         children: [
@@ -209,7 +226,7 @@ class _SelectedVehicleRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: DropdownButtonFormField<String>(
-              initialValue: selected?.id,
+              initialValue: selected.id,
               isExpanded: true,
               isDense: true,
               icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
@@ -220,8 +237,7 @@ class _SelectedVehicleRow extends StatelessWidget {
               ),
               hint: const Text('Select Vehicle'),
               items: assigned
-                  .map(
-                    (v) => DropdownMenuItem<String>(
+                  .map((v) => DropdownMenuItem<String>(
                       value: v.id,
                       child: Text(v.number, overflow: TextOverflow.ellipsis),
                     ),

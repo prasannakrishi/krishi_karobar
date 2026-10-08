@@ -51,6 +51,8 @@ class MonitorController extends GetxController {
   String? currentActivityId;
   ActivityLocationModel? _capturedStopLocation;
   final _finalizingActivityIds = <String>{};
+
+  bool get isFinalizingActivity => _finalizingActivityIds.isNotEmpty;
   final driverWarning = false.obs;
   bool _isSavingActivity = false;
   bool _saveConfirmationPending = false;
@@ -250,28 +252,61 @@ class MonitorController extends GetxController {
         .where((id) => id.isNotEmpty)
         .toList();
 
-    if (assignedIds.isEmpty) {
+    if (assignedIds.isEmpty && !user.hasAllVehicleAccess) {
       clearVehicle();
       return;
     }
 
-    final matchingVehicles = cache.vehicles.values.where(
-          (v) => v.isActive && assignedIds.contains(v.id),
-    );
+    VehicleModel? targetVehicle;
 
-    final VehicleModel? vehicle =
-    matchingVehicles.isEmpty ? null : matchingVehicles.first;
+    // 1. Check recentVehicleIds from user profile first
+    final recentId = user.recentVehicleIds?.trim();
+    if (recentId != null && recentId.isNotEmpty) {
+      final cached = cache.vehicles[recentId];
+      final hasAccess = user.hasAllVehicleAccess ||
+          user.id == cached?.ownerId ||
+          assignedIds.contains(recentId);
 
-    if (vehicle == null) {
+      if (cached != null && hasAccess && cached.isActive) {
+        targetVehicle = cached;
+      }
+    }
+
+    // 2. Check local storage if not in profile
+    if (targetVehicle == null) {
+      final savedData = storage.read('default_vehicle_${user.id}');
+      if (savedData != null) {
+        try {
+          final stored = VehicleModel.fromMap(Map<String, dynamic>.from(savedData));
+          final cached = cache.vehicles[stored.id] ?? stored;
+          final hasAccess = user.hasAllVehicleAccess ||
+              user.id == cached.ownerId ||
+              assignedIds.contains(cached.id);
+          if (cached.id.isNotEmpty && hasAccess && cached.isActive) {
+            targetVehicle = cached;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Fallback: First assigned vehicle
+    if (targetVehicle == null) {
+      final matchingVehicles = cache.vehicles.values.where(
+        (v) => v.isActive && assignedIds.contains(v.id),
+      );
+      targetVehicle = matchingVehicles.isEmpty ? null : matchingVehicles.first;
+    }
+
+    if (targetVehicle == null) {
       clearVehicle();
       return;
     }
 
-    selectVehicle(vehicle);
+    selectVehicle(targetVehicle);
 
     storage.write(
       'default_vehicle_${user.id}',
-      vehicle.toMap(),
+      targetVehicle.toMap(),
     );
   }
 
@@ -279,15 +314,19 @@ class MonitorController extends GetxController {
     customerName.clear();
     address.clear();
     phone.clear();
-    description.clear();
+    //description.clear();
 
     selectedCustomer.value = null;
-    selectedService.value = null;
-
     filteredCustomers.clear();
-
     customerCollapsed.value = false;
-    loadDefaultVehicle();
+
+    final currentVehicle = selectedVehicle.value;
+    if (currentVehicle != null) {
+      selectVehicle(currentVehicle);
+    }
+    else {
+      loadDefaultVehicle();
+    }
   }
 
   void clearVehicle() {
@@ -324,7 +363,7 @@ class MonitorController extends GetxController {
     }
 
     filteredCustomers.assignAll(customers.where((customer) =>
-    customer.name.toLowerCase().contains(value) ||customer.phone.contains(value),
+    customer.name.toLowerCase().contains(value) ||customer.phone!.contains(value),
     ),
     );
     showCustomerSuggestions.value = filteredCustomers.isNotEmpty;
@@ -399,7 +438,7 @@ class MonitorController extends GetxController {
     selectedCustomer.value = customer;
     customerName.text = customer.name;
     address.text = customer.address;
-    phone.text = customer.phone;
+    phone.text = customer.phone!;
     closeCustomerSuggestions();
     customerCollapsed.value = true;
 
@@ -493,7 +532,7 @@ class MonitorController extends GetxController {
     if (customer != null) {
       selectedCustomer.value = customer;
       customerName.text = customer.name;
-      phone.text = customer.phone;
+      phone.text = customer.phone!;
     }
 
     timerController.rehydrate(
@@ -517,9 +556,7 @@ class MonitorController extends GetxController {
     serviceType.text = service.name;
     serviceSearch.text = service.name;
     rate.text = service.rate.toStringAsFixed(0);
-    if (description.text.trim().isEmpty ) {
-      description.text = service.description.trim();
-    }
+
     closeServiceSuggestions();
     timerController.computeAmount(service.rate);
 
@@ -604,7 +641,7 @@ class MonitorController extends GetxController {
     // an existing customer must also be treated as a different customer.
     if (selected != null &&
         (customerName.text.trim() != selected.name.trim() ||
-            phone.text.trim() != selected.phone.trim())) {
+            phone.text.trim() != selected.phone!.trim())) {
       selectedCustomer.value = null;
     }
     _syncCustomer();
@@ -964,7 +1001,7 @@ class MonitorController extends GetxController {
     }
 
     currentActivityId = null;
-    await _clearVehicleActive();
+    //await _clearVehicleActive();
     timerController.reset();
     resetForm();
     _isFinalizingActivity = false;
@@ -1041,7 +1078,6 @@ class MonitorController extends GetxController {
     if (_isSavingActivity || _saveConfirmationPending) return;
 
     var customer = selectedCustomer.value;
-    final customerIdsBeforeSave = cache.customers.keys.toSet();
 
     if (selectedVehicle.value == null) {
       showMessage('Warning', 'Please select a vehicle.');
@@ -1155,9 +1191,14 @@ class MonitorController extends GetxController {
     final finalDuration = timerController.durationSeconds;
     final finalRate = _rate;
     final finalAmount = timerController.amount.value.toInt();
-    final finalDescription =
-        description.text.trim().isEmpty ? null : description.text.trim();
+    final finalDescription = description.text.trim().isEmpty ? null : description.text.trim();
     final preCapturedStopLoc = _capturedStopLocation;
+
+    // Capture customer details in memory before resetForm clears text controllers
+    final customerToSave = customer;
+    final typedCustomerName = customerName.text.trim();
+    final typedCustomerPhone = phone.text.trim();
+    final typedCustomerAddress = address.text.trim();
 
     // Clean form and reset local timer IMMEDIATELY so new activity can start right away
     _isFinalizingActivity = true;
@@ -1180,8 +1221,10 @@ class MonitorController extends GetxController {
     // Execute background save task asynchronously
     _saveActivityInBackground(
       activityId: targetActivityId,
-      customer: customer,
-      customerIdsBeforeSave: customerIdsBeforeSave,
+      customer: customerToSave,
+      typedName: typedCustomerName,
+      typedPhone: typedCustomerPhone,
+      typedAddress: typedCustomerAddress,
       driverId: finalDriverId,
       duration: finalDuration,
       rate: finalRate,
@@ -1194,7 +1237,9 @@ class MonitorController extends GetxController {
   void _saveActivityInBackground({
     required String activityId,
     CustomerModel? customer,
-    required Set<String> customerIdsBeforeSave,
+    required String typedName,
+    required String typedPhone,
+    required String typedAddress,
     String? driverId,
     required int duration,
     required int rate,
@@ -1210,7 +1255,21 @@ class MonitorController extends GetxController {
 
       final latestStatus = latest?['status']?.toString();
 
-      customer ??= await saveCustomer();
+      String customerId = '';
+      if (customer != null) {
+        customerId = customer.id;
+      } else if (typedName.isNotEmpty || typedPhone.isNotEmpty) {
+        try {
+          final newCustomer = await _saveNewCustomerFromDetails(
+            name: typedName,
+            phone: typedPhone,
+            address: typedAddress,
+          );
+          customerId = newCustomer.id;
+        } catch (e) {
+          debugPrint('MonitorController background customer save error: $e');
+        }
+      }
 
       // Ensure stop location is available
       ActivityLocationModel? stopLoc = preCapturedStopLoc;
@@ -1223,7 +1282,7 @@ class MonitorController extends GetxController {
       final now = DateTime.now();
 
       final updatedData = {
-        'customerId': customer.id,
+        'customerId': customerId,
         'driverId': driverId,
         'endTime': now.toUtc().toIso8601String(),
         'duration': duration,
@@ -1263,6 +1322,40 @@ class MonitorController extends GetxController {
     }
   }
 
+  Future<CustomerModel> _saveNewCustomerFromDetails({
+    required String name,
+    required String phone,
+    required String address,
+  }) async {
+    final customerPhone = phone.trim();
+
+    if (customerPhone.isNotEmpty) {
+      final existing = cache.getRecordByValue<CustomerModel>(
+        'customers',
+        (customer) => customer.phone?.trim() == customerPhone,
+      );
+      if (existing != null) return existing;
+    }
+
+    final now = DateTime.now();
+    final uId = await sequenceService.generateSequence('C');
+
+    final customer = CustomerModel(
+      id: const Uuid().v4(),
+      uId: uId,
+      name: name.trim().isEmpty ? 'Customer' : name.trim(),
+      phone: customerPhone,
+      address: address.trim(),
+      createdAt: now,
+      createdBy: LoginController.loginUser.id,
+      updatedAt: now,
+      updatedBy: LoginController.loginUser.id,
+    );
+
+    await firebaseService.saveRecord('customers', customer.id, customer.toMap());
+    return customer;
+  }
+
   Future<CustomerModel> saveCustomer() async {
     final selected = selectedCustomer.value;
     if (selected != null) return selected;
@@ -1278,7 +1371,7 @@ class MonitorController extends GetxController {
         ? null
         : cache.getRecordByValue<CustomerModel>(
       'customers',
-          (customer) => customer.phone.trim() == customerPhone,
+          (customer) => customer.phone?.trim() == customerPhone,
     );
 
     if (existing != null) {

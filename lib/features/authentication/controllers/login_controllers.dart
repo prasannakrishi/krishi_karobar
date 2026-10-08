@@ -229,8 +229,7 @@ class LoginController extends GetxController {
   }
 
   void _saveSession() {
-    localStorage.write('loggedIn', true);
-    localStorage.write('userId', loginUser.id);
+    SessionService.instance.startSession(loginUser);
 
     if (!rememberMe.value) {
       localStorage.remove('REMEMBER_ME_PHONE');
@@ -270,6 +269,7 @@ class LoginController extends GetxController {
 
       loginUser = UserModel.empty();
 
+      SessionService.instance.clearSession();
       localStorage.remove('loggedIn');
       localStorage.remove('userId');
       localStorage.remove('selectedOrganization');

@@ -375,7 +375,7 @@ class _EditCustomerAutocompleteState extends State<_EditCustomerAutocomplete> {
         return widget.customers.where((customer) {
           final name = customer.name.toLowerCase();
           final address = customer.address.toLowerCase();
-          final phone = customer.phone.toLowerCase();
+          final phone = customer.phone!.toLowerCase();
 
           return name.contains(query) ||
               address.contains(query) ||

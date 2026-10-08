@@ -277,12 +277,9 @@ class _ServiceSelector extends StatelessWidget {
               ? 'Select vehicle first'
               : 'Select service'),
           items: controller.supportedServices
-              .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
-              .toList(),
+              .map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
           onChanged: controller.selectedVehicle.value == null ||
-                  (controller.liveActivity != null &&
-                      !controller.isController)
-              ? null
+                  (controller.liveActivity != null && !controller.isController)? null
               : (service) {
                   if (service != null) {
                     controller.selectService(service);

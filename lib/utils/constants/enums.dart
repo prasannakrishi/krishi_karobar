@@ -5,7 +5,7 @@ enum ProductType {single, variable}
 
 enum TextSizes { small, medium, large }
 
-enum PaymentStatus { payed, due, partial}
+enum ActivityState { payed, due, expences}
 
 enum PaymentMethods { cash, bankTransfer, eSewa }
 

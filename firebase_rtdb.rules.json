@@ -18,6 +18,10 @@
 
         ".write": "auth != null && (root.child('authUsers').child(auth.uid).child('roles').child('super_admin').val() === true || root.child('authUsers').child(auth.uid).child('roles').child('admin').val() === true)",
 
+        "recentVehicleIds": {
+          ".write": "auth != null"
+        },
+
         ".validate": "newData.hasChildren(['id', 'uId', 'nId', 'fullname', 'phone', 'assignedVehicleIds', 'roles', 'userType', 'status', 'createdAt'])",
 
         "id": {

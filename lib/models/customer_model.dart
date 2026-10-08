@@ -5,7 +5,7 @@ class CustomerModel {
   final String uId;
 
   String name;
-  String phone;
+  String? phone;
   String address;
 
   final DateTime createdAt;
@@ -18,7 +18,7 @@ class CustomerModel {
     required this.id,
     required this.uId,
     required this.name,
-    required this.phone,
+    this.phone,
     required this.address,
     required this.createdAt,
     this.createdBy,

@@ -37,6 +37,24 @@ class FirebaseService {
     }
   }
 
+  Future<bool> setValue(String path, dynamic value) async {
+    final cleanPath = _cleanPath(path);
+
+    if (cleanPath == null) {
+      throw const DataValidationException(
+        code: 'invalid-path',
+        details: 'setValue',
+      );
+    }
+
+    try {
+      await _db.child(cleanPath).set(value);
+      return true;
+    } catch (error) {
+      throw _mapError('setting value', cleanPath, error);
+    }
+  }
+
   Future<bool> updateRecord(
     String path,
     String id,

@@ -89,6 +89,7 @@ class SummaryFooter extends StatelessWidget {
     super.key,
     required this.totalSeconds,
     required this.totalAmount,
+    required this.totalDiscount,
     required this.totalPaid,
     required this.totalDue,
   });
@@ -96,6 +97,7 @@ class SummaryFooter extends StatelessWidget {
   final int totalSeconds;
   final int totalAmount;
   final int totalPaid;
+  final int totalDiscount;
   final int totalDue;
 
   @override
@@ -118,6 +120,11 @@ class SummaryFooter extends StatelessWidget {
           alignment: TextAlign.center,
         ),
         SummaryItem(
+          label: 'Discount',
+          value: 'रु ${totalDiscount.toStringAsFixed(0)}',
+          alignment: TextAlign.center,
+        ),
+        SummaryItem(
           label: 'Due',
           value: 'रु ${totalDue.toStringAsFixed(0)}',
           alignment: TextAlign.right,
@@ -127,3 +134,5 @@ class SummaryFooter extends StatelessWidget {
     );
   }
 }
+
+

@@ -6,8 +6,7 @@ import '../../../common/widgets/app_scaffold.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../utils/constants/enums.dart';
-import '../../../utils/helper/helper_method.dart';
-import '../../../utils/helper/helper_widgets.dart';
+import '../../../utils/helper/helpers.dart';
 import '../../../utils/theme/widget_themes/custom_decoration.dart';
 import 'package:krishi_karobar/features/controllers.dart';
 import 'widgets/details_card_form.dart';
@@ -65,22 +64,23 @@ class ActivityScreen extends StatelessWidget {
                     controller.changePageIndex(
                       controller.currentPageIndex.value + 1,
                     );
-                  } else {
+                  }
+                  else {
                     navigationController.onTabSelected(3);
                   }
-                } else if (velocity > 0) {
+                }
+                else if (velocity > 0) {
                   if (controller.currentPageIndex.value > 0) {
                     controller.changePageIndex(
                       controller.currentPageIndex.value - 1,
                     );
-                  } else {
+                  }
+                  else {
                     navigationController.onTabSelected(1);
                   }
                 }
               },
-              child: Obx(
-                    () => _buildContent(controller),
-              ),
+              child: Obx(() => _buildContent(controller)),
             ),
           ),
         ],
@@ -129,9 +129,7 @@ class ActivityScreen extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 4),
-            Expanded(
-              child: _buildExpenseTable(controller, expenses),
-            ),
+            Expanded(child: _buildExpenseTable(controller, expenses)),
             _buildExpenseDetails(controller, expenses),
             const SizedBox(height: 12),
             _buildExpenseSummary(controller, expenses),
@@ -147,6 +145,7 @@ class ActivityScreen extends StatelessWidget {
     final totalSeconds = controller.totalSecondsFor(filterEntries);
     final totalAmount = controller.totalAmountFor(filterEntries);
     final totalPaid = controller.totalPaidFor(filterEntries);
+    final totalDiscount = controller.totalDiscountFor(filterEntries);
     final totalDue = controller.totalDueFor(filterEntries);
 
     return Padding(
@@ -169,6 +168,7 @@ class ActivityScreen extends StatelessWidget {
             totalSeconds: totalSeconds,
             totalAmount: totalAmount,
             totalPaid: totalPaid,
+            totalDiscount: totalDiscount,
             totalDue: totalDue,
           ),
         ],
@@ -176,12 +176,16 @@ class ActivityScreen extends StatelessWidget {
     );
   }
 
-  PaymentStatus _currentSection(ActivityController controller) {
+  ActivityState _currentSection(ActivityController controller) {
     switch (controller.currentPageIndex.value) {
+      case 0:
+        return ActivityState.payed;
       case 1:
-        return PaymentStatus.due;
+        return ActivityState.due;
+      case 2:
+        return ActivityState.expences;
       default:
-        return PaymentStatus.payed;
+        return ActivityState.due;
     }
   }
 
@@ -303,7 +307,7 @@ class ActivityScreen extends StatelessWidget {
                     _buildCell(
                     Align(
                       alignment: Alignment.center,
-                      child: Text(controller.secondsToHHMMSS(activity.duration)),
+                      child: Text(secondsToHHMMSS(activity.duration)),
                     ),
                     80,
                     ),

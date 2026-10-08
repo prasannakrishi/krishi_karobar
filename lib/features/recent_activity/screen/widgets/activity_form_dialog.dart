@@ -181,7 +181,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         ? null
         : cache.getRecordByValue<CustomerModel>(
             'customers',
-            (c) => c.phone.trim() == phone,
+            (c) => c.phone!.trim() == phone,
           );
 
     if (existing != null) {

@@ -13,6 +13,7 @@ class UserModel {
   String phone;
   String? email;
   String? permanentAddress;
+  String? recentVehicleIds;
   List<String> assignedVehicleIds;
   List<String> roles;
   String userType;
@@ -30,6 +31,7 @@ class UserModel {
     required this.phone,
     this.email,
     this.permanentAddress,
+    this.recentVehicleIds,
     List<String>? assignedVehicleIds,
     List<String>? roles,
     this.userType = UserTypes.organization,
@@ -124,6 +126,7 @@ class UserModel {
       phone: toStringValue(map['phone']),
       email: map['email']?.toString(),
       permanentAddress: map['permanentAddress']?.toString() ?? map['address']?.toString(),
+      recentVehicleIds: map['recentVehicleIds']?.toString() ?? map['recentVehicleId']?.toString(),
       assignedVehicleIds: assignedVehicleIds,
       roles: userType == UserTypes.guest ? [] : roles,
       userType: userType,
@@ -144,6 +147,7 @@ class UserModel {
       'phone': phone,
       'email': email,
       'permanentAddress': permanentAddress,
+      'recentVehicleIds': recentVehicleIds,
       'assignedVehicleIds': List<String>.from(assignedVehicleIds),
       'roles': List<String>.from(roles),
       'userType': userType,
