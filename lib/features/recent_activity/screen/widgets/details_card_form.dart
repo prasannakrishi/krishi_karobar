@@ -3,9 +3,11 @@ import 'package:get/get.dart';
 
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
+import '../../../../utils/helper/helpers.dart';
 import '../../../../utils/helper/nepali_date_time.dart';
 import '../../../../utils/theme/widget_themes/custom_decoration.dart';
 import '../../../payment/screen/widgets/payment_dialog.dart';
+import '../../../payment/screen/widgets/payment_slip.dart';
 import '../../controllers/activity_controller.dart';
 
 class DetailsCardForm extends StatefulWidget {
@@ -110,6 +112,101 @@ class _DetailsCardFormState extends State<DetailsCardForm> {
       PaymentDialog(
         customerId: widget.entry.customerId,
       ),
+    );
+  }
+
+  void _openBill() {
+    final cache = DataCacheService.instance;
+    final activity = widget.entry;
+
+    // 1. Search cache.payments for all PaymentModel containing activity.id
+    final matchingPayments = cache.payments.values
+        .where((payment) =>
+            payment.allocations.any((alloc) => alloc.activityId == activity.id))
+        .toList();
+
+    matchingPayments.sort((a, b) => b.paidAt.compareTo(a.paidAt));
+
+    if (matchingPayments.length == 1) {
+      Get.dialog(PaymentSlip(payment: matchingPayments.first));
+      return;
+    }
+
+    if (matchingPayments.length > 1) {
+      Get.dialog(
+        AlertDialog(
+          title: const Text('Select Payment Receipt'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: matchingPayments.map((payment) {
+              return ListTile(
+                leading: const Icon(Icons.receipt_long, color: Colors.teal),
+                title: Text('Receipt #${payment.uId}'),
+                subtitle: Text('Amount: रु ${payment.amount} • ${formatNepaliDateTimeShort(payment.paidAt)}'),
+                onTap: () {
+                  Get.back();
+                  Get.dialog(PaymentSlip(payment: payment));
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 2. Fallback: Build synthetic payment for same-time paid activities
+    final syntheticPayment = _createSyntheticPayment(activity, cache);
+    Get.dialog(PaymentSlip(payment: syntheticPayment));
+  }
+
+  PaymentModel _createSyntheticPayment(ActivityModel activity, DataCacheService cache) {
+    final sameTimeActivities = cache.activities.values.where((a) {
+      if (a.customerId != activity.customerId) return false;
+      if (a.paidAmount <= 0 && a.discountAmount <= 0) return false;
+
+      if (activity.paidAt != null && a.paidAt != null) {
+        return a.paidAt!.difference(activity.paidAt!).inMinutes.abs() <= 1;
+      }
+      return a.id == activity.id;
+    }).toList();
+
+    final allocations = sameTimeActivities.map((a) {
+      final paid = a.paidAmount;
+      final disc = a.discountAmount;
+      final amount = a.amount;
+      final due = a.dueAmount;
+      final prevDue = paid + disc + due;
+      return PaymentAllocationModel(
+        activityId: a.id,
+        previousDue: prevDue > 0 ? prevDue : amount,
+        paidAmount: paid,
+        discount: disc,
+        remainingDue: due,
+      );
+    }).toList();
+
+    final totalPaid = allocations.fold(0, (sum, item) => sum + item.paidAmount);
+    final totalDisc = allocations.fold(0, (sum, item) => sum + item.discount);
+
+    return PaymentModel(
+      id: 'syn_${activity.id}',
+      uId: 'P-${activity.uId}',
+      customerId: activity.customerId,
+      amount: totalPaid,
+      discount: totalDisc,
+      paymentMethod: 'cash',
+      receivedBy: activity.receivedBy ?? activity.supervisorId,
+      paidAt: activity.paidAt ?? activity.createdAt,
+      allocations: allocations,
+      description: activity.description,
+      createdAt: activity.createdAt,
     );
   }
 
@@ -228,7 +325,7 @@ class _DetailsCardFormState extends State<DetailsCardForm> {
         Expanded(
           child: CustomDecoration.uTextField(
             'Amount',
-            'रु ${widget.entry.amount.toStringAsFixed(2)}'
+            'रु ${widget.entry.amount.toStringAsFixed(0)}',
           ),
         ),
         const SizedBox(width: 5),
@@ -241,8 +338,15 @@ class _DetailsCardFormState extends State<DetailsCardForm> {
         const SizedBox(width: 5),
         Expanded(
           child: CustomDecoration.uTextField(
+            'Discount',
+            'रु ${widget.entry.discountAmount.toStringAsFixed(0)}',
+          ),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: CustomDecoration.uTextField(
             'Due',
-            'रु ${widget.entry.dueAmount.toStringAsFixed(0)}'
+            'रु ${widget.entry.dueAmount.toStringAsFixed(0)}',
           ),
         ),
       ],
@@ -251,19 +355,63 @@ class _DetailsCardFormState extends State<DetailsCardForm> {
 
   Widget _buildPaymentButton() {
     final hasDue = widget.entry.dueAmount > 0;
+    final hasPaid = widget.entry.paidAmount > 0 || widget.entry.discountAmount > 0;
+
+    if (hasDue && hasPaid) {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _openBill,
+                icon: const Icon(Icons.receipt_long, size: 20),
+                label: const Text('View Bill'),
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _openPayment,
+                icon: const Icon(Icons.payments, size: 20),
+                label: const Text('Collect Payment'),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return SizedBox(
-      height: 50,
+      height: 48,
       child: ElevatedButton.icon(
-        onPressed: hasDue ? _openPayment : null,
-        icon: const Icon(Icons.payments),
+        onPressed: hasDue
+            ? _openPayment
+            : (hasPaid ? _openBill : null),
+        icon: Icon(hasDue ? Icons.payments : Icons.receipt_long, size: 20),
         label: Text(
           hasDue ? 'Collect Customer Payment' : 'View Bill',
         ),
         style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.zero, // 👈 vertical padding हटाइयो
-          minimumSize: const Size(0, 50), // height control
-          alignment: Alignment.center, // content center मा राख्न
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(double.infinity, 48),
+          alignment: Alignment.center,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       ),
     );

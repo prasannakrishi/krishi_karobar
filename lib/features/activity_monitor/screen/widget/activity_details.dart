@@ -17,130 +17,142 @@ class ActivityForm extends StatelessWidget {
     return Column(
       children: [
         // Service and Rate
-        Row(
-          children: [
-            Expanded(
-              child: _ServiceSelector(controller: controller),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: controller.rate,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Rate / Hour',
-                  prefixText: 'Rs. ',
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8), // समान padding
+          child: Row(
+            children: [
+              Expanded(
+                child: _ServiceSelector(controller: controller),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: controller.rate,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Rate / Hour',
+                    prefixText: 'Rs. ',
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 10),
 
-        _DescriptionAutocomplete(controller: controller),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _DescriptionAutocomplete(controller: controller),
+        ),
         const SizedBox(height: 10),
 
         // Start and End Time
-        Obx(
-          () => Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey(timer.startTimeText.value),
-                  initialValue: timer.startTimeText.value,
-                  readOnly: true,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                  decoration: const InputDecoration(
-                    labelText: 'Start Time',
-                    contentPadding: EdgeInsets.all(8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Obx(
+                () => Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey(timer.startTimeText.value),
+                    initialValue: timer.startTimeText.value,
+                    readOnly: true,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    decoration: const InputDecoration(
+                      labelText: 'Start Time',
+                      contentPadding: EdgeInsets.all(8),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey(timer.endTimeText.value),
-                  initialValue: timer.endTimeText.value,
-                  readOnly: true,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                  decoration: const InputDecoration(
-                    labelText: 'End Time',
-                    contentPadding: EdgeInsets.all(8),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey(timer.endTimeText.value),
+                    initialValue: timer.endTimeText.value,
+                    readOnly: true,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    decoration: const InputDecoration(
+                      labelText: 'End Time',
+                      contentPadding: EdgeInsets.all(8),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 8),
-        Obx(
-          () => Row(
-            children: [
-              Expanded(
-                child: _InfoCard(
-                  title: 'DURATION',
-                  value: timer.duration.value,
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Obx(
+                () => Row(
+              children: [
+                Expanded(
+                  child: _InfoCard(
+                    title: 'DURATION',
+                    value: timer.duration.value,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _InfoCard(
-                  title: 'AMOUNT',
-                  value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _InfoCard(
+                    title: 'AMOUNT',
+                    value: 'Rs. ${timer.amount.value.toStringAsFixed(0)}',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        Obx(() {
-          final activity = controller.liveActivity;
-          if (activity == null) return const SizedBox.shrink();
 
-          final isPaused = activity.status == ActivityStatus.paused;
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Obx(() {
+            final activity = controller.liveActivity;
+            if (activity == null) return const SizedBox.shrink();
 
-          return Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: (isPaused ? Colors.orange : Colors.green)
-                    .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isPaused ? Colors.orange : Colors.green,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isPaused ? Icons.pause_circle : Icons.play_circle,
+            final isPaused = activity.status == ActivityStatus.paused;
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: (isPaused ? Colors.orange : Colors.green).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
                     color: isPaused ? Colors.orange : Colors.green,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${isPaused ? 'PAUSED' : 'RUNNING'} · Started by '
-                      '${controller.startedByName(activity)}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isPaused ? Icons.pause_circle : Icons.play_circle,
+                      color: isPaused ? Colors.orange : Colors.green,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${isPaused ? 'PAUSED' : 'RUNNING'} · Started by '
+                            '${controller.startedByName(activity)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ],
     );
+
   }
 }
 
@@ -301,6 +313,12 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Theme.of(context).dividerColor),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(

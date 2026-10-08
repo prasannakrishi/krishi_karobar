@@ -18,6 +18,12 @@ class MonitorSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
+      elevation: 0,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [

@@ -11,6 +11,7 @@ import 'package:krishi_karobar/services/data_cache_service.dart';
 import 'package:krishi_karobar/services/firebase_service.dart';
 import 'package:krishi_karobar/services/authorization_service.dart';
 import 'package:krishi_karobar/services/sequences_service.dart';
+import 'package:krishi_karobar/services/session_service.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 
 class VehicleController extends GetxController {
@@ -217,9 +218,8 @@ class VehicleController extends GetxController {
       return;
     }
 
-    final assignedIds = user.assignedVehicleIds
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
+    final assignedVehicles = assignedVehiclesForUser(userId)
+        .where((v) => v.isActive)
         .toList();
 
     VehicleModel? targetVehicle;
@@ -227,14 +227,7 @@ class VehicleController extends GetxController {
     // 1. Check recentVehicleIds from user profile first
     final recentId = user.recentVehicleIds?.trim();
     if (recentId != null && recentId.isNotEmpty) {
-      final cached = cache.vehicles[recentId];
-      final hasAccess = user.hasAllVehicleAccess ||
-          user.id == cached?.ownerId ||
-          assignedIds.contains(recentId);
-
-      if (cached != null && hasAccess && cached.isActive) {
-        targetVehicle = cached;
-      }
+      targetVehicle = assignedVehicles.firstWhereOrNull((v) => v.id == recentId);
     }
 
     // 2. Check local storage if not found in profile
@@ -245,26 +238,14 @@ class VehicleController extends GetxController {
           final stored = VehicleModel.fromMap(
             Map<String, dynamic>.from(data),
           );
-          final cached = cache.vehicles[stored.id] ?? stored;
-          final hasAccess = user.hasAllVehicleAccess ||
-              user.id == cached.ownerId ||
-              assignedIds.contains(cached.id);
-
-          if (cached.id.isNotEmpty && hasAccess && cached.isActive) {
-            targetVehicle = cached;
-          }
+          targetVehicle = assignedVehicles.firstWhereOrNull((v) => v.id == stored.id);
         } catch (_) {}
       }
     }
 
     // 3. Fallback: First assigned vehicle
-    if (targetVehicle == null && assignedIds.isNotEmpty) {
-      targetVehicle = cache.getCachedRecords<VehicleModel>('vehicles')
-          .cast<VehicleModel?>()
-          .firstWhere(
-            (v) => v != null && assignedIds.contains(v.id) && v.isActive,
-            orElse: () => null,
-          );
+    if (targetVehicle == null && assignedVehicles.isNotEmpty) {
+      targetVehicle = assignedVehicles.first;
     }
 
     if (targetVehicle != null) {
@@ -290,19 +271,21 @@ class VehicleController extends GetxController {
     bool showMessage = true,
     bool persist = true,
   }) {
-    vehicle = v;
-    selectedVehicle.value = v;
+    final cachedVehicle = cache.vehicles[v.id] ?? v;
+    vehicle = cachedVehicle;
+    selectedVehicle.value = cachedVehicle;
 
     if (persist) {
       localStorage.write(
         _defaultVehicleStorageKey,
-        v.toMap(),
+        cachedVehicle.toMap(),
       );
 
       final user = LoginController.loginUser;
       if (user.id.isNotEmpty) {
-        user.recentVehicleIds = v.id;
-        firebaseService.setValue('users/${user.id}/recentVehicleIds', v.id).catchError((e) {
+        user.recentVehicleIds = cachedVehicle.id;
+        SessionService.instance.updateUserSnapshot(user);
+        firebaseService.setValue('users/${user.id}/recentVehicleIds', cachedVehicle.id).catchError((e) {
           debugPrint('VehicleController: remote recentVehicleIds sync skipped: $e');
           return false;
         });
@@ -310,17 +293,19 @@ class VehicleController extends GetxController {
     }
 
     if (Get.isRegistered<MonitorController>()) {
-      Get.find<MonitorController>().selectVehicle(v);
+      Get.find<MonitorController>().selectVehicle(cachedVehicle);
     }
 
     if (Get.isRegistered<ActivityController>()) {
-      Get.find<ActivityController>().applyLocalFilters();
+      final activityCtrl = Get.find<ActivityController>();
+      activityCtrl.selectedVehicleIds.assignAll([cachedVehicle.id]);
+      activityCtrl.applyLocalFilters();
     }
 
     if (showMessage) {
       Get.snackbar(
         'Success',
-        'Default Vehicle set to ${v.number}',
+        'Default Vehicle set to ${cachedVehicle.number}',
       );
     }
   }
@@ -346,12 +331,8 @@ class VehicleController extends GetxController {
         .toList();
   }
 
-  /// The logged-in user's assigned vehicle is the app-wide default.
-  ///
-  /// This intentionally does not respect a vehicle left by a previous login.
-  /// A user with multiple assigned vehicles gets the first valid assigned
-  /// vehicle as the initial default; the user may still change the selection
-  /// afterwards where the UI permits it.
+  /// Ensures the default vehicle for current user is set without overwriting
+  /// an existing valid user selection.
   void ensureDefaultVehicleForCurrentUser() {
     final userId = LoginController.loginUser.id.trim();
     if (userId.isEmpty) {
@@ -359,27 +340,17 @@ class VehicleController extends GetxController {
       return;
     }
 
-    final assignedIds =
-        LoginController.loginUser.assignedVehicleIds
-            .map((id) => id.trim())
-            .where((id) => id.isNotEmpty)
-            .toList();
-
-    final assigned = vehiclesList
-        .where((v) => assignedIds.contains(v.id) && v.isActive)
+    final assigned = assignedVehiclesForUser(userId)
+        .where((v) => v.isActive)
         .toList();
 
-    if (assigned.isNotEmpty) {
-      setDefaultVehicle(
-        assigned.first,
-        showMessage: false,
-        persist: true,
-      );
+    final current = selectedVehicle.value;
+    if (current != null && assigned.any((v) => v.id == current.id)) {
+      // Valid current selection, do not reset!
       return;
     }
 
-    // No assigned vehicle: do not carry a previous user's vehicle.
-    clearDefaultVehicle();
+    loadDefaultVehicle();
   }
 
   // INITIALIZE FORM

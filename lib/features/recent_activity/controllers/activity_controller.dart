@@ -5,6 +5,7 @@ import 'package:nepali_utils/nepali_utils.dart';
 
 import '../../../models/models.dart';
 import '../../../features/authentication/controllers/login_controllers.dart';
+import '../../../features/user_setting/controller/vehicle_controller.dart';
 import '../../../services/data_cache_service.dart';
 import '../../../services/authorization_service.dart';
 import '../../../services/firebase_service.dart';
@@ -45,7 +46,9 @@ class ActivityController extends GetxController {
   final sections = ['Paid', 'Due', 'Expenses'];
 
   List<ActivityModel> get allActivities =>
-      cache.activities.values.toList();
+      cache.activities.values
+          .where((activity) => activity.status != ActivityStatus.cancelled)
+          .toList();
 
   List<VehicleModel> get vehicles =>
       cache.vehicles.values.toList();
@@ -79,15 +82,44 @@ class ActivityController extends GetxController {
     setFilter('Today');
 
     ever(cache.activities, (_) => applyLocalFilters());
-    ever(cache.vehicles, (_) => update());
+    ever(cache.vehicles, (_) {
+      _loadDefaultVehicle();
+      update();
+    });
     ever(cache.customers, (_) => update());
     ever(cache.services, (_) => update());
+
+    if (Get.isRegistered<VehicleController>()) {
+      ever(VehicleController.instance.selectedVehicle, (vehicle) {
+        if (vehicle != null && vehicle.id.isNotEmpty) {
+          selectedVehicleIds.assignAll([vehicle.id]);
+          applyLocalFilters();
+        }
+      });
+    }
 
     applyLocalFilters();
   }
 
   void _loadDefaultVehicle() {
+    if (Get.isRegistered<VehicleController>()) {
+      final selected = VehicleController.instance.selectedVehicle.value;
+      if (selected != null && selected.id.isNotEmpty) {
+        selectedVehicleIds.assignAll([selected.id]);
+        return;
+      }
+    }
+
     final user = LoginController.loginUser;
+    final recentId = user.recentVehicleIds?.trim();
+    if (recentId != null && recentId.isNotEmpty) {
+      final recentVehicle = vehicles.firstWhereOrNull((v) => v.id == recentId);
+      if (recentVehicle != null) {
+        selectedVehicleIds.assignAll([recentVehicle.id]);
+        return;
+      }
+    }
+
     final assignedIds = user.assignedVehicleIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
@@ -98,8 +130,6 @@ class ActivityController extends GetxController {
       return;
     }
 
-    // The records filter must start with the logged-in user's assigned
-    // vehicle, not with a vehicle left by another login.
     final assignedVehicle = vehicles.firstWhereOrNull(
       (vehicle) =>
           assignedIds.contains(vehicle.id) && vehicle.isActive,
@@ -107,10 +137,6 @@ class ActivityController extends GetxController {
 
     if (assignedVehicle != null) {
       selectedVehicleIds.assignAll([assignedVehicle.id]);
-      localStorage.write(
-        'default_vehicle_${user.id}',
-        assignedVehicle.toMap(),
-      );
       return;
     }
 
@@ -243,7 +269,8 @@ class ActivityController extends GetxController {
     return activities.where((activity) {
       final amount = activity.amount;
       final paid = activity.paidAmount;
-      final due = amount - paid;
+      final discount = activity.discountAmount;
+      final due = amount - (paid + discount);
 
       switch (section) {
         case ActivityState.payed:
@@ -786,14 +813,28 @@ class ActivityController extends GetxController {
     try {
       Authz.requirePermission(Permissions.activityEdit);
 
-      await firebaseService.deleteRecord('activities', activity.id);
+      await firebaseService.updateRecord('activities', activity.id, {
+        'status': ActivityStatus.cancelled,
+        'cancelledBy': LoginController.loginUser.id,
+        'cancelledAt': DateTime.now().toUtc().toIso8601String(),
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      final cached = cache.activities[activity.id];
+      if (cached != null) {
+        cached.status = ActivityStatus.cancelled;
+        cached.cancelledBy = LoginController.loginUser.id;
+        cached.cancelledAt = DateTime.now();
+        cached.updatedAt = DateTime.now();
+        cache.activities.refresh();
+      }
 
       applyLocalFilters();
       selectedIndex.value = null;
 
       Get.snackbar(
         'Success',
-        'Activity deleted successfully',
+        'Activity reset/cancelled successfully',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: const Color(0xFF4CAF50),
         colorText: Colors.white,

@@ -278,9 +278,10 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         duration: durationSeconds,
         rate: rate,
         amount: amount,
-        paidAmount: paidAmount + discount,
+        paidAmount: paidAmount,
+        discountAmount: discount,
         dueAmount: dueAmount > 0 ? dueAmount : 0,
-        receivedBy: (paidAmount + discount) > 0 ? user.id : null,
+        receivedBy: paidAmount > 0 ? user.id : null,
         description: description.isEmpty ? null : description,
         status: status,
         startLocation: startLoc,
@@ -289,7 +290,38 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         updatedAt: currentTime,
       );
 
-      await firebaseService.saveRecord('activities', id, activity.toMap());
+      final updates = <String, dynamic>{
+        'activities/$id': activity.toMap(),
+      };
+
+      if (paidAmount > 0 || discount > 0) {
+        final paymentId = const Uuid().v4();
+        final paymentUid = await SequenceService.instance.generateSequence('P');
+        final payment = PaymentModel(
+          id: paymentId,
+          uId: paymentUid,
+          customerId: customer.id,
+          amount: paidAmount,
+          discount: discount,
+          paymentMethod: 'cash',
+          receivedBy: user.id,
+          paidAt: currentTime,
+          allocations: [
+            PaymentAllocationModel(
+              activityId: id,
+              previousDue: amount,
+              paidAmount: paidAmount,
+              discount: discount,
+              remainingDue: dueAmount > 0 ? dueAmount : 0,
+            ),
+          ],
+          description: description.isEmpty ? null : description,
+          createdAt: currentTime,
+        );
+        updates['payments/$paymentId'] = payment.toMap();
+      }
+
+      await firebaseService.updateRecords(updates);
       if (startLoc != null) {
         await LocationService.instance.saveStartLocation(id, startLoc);
       }

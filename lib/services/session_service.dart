@@ -103,6 +103,10 @@ class SessionService extends GetxService with WidgetsBindingObserver {
     _scheduleMidnightCheck();
   }
 
+  void updateUserSnapshot(UserModel user) {
+    _storage.write(_userSnapshotKey, user.toMap());
+  }
+
   void clearSession() {
     _midnightTimer?.cancel();
     _midnightTimer = null;

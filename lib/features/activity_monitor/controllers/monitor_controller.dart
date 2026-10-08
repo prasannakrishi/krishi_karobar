@@ -561,10 +561,10 @@ class MonitorController extends GetxController {
     timerController.computeAmount(service.rate);
 
     final vehicle = selectedVehicle.value;
-    if (vehicle != null &&
-        (vehicle.serviceId == null || vehicle.serviceId!.trim().isEmpty)) {
+    if (vehicle != null) {
       vehicle.serviceId = service.id;
       storage.write('default_vehicle', vehicle.toMap());
+      cache.vehicles[vehicle.id]?.serviceId = service.id;
       _background('vehicles', vehicle.id, {
         'serviceId': service.id,
       });
@@ -954,13 +954,24 @@ class MonitorController extends GetxController {
   /// this just clears the local form; otherwise it cancels the live
   /// activity record so every viewer sees it end.
   Future<void> confirmReset() async {
-    if (currentActivityId != null &&
-        !_requirePermission(Permissions.activityCancel)) {
-      return;
-    }
-    if (!_requireControl()) return;
-
     final hasLiveRecord = currentActivityId != null;
+
+    if (hasLiveRecord) {
+      final activity = cache.activities[currentActivityId!];
+      if (activity != null) {
+        if (!Authz.canControlActivity(activity) && !Authz.can(Permissions.activityCancel)) {
+          showMessage('Not allowed', 'You do not have permission to cancel this activity.');
+          return;
+        }
+      }
+    } else {
+      if (!Authz.can(Permissions.activityCancel) && !Authz.can(Permissions.activityStart) && !Authz.can(Permissions.activityEdit)) {
+        showMessage('Not allowed', 'You do not have permission to reset activity.');
+        return;
+      }
+    }
+
+    if (!_requireControl()) return;
 
     final confirmed = await _confirmDialog(
       title: hasLiveRecord ? 'Cancel Activity?' : 'Reset Activity?',

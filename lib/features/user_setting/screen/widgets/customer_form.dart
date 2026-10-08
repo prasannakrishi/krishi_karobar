@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:krishi_karobar/common/widgets/customer_search_field.dart';
 import 'package:krishi_karobar/features/controllers.dart';
-import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 
 class CustomerForm extends StatelessWidget {
-  final controller = Get.find<CustomerController>();
+  const CustomerForm({super.key});
 
-
+  @override
   Widget build(BuildContext context) {
     final controller = CustomerController.instance;
 
@@ -15,7 +15,7 @@ class CustomerForm extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: SingleChildScrollView(
             child: Obx(
                 () => Column(
@@ -43,29 +43,14 @@ class CustomerForm extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                TextFormField(
-                  controller: controller.nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: CustomDecoration.uInputDecoration(
-                    labelText: 'Customer Name *',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: controller.phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: CustomDecoration.uInputDecoration(
-                    labelText: 'Phone Number',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: controller.addressController,
-                  textCapitalization: TextCapitalization.words,
-                  maxLines: 1,
-                  decoration: CustomDecoration.uInputDecoration(
-                    labelText: 'Address',
-                  ),
+                CustomerSearchField(
+                  nameController: controller.nameController,
+                  phoneController: controller.phoneController,
+                  addressController: controller.addressController,
+                  onCustomerSelected: (customer) {
+                    controller.phoneController.text = customer.phone ?? '';
+                    controller.addressController.text = customer.address;
+                  },
                 ),
                 const SizedBox(height: 18),
                 SizedBox(
@@ -88,21 +73,21 @@ class CustomerForm extends StatelessWidget {
                         strokeWidth: 2,
                         color: Colors.grey,
                       ),
-                      )
-                      : Text(
+                    )
+                    : Text(
                         controller.isEditMode.value ? 'Update Customer' : 'Save Customer',
                         style: const TextStyle(
                           fontSize: 25,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    )
+                  ),
                 ),
-              ]
+              ],
             )),
           ),
         ),
-      )
+      ),
     );
   }
 }

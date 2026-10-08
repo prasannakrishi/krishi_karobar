@@ -203,8 +203,14 @@ class _SelectedVehicleRow extends StatelessWidget {
       }
 
       if (assigned.length == 1) {
+        final single = assigned.first;
+        if (selectedVehicle == null || selectedVehicle.id != single.id) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            controller.setDefaultVehicle(single, showMessage: false);
+          });
+        }
         return UDetailRow(
-          value: assigned.first.number,
+          value: single.number,
           icon: Iconsax.truck,
         );
       }
@@ -218,6 +224,13 @@ class _SelectedVehicleRow extends StatelessWidget {
 
       if (selected == null || !assigned.any((v) => v.id == selected!.id)) {
         selected = assigned.first;
+      }
+
+      if (selectedVehicle == null || selectedVehicle.id != selected.id) {
+        final target = selected;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          controller.setDefaultVehicle(target, showMessage: false);
+        });
       }
 
       return Row(

@@ -20,7 +20,7 @@ class MonitorScreen extends GetView<MonitorController> {
       extendBodyBehindAppBar: false,
       appBar: UAppBar(title: 'Activity Monitor'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(5, 8, 5, 10),
+        padding: const EdgeInsets.fromLTRB(3, 8, 3, 10),
         child: Column(
           children: [
             Obx(
@@ -36,10 +36,11 @@ class MonitorScreen extends GetView<MonitorController> {
             Obx(
               () => _Section(
                 title: 'CUSTOMER INFO',
+                summary: controller.customerSummary.value,
                 collapsed: controller.customerCollapsed.value,
                 onTap: controller.customerCollapsed.toggle,
+                // ignore: sort_child_properties_last
                 child: CustomerForm(controller: controller),
-                summary: controller.customerSummary.value,
               ),
             ),
             const SizedBox(height: 5),
@@ -54,6 +55,7 @@ class MonitorScreen extends GetView<MonitorController> {
 
 class _Section extends StatelessWidget {
   const _Section({
+    super.key,
     required this.title,
     required this.summary,
     required this.collapsed,
@@ -69,6 +71,12 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
+      elevation: 0,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,11 +84,11 @@ class _Section extends StatelessWidget {
           InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(title, style: theme.textTheme.titleMedium),
+                    child: Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   ),
                   if (collapsed) ...[
                       const SizedBox(width: 5),
@@ -102,7 +110,7 @@ class _Section extends StatelessWidget {
           ),
           if (!collapsed)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: const EdgeInsets.fromLTRB(5, 0, 5, 5),
               child: child,
             ),
         ],
