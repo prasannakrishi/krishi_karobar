@@ -26,13 +26,13 @@ android {
     flavorDimensions += "default"
 
     productFlavors {
-        create("dev") {
-            dimension = "default"
-            applicationId = "com.example.krishi_karobar_dev"
-        }
         create("prod") {
             dimension = "default"
             applicationId = "com.example.krishi_karobar"
+        }
+        create("dev") {
+            dimension = "default"
+            applicationId = "com.example.krishi_karobar_dev"
         }
     }
 
