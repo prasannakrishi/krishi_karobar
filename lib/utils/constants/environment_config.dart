@@ -1,8 +1,8 @@
 enum Environment { dev, prod }
 
 class EnvironmentConfig {
-  static Environment currentEnvironment = Environment.prod;
-  //static Environment currentEnvironment = Environment.dev;
+  //static Environment currentEnvironment = Environment.prod;
+  static Environment currentEnvironment = Environment.dev;
 
   static void setEnvironment(Environment env) {
     currentEnvironment = env;
