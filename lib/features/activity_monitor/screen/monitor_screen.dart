@@ -55,7 +55,6 @@ class MonitorScreen extends GetView<MonitorController> {
 
 class _Section extends StatelessWidget {
   const _Section({
-    super.key,
     required this.title,
     required this.summary,
     required this.collapsed,

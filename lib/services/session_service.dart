@@ -140,58 +140,23 @@ class SessionService extends GetxService with WidgetsBindingObserver {
     }
 
     final storedUserId = _storage.read<String>(_userIdKey) ?? '';
-    final firebaseUser = await _currentFirebaseUser();
+    final cached = _cachedProfile(storedUserId);
 
-    if (firebaseUser == null) {
-      return _rejectRestore('Your sign-in is no longer valid. Please sign in again.');
+    if (cached == null) {
+      return const SessionRestoreResult.loginRequired();
     }
 
-    UserModel profile;
-    var validatedOnline = true;
-
-    try {
-      profile = await UserProfileResolver()
-          .resolve(firebaseUser)
-          .timeout(const Duration(seconds: 15));
-      _storage.write(_userSnapshotKey, profile.toMap());
-    } catch (error) {
-      final isNetworkProblem =
-          error is TimeoutException || AppException.from(error) is NetworkException;
-
-      if (!isNetworkProblem) {
-        return _rejectRestore(AppException.messageOf(error));
-      }
-
-      final cached = _cachedProfile(storedUserId);
-
-      if (cached == null) {
-        return _rejectRestore(
-          'No internet connection. Connect to the internet and sign in again.',
-        );
-      }
-
-      profile = cached;
-      validatedOnline = false;
-    }
-
-    if (profile.id != storedUserId) {
-      return _rejectRestore('Stored session does not match the signed-in user.');
-    }
-
-    LoginController.loginUser = profile;
+    // Instantly restore session from local storage for instant cold start
+    LoginController.loginUser = cached;
 
     if (!Get.isRegistered<DataCacheService>()) {
       Get.put(DataCacheService());
     }
 
     try {
-      final init = DataCacheService.instance.initializeForUser(profile);
-      await (validatedOnline ? init : init.timeout(const Duration(seconds: 10)));
+      await DataCacheService.instance.initializeForUser(cached);
     } catch (error) {
-      if (validatedOnline) {
-        return _rejectRestore(AppException.messageOf(error));
-      }
-      debugPrint('SessionService offline cache init: $error');
+      debugPrint('SessionService local cache init: $error');
     }
 
     if (!_isSessionDateCurrent) {
@@ -211,7 +176,22 @@ class SessionService extends GetxService with WidgetsBindingObserver {
     }
 
     _scheduleMidnightCheck();
+
+    // Refresh profile in background asynchronously without blocking startup
+    _backgroundProfileRefresh();
+
     return const SessionRestoreResult.restored();
+  }
+
+  void _backgroundProfileRefresh() {
+    _currentFirebaseUser().then((firebaseUser) {
+      if (firebaseUser != null) {
+        UserProfileResolver().resolve(firebaseUser).then((profile) {
+          _storage.write(_userSnapshotKey, profile.toMap());
+          LoginController.loginUser = profile;
+        }).catchError((_) {});
+      }
+    }).catchError((_) {});
   }
 
   Future<User?> _currentFirebaseUser() async {

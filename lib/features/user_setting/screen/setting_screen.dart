@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
 import '../../../common/widgets/settings_menu_title.dart';
+import '../../../common/widgets/u_widgets.dart';
 import '../../../features/user_setting/screen/user_management_screen.dart';
 import '../../../models/vehicle_model.dart';
 import '../../../services/services.dart';
@@ -147,6 +148,31 @@ class SettingsScreen extends StatelessWidget {
                       subtitle: 'Manage app notifications',
                       trailing: Switch(value: true, onChanged: (_) {}),
                     ),
+                    Obx(() {
+                      final displaySizeCtrl = UDisplaySizeController.instance;
+                      return USettingsMenuTile(
+                        icon: Iconsax.size,
+                        title: 'Display Size',
+                        subtitle: 'Current: ${displaySizeCtrl.displaySize.value.label}',
+                        trailing: DropdownButtonHideUnderline(
+                          child: DropdownButton<UDisplaySize>(
+                            value: displaySizeCtrl.displaySize.value,
+                            isDense: true,
+                            items: UDisplaySize.values.map((size) {
+                              return DropdownMenuItem(
+                                value: size,
+                                child: Text(size.label, style: const TextStyle(fontSize: 12)),
+                              );
+                            }).toList(),
+                            onChanged: (newSize) {
+                              if (newSize != null) {
+                                displaySizeCtrl.setDisplaySize(newSize);
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               );

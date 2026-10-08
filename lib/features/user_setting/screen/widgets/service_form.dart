@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../../common/widgets/u_widgets.dart';
 import '../../controller/service_controller.dart';
 
 class ServiceForm extends StatelessWidget {
@@ -20,7 +21,7 @@ class ServiceForm extends StatelessWidget {
           maxWidth: 760,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.all(16),
           child: SingleChildScrollView(
             child: Obx(
               () => Column(
@@ -49,23 +50,24 @@ class ServiceForm extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: _TextField(
+                        child: UTextField(
                           controller: controller.nameController,
-                          label: 'Name',
+                          labelText: 'Name',
                           required: true,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _DropdownField<String>(
-                          label: 'Vehicle Type',
+                        child: UOptionField<String>(
+                          labelText: 'Vehicle Type',
                           value: controller.selectedVehicleType.value,
-                          items: ServiceController.vehicleTypes,
-                          itemLabel: (v) => v ?? 'All',
+                          options: ServiceController.vehicleTypes
+                              .map((v) => UOption<String>(value: v, label: v))
+                              .toList(),
                           onChanged: (value) {
                             if (value != null) {
                               controller.selectedVehicleType.value = value;
@@ -75,26 +77,25 @@ class ServiceForm extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: _TextField(
+                        child: UNumberField(
                           controller: controller.rateController,
-                          label: 'Rate',
+                          labelText: 'Rate',
                           required: true,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
+                          isDecimal: true,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _DropdownField<String>(
-                          label: 'Unit',
+                        child: UOptionField<String>(
+                          labelText: 'Unit',
                           value: controller.selectedUnit.value,
-                          items: ServiceController.units,
-                          itemLabel: _unitLabel,
+                          options: ServiceController.units
+                              .map((u) => UOption<String>(value: u, label: _unitLabel(u)))
+                              .toList(),
                           onChanged: (value) {
                             if (value != null) {
                               controller.selectedUnit.value = value;
@@ -104,98 +105,61 @@ class ServiceForm extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  _TextField(
+                  const SizedBox(height: 12),
+                  UTextField(
                     controller: controller.descriptionController,
-                    label: 'Description',
+                    labelText: 'Description',
                     maxLines: 1,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  _DropdownField<String>(
-                    label: 'Status',
+                  UOptionField<String>(
+                    labelText: 'Status',
                     value: controller.selectedStatus.value,
-                    items: const [
-                      'active',
-                      'inactive',
+                    options: const [
+                      UOption(value: 'active', label: 'Active'),
+                      UOption(value: 'inactive', label: 'Inactive'),
                     ],
-                    itemLabel: _statusLabel,
                     onChanged: (value) {
                       if (value != null) {
                         controller.selectedStatus.value = value;
                       }
                     },
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: UButton(
+                          text: 'Cancel',
+                          style: UButtonStyle.outline,
                           onPressed: controller.isLoading.value
                               ? null
                               : () {
-                            Navigator.of(context).pop();
-                            controller.clearForm();
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent, width: 1.2),
-                            foregroundColor: Colors.redAccent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
+                                  Navigator.of(context).pop();
+                                  controller.clearForm();
+                                },
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: controller.isLoading.value
-                              ? null
-                              : () async {
+                        child: UButton(
+                          text: controller.isEditMode.value ? 'Update' : 'Save',
+                          style: UButtonStyle.primary,
+                          isLoading: controller.isLoading.value,
+                          onPressed: () async {
                             final saved = await controller.saveService();
                             if (saved && context.mounted) {
                               Navigator.of(context).pop();
                               controller.clearForm();
                             }
                           },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: controller.isLoading.value
-                              ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                              : Text(
-                            controller.isEditMode.value ? 'Update' : 'Save',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                              color: Colors.white,
-                            ),
-                          ),
                         ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             ),
@@ -209,96 +173,4 @@ class ServiceForm extends StatelessWidget {
     if (value == null || value.isEmpty) return 'Hour';
     return '${value[0].toUpperCase()}${value.substring(1)}';
   }
-
-  static String _statusLabel(String? value) {
-    return value == 'active' ? 'Active' : 'Inactive';
-  }
-}
-
-class _TextField extends StatelessWidget {
-  const _TextField({
-    required this.controller,
-    required this.label,
-    this.required = false,
-    this.keyboardType,
-    this.maxLines = 1,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final bool required;
-  final TextInputType? keyboardType;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      decoration: _inputDecoration(required ? '$label *' : label),
-    );
-  }
-}
-
-class _DropdownField<T> extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.itemLabel,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T? value;
-  final List<T> items;
-  final String Function(T? value) itemLabel;
-  final ValueChanged<T?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final containsValue = value != null && items.contains(value);
-    final initial = containsValue ? value : (items.isNotEmpty ? items.first : null);
-
-    return DropdownButtonFormField<T>(
-      initialValue: initial,
-      isExpanded: true,
-      borderRadius: BorderRadius.circular(10),
-      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-      decoration: _inputDecoration(label),
-      items: items.map(
-        (item) {
-          return DropdownMenuItem<T>(
-            value: item,
-            child: Text(
-              itemLabel(item),
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
-        },
-      ).toList(),
-      onChanged: onChanged,
-    );
-  }
-}
-
-InputDecoration _inputDecoration(String label) {
-  return InputDecoration(
-    labelText: label,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade400),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade400),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Colors.green, width: 1.5),
-    ),
-  );
 }

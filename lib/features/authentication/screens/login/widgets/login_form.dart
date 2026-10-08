@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:krishi_karobar/common/widgets/u_widgets.dart';
 import 'package:krishi_karobar/features/authentication/screens/login/widgets/register_form.dart';
 import 'package:krishi_karobar/features/authentication/screens/login/widgets/phone_history_dialog.dart';
 import 'package:krishi_karobar/features/authentication/screens/password_configuration/forget_passwrod.dart';
 import 'package:krishi_karobar/utils/constants/colors.dart';
 import 'package:krishi_karobar/utils/constants/sizes.dart';
 import 'package:krishi_karobar/utils/constants/text_strings.dart';
-import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 
 import '../../../controllers/login_controllers.dart';
 
@@ -21,15 +21,15 @@ class ULoginForm extends StatelessWidget {
 
     return Card(
       elevation: 5,
-      color: Colors.white.withAlpha(240),
+      color: Colors.white.withValues(alpha: 240 / 255),
       margin: const EdgeInsets.symmetric(horizontal: 1, vertical: 5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(30),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         child: Obx(
-              () => Form(
+          () => Form(
             key: controller.isNewUser.value
                 ? controller.registerFormKey
                 : controller.loginFormKey,
@@ -59,9 +59,9 @@ class ULoginForm extends StatelessWidget {
   }
 
   Widget _welcomeHeader(
-      LoginController controller,
-      BuildContext context,
-      ) {
+    LoginController controller,
+    BuildContext context,
+  ) {
     return Column(
       children: [
         Text(
@@ -69,9 +69,9 @@ class ULoginForm extends StatelessWidget {
               ? UTexts.welcomeRegTitle
               : UTexts.welcomeLoginTitle,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: UColors.primary,
-            fontWeight: FontWeight.bold,
-          ),
+                color: UColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: USizes.xs),
@@ -80,8 +80,8 @@ class ULoginForm extends StatelessWidget {
               ? UTexts.welcomeRegSubTitle
               : UTexts.welcomeLoginSubTitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey,
-          ),
+                color: Colors.grey,
+              ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -89,14 +89,12 @@ class ULoginForm extends StatelessWidget {
   }
 
   Widget _phoneField(LoginController controller) {
-    return TextFormField(
+    return UTextField(
       controller: controller.phone,
       keyboardType: TextInputType.phone,
-      decoration: CustomDecoration.uInputDecoration(
-        prefixIcon: const Icon(Iconsax.call),
-        prefixText: '+977 ',
-        labelText: UTexts.phoneNo,
-      ),
+      prefixIcon: const Icon(Iconsax.call),
+      prefixText: '+977 ',
+      labelText: UTexts.phoneNo,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
           return 'Phone number is required.';
@@ -125,20 +123,18 @@ class ULoginForm extends StatelessWidget {
 
   Widget _passwordField(LoginController controller) {
     return Obx(
-          () => TextFormField(
+      () => UTextField(
         controller: controller.password,
         obscureText: controller.hidePassword.value,
-        decoration: CustomDecoration.uInputDecoration(
-          prefixIcon: const Icon(Iconsax.password_check),
-          labelText: UTexts.password,
-          suffixIcon: IconButton(
-            icon: Icon(
-              controller.hidePassword.value
-                  ? Iconsax.eye_slash
-                  : Iconsax.eye,
-            ),
-            onPressed: controller.hidePassword.toggle,
+        prefixIcon: const Icon(Iconsax.password_check),
+        labelText: UTexts.password,
+        suffixIcon: IconButton(
+          icon: Icon(
+            controller.hidePassword.value
+                ? Iconsax.eye_slash
+                : Iconsax.eye,
           ),
+          onPressed: controller.hidePassword.toggle,
         ),
         validator: (value) {
           if (value == null || value.isEmpty) {
@@ -162,7 +158,7 @@ class ULoginForm extends StatelessWidget {
         Row(
           children: [
             Obx(
-                  () => Checkbox(
+              () => Checkbox(
                 value: controller.rememberMe.value,
                 activeColor: UColors.primary,
                 onChanged: (value) {
@@ -175,7 +171,7 @@ class ULoginForm extends StatelessWidget {
         ),
         TextButton(
           onPressed: () => Get.to(
-                () => const ForgetPassScreen(),
+            () => const ForgetPassScreen(),
           ),
           child: const Text(
             UTexts.forgetPassword,
@@ -190,41 +186,16 @@ class ULoginForm extends StatelessWidget {
   }
 
   Widget _submitButton(LoginController controller) {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: controller.isNewUser.value
-            ? controller.registerUser
-            : controller.phoneAndPasswordSignIn,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: UColors.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              controller.isNewUser.value
-                  ? UTexts.registerAccount
-                  : UTexts.signIn,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: USizes.fontSizeLg,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: USizes.sm),
-            const Icon(
-              Icons.arrow_forward,
-              color: Colors.white,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
+    return UButton(
+      text: controller.isNewUser.value
+          ? UTexts.registerAccount
+          : UTexts.signIn,
+      style: UButtonStyle.primary,
+      isFullWidth: true,
+      icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+      onPressed: controller.isNewUser.value
+          ? controller.registerUser
+          : controller.phoneAndPasswordSignIn,
     );
   }
 

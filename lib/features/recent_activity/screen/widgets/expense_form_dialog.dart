@@ -84,6 +84,18 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     descriptionController = TextEditingController(text: exp?.description ?? '');
     referenceController = TextEditingController(text: exp?.referenceNo ?? '');
     selectedVehicleId = exp?.vehicleId;
+
+    if (exp == null && selectedVehicleId == null) {
+      final cache = DataCacheService.instance;
+      final currentUser = LoginController.loginUser;
+      final assignedVehicles = currentUser.hasAllVehicleAccess
+          ? cache.vehicles.values.toList()
+          : cache.vehicles.values.where((v) => v.ownerId == currentUser.id || currentUser.assignedVehicleIds.contains(v.id)).toList();
+      if (assignedVehicles.length == 1) {
+        selectedVehicleId = assignedVehicles.first.id;
+      }
+    }
+
     selectedActivityId = exp?.activityId;
     paymentMethod = exp?.paymentMethod ?? 'cash';
     selectedCreatedAt = exp?.createdAt ?? DateTime.now();

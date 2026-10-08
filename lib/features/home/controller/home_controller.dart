@@ -1,10 +1,37 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nepali_date_picker/nepali_date_picker.dart';
+import 'package:nepali_utils/nepali_utils.dart';
 
 import '../../../models/models.dart';
 import '../../../services/data_cache_service.dart';
 import '../../../utils/helper/nepali_date_time.dart';
+import '../../../utils/helper/network_manager.dart';
+import '../../../offline/offline_storage.dart';
 import '../../authentication/controllers/login_controllers.dart';
 import '../../user_setting/controller/vehicle_controller.dart';
+import '../../user_setting/screen/customer_management_screen.dart';
+import '../../user_setting/screen/profile_screen.dart';
+import '../../recent_activity/controllers/activity_controller.dart';
+import '../../recent_activity/screen/widgets/expense_form_dialog.dart';
+import '../../navigarion/controller/navigation_controller.dart';
+
+class VehiclePerformanceItem {
+  final String vehicleId;
+  final String vehicleNumber;
+  final int activitiesCount;
+  final double serviceAmount;
+  final double dueAmount;
+
+  VehiclePerformanceItem({
+    required this.vehicleId,
+    required this.vehicleNumber,
+    required this.activitiesCount,
+    required this.serviceAmount,
+    required this.dueAmount,
+  });
+}
 
 class HomeController extends GetxController {
   static HomeController get instance => Get.find();
@@ -13,6 +40,10 @@ class HomeController extends GetxController {
 
   final user = Rx<UserModel?>(null);
   final selectedVehicleId = 'all'.obs;
+  final selectedPeriod = 'Today'.obs; // 'Today', 'Week', 'Month', 'All'
+  final pendingQueueCount = 0.obs;
+
+  final List<String> periodOptions = ['Today', 'Week', 'Month', 'All'];
 
   @override
   void onInit() {
@@ -61,11 +92,57 @@ class HomeController extends GetxController {
       }
     });
 
-    final initialVid = selectedVehicleId.value;
-    if (!currentUser.hasAllVehicleAccess && assigned.length == 1) {
-      selectedVehicleId.value = assigned.first.id;
-    } else if (initialVid != 'all' && !_cache.vehicles.containsKey(initialVid)) {
-      selectedVehicleId.value = 'all';
+    // Bi-directional sync with ActivityController date filter
+    if (Get.isRegistered<ActivityController>()) {
+      selectedPeriod.value = ActivityController.instance.selectedFilter.value;
+      ever(ActivityController.instance.selectedFilter, (filter) {
+        if (selectedPeriod.value != filter) {
+          selectedPeriod.value = filter;
+        }
+      });
+    }
+
+    ever(selectedPeriod, (period) {
+      if (Get.isRegistered<ActivityController>()) {
+        final actCtrl = Get.find<ActivityController>();
+        if (actCtrl.selectedFilter.value != period) {
+          actCtrl.setFilter(period);
+        }
+      }
+    });
+
+    _checkPendingQueue();
+  }
+
+  Future<void> _checkPendingQueue() async {
+    try {
+      if (OfflineStorage.isAvailable) {
+        final workspaceId = LoginController.loginUser.id;
+        final total = await OfflineStorage.instance.queue.total(workspaceId);
+        pendingQueueCount.value = total;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> refreshDashboard() async {
+    await _checkPendingQueue();
+  }
+
+  void setSelectedVehicle(String? vehicleId) {
+    if (vehicleId != null) {
+      selectedVehicleId.value = vehicleId;
+    }
+  }
+
+  void setSelectedPeriod(String? period) {
+    if (period != null) {
+      selectedPeriod.value = period;
+      if (Get.isRegistered<ActivityController>()) {
+        final actCtrl = Get.find<ActivityController>();
+        if (actCtrl.selectedFilter.value != period) {
+          actCtrl.setFilter(period);
+        }
+      }
     }
   }
 
@@ -90,6 +167,75 @@ class HomeController extends GetxController {
   int get totalVehicles => _cache.vehicles.length;
   int get totalServices => _cache.services.length;
 
+  VehicleModel? get selectedVehicle {
+    if (selectedVehicleId.value == 'all') return null;
+    return _cache.vehicles[selectedVehicleId.value];
+  }
+
+  String get assignedVehicleDetailsText {
+    final assigned = assignedVehicles;
+    if (assigned.isEmpty) return 'No Assigned Vehicle';
+    if (selectedVehicleId.value != 'all') {
+      final v = _cache.vehicles[selectedVehicleId.value];
+      if (v != null) return '${v.number} (${v.name} • ${v.vehicleType})';
+    }
+    return assigned.map((v) => '${v.number} (${v.vehicleType})').join(', ');
+  }
+
+  DateTime? get _calculatedFilterStart {
+    final todayNepali = toNepaliCalendar(DateTime.now());
+    final todayCalendarDay = NepaliDateTime(
+      todayNepali.year,
+      todayNepali.month,
+      todayNepali.day,
+    ).toDateTime();
+
+    switch (selectedPeriod.value) {
+      case 'Today':
+        return nepalCalendarDayBoundary(todayCalendarDay);
+      case 'Week':
+        final start = todayCalendarDay.subtract(const Duration(days: 6));
+        return nepalCalendarDayBoundary(start);
+      case 'Month':
+        final bsMonthStart = NepaliDateTime(
+          todayNepali.year,
+          todayNepali.month,
+          1,
+        ).toDateTime();
+        return nepalCalendarDayBoundary(bsMonthStart);
+      case 'All':
+      default:
+        return null;
+    }
+  }
+
+  DateTime? get _calculatedFilterEnd {
+    final todayNepali = toNepaliCalendar(DateTime.now());
+    final todayCalendarDay = NepaliDateTime(
+      todayNepali.year,
+      todayNepali.month,
+      todayNepali.day,
+    ).toDateTime();
+
+    switch (selectedPeriod.value) {
+      case 'Today':
+      case 'Week':
+      case 'Month':
+        return nepalCalendarDayBoundary(todayCalendarDay, endOfDay: true);
+      case 'All':
+      default:
+        return null;
+    }
+  }
+
+  bool _isDateInFilter(DateTime date) {
+    final start = _calculatedFilterStart;
+    final end = _calculatedFilterEnd;
+    if (start == null || end == null) return true;
+    return (date.isAtSameMomentAs(start) || date.isAfter(start)) &&
+        (date.isAtSameMomentAs(end) || date.isBefore(end));
+  }
+
   List<ActivityModel> get _filteredActivities {
     var acts = _cache.activities.values
         .where((a) => a.status != ActivityStatus.cancelled);
@@ -97,115 +243,302 @@ class HomeController extends GetxController {
     final currentUser = LoginController.loginUser;
     final assigned = assignedVehicles;
     if (!currentUser.hasAllVehicleAccess && assigned.length == 1) {
-      return acts.where((a) => a.vehicleId == assigned.first.id).toList();
+      acts = acts.where((a) => a.vehicleId == assigned.first.id);
+    } else {
+      final vId = selectedVehicleId.value;
+      if (vId != 'all') {
+        acts = acts.where((a) => a.vehicleId == vId);
+      }
     }
 
-    final vId = selectedVehicleId.value;
-    if (vId != 'all') {
-      acts = acts.where((a) => a.vehicleId == vId);
-    }
-    return acts.toList();
+    return acts.where((a) => _isDateInFilter(a.createdAt)).toList();
   }
 
   List<ExpenseModel> get _filteredExpenses {
+    var exps = _cache.expenses.values.where((e) => e.status != 'cancelled');
+
     final currentUser = LoginController.loginUser;
     final assigned = assignedVehicles;
     if (!currentUser.hasAllVehicleAccess && assigned.length == 1) {
-      return _cache.expenses.values.where((e) => e.vehicleId == assigned.first.id).toList();
+      exps = exps.where((e) => e.vehicleId == assigned.first.id);
+    } else {
+      final vId = selectedVehicleId.value;
+      if (vId != 'all') {
+        exps = exps.where((e) => e.vehicleId == vId);
+      }
     }
 
-    final vId = selectedVehicleId.value;
-    if (vId == 'all') {
-      return _cache.expenses.values.toList();
-    }
-    return _cache.expenses.values.where((e) => e.vehicleId == vId).toList();
+    return exps.where((e) => _isDateInFilter(e.createdAt)).toList();
   }
 
-  // Daily (Today)
-  double get dailyIncome {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredActivities
-        .where((a) {
-          final d = toNepaliCalendar(a.startTime);
-          return d.year == today.year && d.month == today.month && d.day == today.day;
-        })
-        .fold(0.0, (sum, a) => sum + a.paidAmount);
+  // Financial summary getters
+  double get totalServiceAmount {
+    return _filteredActivities.fold(0.0, (sum, a) => sum + a.amount);
   }
 
-  double get dailyExpense {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredExpenses
-        .where((e) {
-          final d = toNepaliCalendar(e.date);
-          return d.year == today.year && d.month == today.month && d.day == today.day;
-        })
-        .fold(0.0, (sum, e) => sum + e.amount);
+  double get amountCollected {
+    return _filteredActivities.fold(0.0, (sum, a) => sum + a.paidAmount);
   }
 
-  // Weekly (Last 7 days)
-  double get weeklyIncome {
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-    return _filteredActivities
-        .where((a) => a.startTime.isAfter(weekAgo))
-        .fold(0.0, (sum, a) => sum + a.paidAmount);
+  double get outstandingDue {
+    return _filteredActivities.fold(0.0, (sum, a) => sum + a.dueAmount);
   }
 
-  double get weeklyExpense {
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-    return _filteredExpenses
-        .where((e) => e.date.isAfter(weekAgo))
-        .fold(0.0, (sum, e) => sum + e.amount);
+  double get totalExpenses {
+    return _filteredExpenses.fold(0.0, (sum, e) => sum + e.amount);
   }
 
-  // Monthly (This BS Month)
-  double get monthlyIncome {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredActivities
-        .where((a) {
-          final d = toNepaliCalendar(a.startTime);
-          return d.year == today.year && d.month == today.month;
-        })
-        .fold(0.0, (sum, a) => sum + a.paidAmount);
+  double get operatingResult {
+    return totalServiceAmount - totalExpenses;
   }
 
-  double get monthlyExpense {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredExpenses
-        .where((e) {
-          final d = toNepaliCalendar(e.date);
-          return d.year == today.year && d.month == today.month;
-        })
-        .fold(0.0, (sum, e) => sum + e.amount);
+  int get totalActivitiesCount {
+    return _filteredActivities.length;
   }
 
-  // Yearly (This BS Year)
-  double get yearlyIncome {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredActivities
-        .where((a) {
-          final d = toNepaliCalendar(a.startTime);
-          return d.year == today.year;
-        })
-        .fold(0.0, (sum, a) => sum + a.paidAmount);
-  }
-
-  double get yearlyExpense {
-    final today = toNepaliCalendar(DateTime.now());
-    return _filteredExpenses
-        .where((e) {
-          final d = toNepaliCalendar(e.date);
-          return d.year == today.year;
-        })
-        .fold(0.0, (sum, e) => sum + e.amount);
-  }
+  double get dailyIncome => _filteredActivities.fold(0.0, (s, a) => s + a.paidAmount);
+  double get dailyExpense => _filteredExpenses.fold(0.0, (s, e) => s + e.amount);
+  double get weeklyIncome => dailyIncome;
+  double get weeklyExpense => dailyExpense;
+  double get monthlyIncome => dailyIncome;
+  double get monthlyExpense => dailyExpense;
+  double get yearlyIncome => dailyIncome;
+  double get yearlyExpense => dailyExpense;
 
   int get todayActivities {
     final today = toNepaliCalendar(DateTime.now());
-    return _filteredActivities.where((a) {
-      final d = toNepaliCalendar(a.startTime);
-      return d.year == today.year && d.month == today.month && d.day == today.day;
-    }).length;
+    return _cache.activities.values
+        .where((a) => a.status != ActivityStatus.cancelled)
+        .where((a) {
+          final d = toNepaliCalendar(a.createdAt);
+          return d.year == today.year && d.month == today.month && d.day == today.day;
+        })
+        .length;
+  }
+
+  int get todayRunningActivities {
+    final today = toNepaliCalendar(DateTime.now());
+    return _cache.activities.values
+        .where((a) => a.status == ActivityStatus.running)
+        .where((a) {
+          final d = toNepaliCalendar(a.createdAt);
+          return d.year == today.year && d.month == today.month && d.day == today.day;
+        })
+        .length;
+  }
+
+  int get todayCompletedActivities {
+    final today = toNepaliCalendar(DateTime.now());
+    return _cache.activities.values
+        .where((a) => a.status == ActivityStatus.completed)
+        .where((a) {
+          final d = toNepaliCalendar(a.createdAt);
+          return d.year == today.year && d.month == today.month && d.day == today.day;
+        })
+        .length;
+  }
+
+  int get todayDueActivities {
+    final today = toNepaliCalendar(DateTime.now());
+    return _cache.activities.values
+        .where((a) => a.dueAmount > 0 && a.status != ActivityStatus.cancelled)
+        .where((a) {
+          final d = toNepaliCalendar(a.createdAt);
+          return d.year == today.year && d.month == today.month && d.day == today.day;
+        })
+        .length;
+  }
+
+  List<VehiclePerformanceItem> get vehiclePerformanceList {
+    final items = <VehiclePerformanceItem>[];
+    final activeVehicles = assignedVehicles;
+
+    for (final v in activeVehicles) {
+      final vActs = _cache.activities.values
+          .where((a) => a.vehicleId == v.id && a.status != ActivityStatus.cancelled)
+          .where((a) => _isDateInFilter(a.createdAt))
+          .toList();
+
+      final count = vActs.length;
+      final servAmt = vActs.fold(0.0, (s, a) => s + a.amount);
+      final dueAmt = vActs.fold(0.0, (s, a) => s + a.dueAmount);
+
+      items.add(VehiclePerformanceItem(
+        vehicleId: v.id,
+        vehicleNumber: v.number,
+        activitiesCount: count,
+        serviceAmount: servAmt,
+        dueAmount: dueAmt,
+      ));
+    }
+
+    return items;
+  }
+
+  double get totalCustomerDue {
+    return _cache.activities.values
+        .where((a) => a.status != ActivityStatus.cancelled)
+        .fold(0.0, (s, a) => s + a.dueAmount);
+  }
+
+  int get customersWithDueCount {
+    final customerIdsWithDue = _cache.activities.values
+        .where((a) => a.dueAmount > 0 && a.status != ActivityStatus.cancelled)
+        .map((a) => a.customerId)
+        .toSet();
+    return customerIdsWithDue.length;
+  }
+
+  /// Recent Activities: Most recent 1 record for each vehicle
+  List<ActivityModel> get recentActivities {
+    final Map<String, ActivityModel> latestPerVehicle = {};
+
+    final acts = _cache.activities.values
+        .where((a) => a.status != ActivityStatus.cancelled)
+        .toList();
+
+    acts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    for (final act in acts) {
+      if (!latestPerVehicle.containsKey(act.vehicleId)) {
+        latestPerVehicle[act.vehicleId] = act;
+      }
+    }
+
+    final result = latestPerVehicle.values.toList();
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  bool get isOffline {
+    if (!Get.isRegistered<NetworkManager>()) return false;
+    return NetworkManager.instance.connectionStatus.value == ConnectivityResult.none;
+  }
+
+  String get loginUserName {
+    final u = LoginController.loginUser;
+    return u.fullname.isNotEmpty ? u.fullname : 'Admin';
+  }
+
+  String get syncStatusText {
+    if (isOffline) return 'Offline';
+    if (pendingQueueCount.value > 0) return 'Waiting (${pendingQueueCount.value})';
+    return 'Online • Synced';
+  }
+
+  Color get syncStatusColor {
+    if (isOffline) return Colors.amber.shade800;
+    if (pendingQueueCount.value > 0) return Colors.orange.shade800;
+    return Colors.green;
+  }
+
+  Color get syncStatusBgColor {
+    if (isOffline) return Colors.amber.withValues(alpha: 0.2);
+    if (pendingQueueCount.value > 0) return Colors.orange.withValues(alpha: 0.2);
+    return Colors.green.withValues(alpha: 0.15);
+  }
+
+  String get currentNepaliDateFormatted {
+    return formatNepaliDateTime(DateTime.now(), pattern: 'yyyy MMMM d, hh:mm a');
+  }
+
+  String get userInitial {
+    final name = LoginController.loginUser.fullname;
+    if (name.isNotEmpty) return name[0].toUpperCase();
+    return 'A';
+  }
+
+  // Quick Action handlers
+  void onNavigateToMonitor() {
+    if (Get.isRegistered<NavigationController>()) {
+      Get.find<NavigationController>().onTabSelected(1);
+    }
+  }
+
+  void onNavigateToRecords() {
+    if (Get.isRegistered<NavigationController>()) {
+      Get.find<NavigationController>().onTabSelected(2);
+    }
+  }
+
+  void onNavigateToCustomers() {
+    Get.to(() => CustomerManagementScreen());
+  }
+
+  void onOpenAddExpense() {
+    Get.dialog(const ExpenseFormDialog());
+  }
+
+  void openNotifications(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Notifications',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView(
+                children: [
+                  _notificationItem('Activity Started', 'Vehicle operation started successfully.', '10m ago'),
+                  _notificationItem('Payment Received', 'Collection recorded for recent activity.', '1h ago'),
+                  _notificationItem('System Synced', 'All offline records synchronized with server.', '3h ago'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notificationItem(String title, String subtitle, String time) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0xFFE8F5E9),
+            child: Icon(Icons.notifications, color: Color(0xFF1B5E20), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
+          Text(time, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  void openProfile() {
+    Get.to(() => const ProfileScreen());
   }
 }
