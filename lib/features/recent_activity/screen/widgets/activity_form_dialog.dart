@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 
@@ -216,7 +215,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         final userId = LoginController.loginUser.id;
         final scope = WorkspaceScope.forCurrentEnvironment(
           ownerUserId: userId,
-          authUid: FirebaseAuth.instance.currentUser?.uid ?? userId,
+          authUid: OfflineStorage.requireAuthUid(),
           vehicleId: selectedVehicleId ?? 'default',
         );
         await OfflineStorage.instance.localRecords.saveRecord(
@@ -356,7 +355,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         if (OfflineStorage.isAvailable) {
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: user.id,
-            authUid: FirebaseAuth.instance.currentUser?.uid ?? user.id,
+            authUid: OfflineStorage.requireAuthUid(),
             vehicleId: selectedVehicleId ?? 'default',
           );
           await OfflineStorage.instance.localRecords.saveRecord(

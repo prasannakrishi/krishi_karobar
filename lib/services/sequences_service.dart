@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../offline/offline_storage.dart';
-import '../offline/core/workspace_scope.dart';
 import '../features/authentication/controllers/login_controllers.dart';
 
 class SequenceService extends GetxService {
@@ -102,7 +101,7 @@ class SequenceService extends GetxService {
       try {
         final userId = LoginController.loginUser.id;
         if (userId.isNotEmpty) {
-          final scope = WorkspaceScope.forCurrentEnvironment(ownerUserId: userId, authUid: userId);
+          final scope = OfflineStorage.currentScope();
           final records = await OfflineStorage.instance.localRecords.listRecords(
             scope,
             entityType: 'activities',

@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -614,7 +613,7 @@ class ActivityController extends GetxController {
           final workspaceId = LoginController.loginUser.id;
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: workspaceId,
-            authUid: FirebaseAuth.instance.currentUser?.uid ?? workspaceId,
+            authUid: OfflineStorage.requireAuthUid(),
             vehicleId: activity.vehicleId,
           );
           await OfflineStorage.instance.localRecords.patchRecord(
@@ -770,7 +769,7 @@ class ActivityController extends GetxController {
           final workspaceId = LoginController.loginUser.id;
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: workspaceId,
-            authUid: FirebaseAuth.instance.currentUser?.uid ?? workspaceId,
+            authUid: OfflineStorage.requireAuthUid(),
             vehicleId: vehicleId,
           );
           await OfflineStorage.instance.localRecords.patchRecord(

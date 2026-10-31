@@ -92,10 +92,20 @@ class OfflineStorage {
     required String ownerPhone,
     WorkspaceAccess? access,
   }) async {
-    await workspaces.open(scope, ownerPhone: ownerPhone, access: access);
-    await queue.resetSyncingToPending(scope.workspaceId);
-    await syncEngine.start(scope);
+    try {
+      await workspaces.open(scope, ownerPhone: ownerPhone, access: access);
+      await queue.resetSyncingToPending(scope.workspaceId);
+      await syncEngine.start(scope);
+      activationError = null;
+    } catch (error) {
+      activationError = AppException.messageOf(error);
+      rethrow;
+    }
   }
+
+  /// Why the last [activateWorkspace] failed, or `null` after a successful
+  /// one. While set, local saves are refused with a specific reason.
+  static String? activationError;
 
   Future<void> syncNow({bool isManual = true}) => syncEngine.syncNow(isManual: isManual);
 
@@ -197,10 +207,74 @@ class OfflineStorage {
     _instance = null;
     _initializationError = null;
     lastSaveError = null;
+    activationError = null;
   }
 
   /// The reason the most recent [saveLocal] did not save, or `null`.
   static String? lastSaveError;
+
+  /// Why offline storage cannot be used right now, or `null` when it can.
+  /// Shown to the user instead of letting a missing database look like a
+  /// working one.
+  static String? get unavailableReason {
+    if (isAvailable) return null;
+    return _initializationError?.message ??
+        const OfflineStorageException.unavailable().message;
+  }
+
+  /// Firebase Auth uid of the signed-in session. The business record id
+  /// (`users/{id}`) is a different identity and is NEVER substituted for it;
+  /// without an Auth session this throws [OfflineScopeException].
+  static String requireAuthUid() {
+    final uid = FirebaseAuth.instance.currentUser?.uid.trim() ?? '';
+    if (uid.isEmpty) {
+      throw const OfflineScopeException.noWorkspace(
+        details: 'no Firebase Auth session',
+      );
+    }
+    return uid;
+  }
+
+  /// The workspace scope of the signed-in user: owner = resolved
+  /// `authUsers/{uid}/recordId` user (`LoginController.loginUser.id`), auth
+  /// identity = the Firebase Auth uid. Single place every caller builds its
+  /// scope from.
+  static WorkspaceScope currentScope({String vehicleId = ''}) {
+    final ownerUserId = LoginController.loginUser.id.trim();
+    if (ownerUserId.isEmpty) {
+      throw const OfflineScopeException.noWorkspace(
+        details: 'no signed-in user',
+      );
+    }
+    return WorkspaceScope.forCurrentEnvironment(
+      ownerUserId: ownerUserId,
+      authUid: requireAuthUid(),
+      vehicleId: vehicleId,
+    );
+  }
+
+  /// Throws the specific reason when the open workspace cannot accept writes
+  /// of every type in [entityTypes] (no workspace, locked, no access profile
+  /// or a role that may not write it). Lets a multi-record operation fail
+  /// before it writes anything.
+  Future<void> requireWritable(Iterable<String> entityTypes) async {
+    final info = await workspaces.current();
+    if (info == null) throw const OfflineScopeException.noWorkspace();
+    if (info.isLocked) throw const OfflineScopeException.locked();
+    final access = info.access;
+    if (access == null) {
+      throw const OfflineScopeException.notAllowed(
+        details: 'the workspace has no access profile',
+      );
+    }
+    for (final type in entityTypes) {
+      if (!access.canWrite(type)) {
+        throw OfflineScopeException.notAllowed(
+          details: '${access.userType} may not write $type',
+        );
+      }
+    }
+  }
 
   /// Saves a record to the local workspace and queues it for sync.
   ///
@@ -219,20 +293,12 @@ class OfflineStorage {
     bool isNew = false,
     String? vehicleId,
   }) async {
-    if (!isAvailable) return false;
+    if (!isAvailable) {
+      lastSaveError = unavailableReason;
+      return false;
+    }
     try {
-      final userId = LoginController.loginUser.id;
-      if (userId.isEmpty) {
-        throw const OfflineScopeException.noWorkspace(
-          details: 'no signed-in user',
-        );
-      }
-      final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
-
-      final scope = WorkspaceScope.forCurrentEnvironment(
-        ownerUserId: userId,
-        authUid: authUid,
-      );
+      final scope = currentScope();
 
       await instance.localRecords.saveRecord(
         scope,

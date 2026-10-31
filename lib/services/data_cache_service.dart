@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../models/models.dart';
 import '../offline/offline_storage.dart';
+import '../offline/core/workspace_access_user.dart';
 import '../offline/core/workspace_scope.dart';
 import '../utils/exceptions/app_exceptions.dart';
 import 'authorization_service.dart';
@@ -149,14 +149,21 @@ class DataCacheService extends GetxController {
 
       try {
         if (OfflineStorage.isAvailable && user.id.isNotEmpty) {
-          final authUid = FirebaseAuth.instance.currentUser?.uid ?? user.id;
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: user.id,
-            authUid: authUid,
+            authUid: OfflineStorage.requireAuthUid(),
           );
+          // The access profile is part of opening the workspace: without it
+          // every local write is refused until something else supplies it.
           await OfflineStorage.instance.activateWorkspace(
             scope,
             ownerPhone: user.phone,
+            access: workspaceAccessFor(
+              user,
+              ownedVehicleIds: vehicles.values
+                  .where((vehicle) => vehicle.ownerId == user.id)
+                  .map((vehicle) => vehicle.id),
+            ),
           );
           debugPrint('[SYNC_ENGINE_STARTED] Workspace activated successfully for user=${user.id}');
         }

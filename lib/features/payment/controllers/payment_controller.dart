@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import 'package:krishi_karobar/offline/offline_storage.dart';
-import 'package:krishi_karobar/offline/core/workspace_scope.dart';
+import 'package:krishi_karobar/offline/offline_constants.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../authentication/controllers/login_controllers.dart';
 import '../../recent_activity/controllers/activity_controller.dart';
@@ -269,6 +268,28 @@ class PaymentController extends GetxController {
     isSaving.value = true;
 
     try {
+      // The payment lives only in the local database until it syncs, so every
+      // way the local save can fail is checked BEFORE a payment number is
+      // generated or anything is written.
+      final unavailable = OfflineStorage.unavailableReason;
+      if (unavailable != null) {
+        _showError('Payment was not saved. $unavailable');
+        return null;
+      }
+      final scope = OfflineStorage.currentScope();
+      await OfflineStorage.instance.requireWritable(
+        const [SyncEntity.payment, SyncEntity.activity],
+      );
+      for (final allocation in allocations) {
+        if (cache.activities[allocation.activityId] == null) {
+          _showError(
+            'An activity in this payment is not available on this device. '
+            'Refresh and try again.',
+          );
+          return null;
+        }
+      }
+
       final now = DateTime.now();
       final paymentId = const Uuid().v4();
       final paymentUid = await sequenceService.generateSequence('P');
@@ -327,56 +348,37 @@ class PaymentController extends GetxController {
         updates['$activityPath/updatedAt'] = now.toUtc().toIso8601String();
       }
 
-      try {
-        if (OfflineStorage.isAvailable) {
-          final workspaceId = LoginController.loginUser.id;
-          final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: workspaceId,
-            authUid: authUid,
-            vehicleId: 'default',
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
-            entityType: 'payments',
-            recordId: paymentId,
-            data: payment.toMap(),
-            isNew: true,
-          );
+      // A failure here propagates to the catch below: no success message and
+      // no cache update for a payment that was not saved.
+      await OfflineStorage.instance.localRecords.saveRecord(
+        scope,
+        entityType: 'payments',
+        recordId: paymentId,
+        data: payment.toMap(),
+        isNew: true,
+      );
 
-          for (final allocation in allocations) {
-            final activityIndex = customerActivities.indexWhere(
-              (item) => item.id == allocation.activityId,
-            );
-            if (activityIndex != -1) {
-              final act = customerActivities[activityIndex];
-              final cachedAct = cache.activities[act.id];
-              if (cachedAct != null) {
-                final settlement = allocation.paidAmount + allocation.discount;
-                final newPaid = cachedAct.paidAmount + settlement;
-                final newDue = cachedAct.amount - newPaid;
-                final newStatus = _paymentStatus(newPaid, cachedAct.amount);
+      for (final allocation in allocations) {
+        final cachedAct = cache.activities[allocation.activityId]!;
+        final settlement = allocation.paidAmount + allocation.discount;
+        final newPaid = cachedAct.paidAmount + settlement;
+        final newDue = cachedAct.amount - newPaid;
+        final newStatus = _paymentStatus(newPaid, cachedAct.amount);
 
-                await OfflineStorage.instance.localRecords.patchRecord(
-                  scope,
-                  entityType: 'activities',
-                  recordId: act.id,
-                  patch: {
-                    'paidAmount': newPaid,
-                    'discountAmount': cachedAct.discountAmount + allocation.discount,
-                    'dueAmount': newDue,
-                    'status': newStatus,
-                    'paidAt': now.toUtc().toIso8601String(),
-                    'receivedBy': LoginController.loginUser.id,
-                    'updatedAt': now.toUtc().toIso8601String(),
-                  },
-                );
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('PaymentController offline payment save notice: $e');
+        await OfflineStorage.instance.localRecords.patchRecord(
+          scope,
+          entityType: 'activities',
+          recordId: cachedAct.id,
+          patch: {
+            'paidAmount': newPaid,
+            'discountAmount': cachedAct.discountAmount + allocation.discount,
+            'dueAmount': newDue,
+            'status': newStatus,
+            'paidAt': now.toUtc().toIso8601String(),
+            'receivedBy': LoginController.loginUser.id,
+            'updatedAt': now.toUtc().toIso8601String(),
+          },
+        );
       }
 
       cache.payments[paymentId] = payment;

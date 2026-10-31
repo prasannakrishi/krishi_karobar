@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 
@@ -211,7 +210,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         if (OfflineStorage.isAvailable) {
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: user.id,
-            authUid: FirebaseAuth.instance.currentUser?.uid ?? user.id,
+            authUid: OfflineStorage.requireAuthUid(),
             vehicleId: selectedVehicleId ?? 'default',
           );
           await OfflineStorage.instance.localRecords.saveRecord(

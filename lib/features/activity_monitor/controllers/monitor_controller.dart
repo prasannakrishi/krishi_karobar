@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -822,7 +821,7 @@ class MonitorController extends GetxController {
     try {
       if (OfflineStorage.isAvailable) {
         final workspaceId = LoginController.loginUser.id;
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final authUid = OfflineStorage.requireAuthUid();
         final scope = WorkspaceScope.forCurrentEnvironment(
           ownerUserId: workspaceId,
           authUid: authUid,
@@ -1046,7 +1045,7 @@ class MonitorController extends GetxController {
           if (OfflineStorage.isAvailable) {
             final workspaceId = LoginController.loginUser.id;
             final vehicle = selectedVehicle.value;
-            final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+            final authUid = OfflineStorage.requireAuthUid();
             final scope = WorkspaceScope.forCurrentEnvironment(
               ownerUserId: workspaceId,
               authUid: authUid,
@@ -1430,7 +1429,7 @@ class MonitorController extends GetxController {
         if (OfflineStorage.isAvailable) {
           final workspaceId = LoginController.loginUser.id;
           final vehicleIdStr = updatedData['vehicleId'].toString();
-          final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+          final authUid = OfflineStorage.requireAuthUid();
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: workspaceId,
             authUid: authUid,
@@ -1529,7 +1528,7 @@ class MonitorController extends GetxController {
     try {
       if (OfflineStorage.isAvailable) {
         final workspaceId = LoginController.loginUser.id;
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final authUid = OfflineStorage.requireAuthUid();
         final scope = WorkspaceScope.forCurrentEnvironment(
           ownerUserId: workspaceId,
           authUid: authUid,
@@ -1616,7 +1615,7 @@ class MonitorController extends GetxController {
     try {
       if (OfflineStorage.isAvailable) {
         final workspaceId = LoginController.loginUser.id;
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final authUid = OfflineStorage.requireAuthUid();
         final scope = WorkspaceScope.forCurrentEnvironment(
           ownerUserId: workspaceId,
           authUid: authUid,

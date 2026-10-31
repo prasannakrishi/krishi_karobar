@@ -1,5 +1,4 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
@@ -7,11 +6,11 @@ import 'package:nepali_utils/nepali_utils.dart';
 
 import '../../../models/models.dart';
 import '../../../services/data_cache_service.dart';
+import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/helper/nepali_date_time.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../offline/offline_storage.dart';
 import '../../../offline/core/workspace_access_user.dart';
-import '../../../offline/core/workspace_scope.dart';
 import '../../authentication/controllers/login_controllers.dart';
 import '../../user_setting/controller/vehicle_controller.dart';
 import '../../user_setting/screen/customer_management_screen.dart';
@@ -45,6 +44,8 @@ class HomeController extends GetxController {
   final selectedVehicleId = 'all'.obs;
   final selectedPeriod = 'Today'.obs; // 'Today', 'Week', 'Month', 'All'
   final pendingQueueCount = 0.obs;
+  final pendingQueueError = RxnString();
+  final offlineStatusMessage = RxnString();
 
   final List<String> periodOptions = ['Today', 'Week', 'Month', 'All'];
 
@@ -123,25 +124,27 @@ class HomeController extends GetxController {
       });
     }
 
-    // Keep the local workspace aligned with the dashboard's selected vehicle.
+    // Open the workspace (with the owner's access profile) once now - the
+    // initial vehicle was chosen above, so `ever` alone would never fire for
+    // a user whose vehicle does not change - and again whenever the
+    // dashboard's selected vehicle changes.
     ever(selectedVehicleId, (_) => _activateOfflineWorkspace());
-    _checkPendingQueue();
+    _activateOfflineWorkspace();
   }
 
   Future<void> _activateOfflineWorkspace() async {
-    if (!OfflineStorage.isAvailable) return;
+    if (!OfflineStorage.isAvailable) {
+      _reportOfflineUnavailable();
+      return;
+    }
     final currentUser = LoginController.loginUser;
-    final vehicleId = selectedVehicleId.value;
-    final authUid = FirebaseAuth.instance.currentUser?.uid ?? currentUser.id;
-    if (currentUser.id.isEmpty || authUid.isEmpty) return;
+    if (currentUser.id.isEmpty) return;
 
     // One workspace per owner. The selected vehicle is not part of its
     // identity; re-opening it refreshes the owner's access profile.
     try {
-      final scope = WorkspaceScope.forCurrentEnvironment(
-        ownerUserId: currentUser.id,
-        authUid: authUid,
-        vehicleId: vehicleId,
+      final scope = OfflineStorage.currentScope(
+        vehicleId: selectedVehicleId.value,
       );
       await OfflineStorage.instance.activateWorkspace(
         scope,
@@ -153,19 +156,45 @@ class HomeController extends GetxController {
               .map((vehicle) => vehicle.id),
         ),
       );
-    } catch (e) {
-      debugPrint('HomeController _activateOfflineWorkspace notice: $e');
+      offlineStatusMessage.value = null;
+    } catch (e, stack) {
+      offlineStatusMessage.value = AppException.messageOf(e);
+      debugPrint('HomeController _activateOfflineWorkspace failed: $e\n$stack');
     }
     await _checkPendingQueue();
   }
 
-  Future<void> _checkPendingQueue() async {
-    try {
-      if (OfflineStorage.isAvailable) {
-        final counts = await OfflineStorage.instance.pendingCounts();
-        pendingQueueCount.value = counts.unsynced;
+  static bool _offlineNoticeShown = false;
+
+  void _reportOfflineUnavailable() {
+    final reason = OfflineStorage.unavailableReason;
+    offlineStatusMessage.value = reason;
+    if (reason == null || _offlineNoticeShown) return;
+    _offlineNoticeShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        Get.snackbar(
+          'Offline storage unavailable',
+          '$reason Changes cannot be saved on this device until it is fixed.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } catch (e) {
+        debugPrint('HomeController offline notice not shown: $e');
       }
-    } catch (_) {}
+    });
+  }
+
+  Future<void> _checkPendingQueue() async {
+    if (!OfflineStorage.isAvailable) return;
+    try {
+      final counts = await OfflineStorage.instance.pendingCounts();
+      pendingQueueCount.value = counts.unsynced;
+      pendingQueueError.value = null;
+    } catch (e, stack) {
+      // Keep the last known count; a failed read must not look like "0".
+      pendingQueueError.value = AppException.messageOf(e);
+      debugPrint('HomeController pending queue count failed: $e\n$stack');
+    }
   }
 
   /// Refresh dashboard data

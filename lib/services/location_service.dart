@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -181,7 +180,7 @@ class LocationService {
     try {
       if (OfflineStorage.isAvailable) {
         final userId = LoginController.loginUser.id;
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
+        final authUid = OfflineStorage.requireAuthUid();
         if (userId.isNotEmpty) {
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: userId,
@@ -225,7 +224,7 @@ class LocationService {
     try {
       if (OfflineStorage.isAvailable) {
         final userId = LoginController.loginUser.id;
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
+        final authUid = OfflineStorage.requireAuthUid();
         if (userId.isNotEmpty) {
           final scope = WorkspaceScope.forCurrentEnvironment(
             ownerUserId: userId,
