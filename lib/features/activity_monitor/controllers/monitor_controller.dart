@@ -13,7 +13,6 @@ import '../../../offline/core/workspace_scope.dart';
 import '../../../offline/offline_constants.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
-import 'timer_controller.dart';
 
 class MonitorController extends GetxController {
   static MonitorController get instance => Get.find();
@@ -333,15 +332,32 @@ class MonitorController extends GetxController {
     //description.clear();
 
     selectedCustomer.value = null;
+    //selectedDriver.value = null;
+    //driver.clear();
+    driverWarning.value = false;
     filteredCustomers.clear();
     customerCollapsed.value = false;
     currentActivityId.value = '';
+    _liveActivity.value = null;
 
     final currentVehicle = selectedVehicle.value;
     if (currentVehicle != null) {
-      selectVehicle(currentVehicle);
-    }
-    else {
+      final supported = services
+          .where((s) => currentVehicle.supportServiceIds.contains(s.id))
+          .toList();
+      supportedServices.assignAll(supported);
+
+      final serviceId = currentVehicle.serviceId;
+      if (serviceId != null && serviceId.isNotEmpty) {
+        final s = cache.services[serviceId];
+        if (s != null) {
+          selectedService.value = s;
+          serviceType.text = s.name;
+          serviceSearch.text = s.name;
+          rate.text = s.rate.toStringAsFixed(0);
+        }
+      }
+    } else {
       loadDefaultVehicle();
     }
   }
@@ -724,21 +740,24 @@ class MonitorController extends GetxController {
   }
 
   Future<void> _startConfirmed() async {
+    debugPrint('[ACTIVITY_START_REQUESTED] Starting activity confirmation flow.');
+
     if (_isSavingActivity || currentActivityId.value.isNotEmpty || liveActivity != null) {
+      debugPrint('[ACTIVITY_START_REQUESTED] Blocked: activity already running or saving.');
       return;
     }
 
     final vehicle = selectedVehicle.value;
     final service = selectedService.value;
-    if (vehicle == null || service == null) return;
+    if (vehicle == null || service == null) {
+      debugPrint('[ACTIVITY_START_REQUESTED] Blocked: vehicle or service is null.');
+      return;
+    }
 
     _isSavingActivity = true;
+    debugPrint('[ACTIVITY_VALIDATION_SUCCESS] Vehicle=${vehicle.number} Service=${service.name}');
 
-    // Resolve (or create) the customer BEFORE the activity is built - a
-    // new customer typed into the customer section must actually be
-    // persisted here, so the activity is saved against that customer's
-    // real id, never a stale/previous selection. saveCustomer() already
-    // returns the existing match if one was picked from suggestions.
+    // Resolve (or create) the customer BEFORE the activity is built
     final customerIdsBeforeSave = cache.customers.keys.toSet();
     CustomerModel? customer;
 
@@ -753,18 +772,9 @@ class MonitorController extends GetxController {
       return;
     }
 
-    // True only if saveCustomer() just created this record (as opposed to
-    // matching an existing one) - used below to roll it back if the
-    // activity itself fails to save, so a failed activity start never
-    // leaves an orphan customer with nothing pointing to it.
     final customerIsNewlyCreated =
         customer != null && !customerIdsBeforeSave.contains(customer.id);
 
-    // The activity's uId depends on a Firebase sequence transaction and can
-    // fail (bad vehicle uId prefix, sequence conflict, network/permission
-    // error). This must be resolved - and the record actually persisted -
-    // BEFORE the visible timer starts, so a failed creation never leaves a
-    // ticking timer with no backing activity.
     final id = const Uuid().v4();
     final String activityUId;
 
@@ -773,6 +783,7 @@ class MonitorController extends GetxController {
         serviceType: service.name,
         vehicleUId: vehicle.uId,
       );
+      debugPrint('[ACTIVITY_UID_GENERATED] id=$id activityUId=$activityUId');
     } catch (error) {
       _isSavingActivity = false;
       if (customerIsNewlyCreated) {
@@ -807,6 +818,7 @@ class MonitorController extends GetxController {
     );
 
     // Save directly into local Sembast offline database
+    debugPrint('[ACTIVITY_LOCAL_SAVE_STARTED] id=$id workspace=${LoginController.loginUser.id}');
     try {
       if (OfflineStorage.isAvailable) {
         final workspaceId = LoginController.loginUser.id;
@@ -823,19 +835,11 @@ class MonitorController extends GetxController {
           data: activity.toMap(),
           isNew: true,
         );
+        debugPrint('[ACTIVITY_LOCAL_SAVE_SUCCESS] id=$id saved to Sembast.');
+        debugPrint('[ACTIVITY_SYNC_QUEUE_INSERTED] id=$id enqueued in sync queue.');
       }
     } catch (e) {
-      debugPrint('MonitorController offline activity start save notice: $e');
-    }
-
-    try {
-      await firebaseService.saveRecord(
-        'activities',
-        id,
-        activity.toMap(),
-      );
-    } catch (error) {
-      debugPrint('MonitorController.startActivity firebase save notice: $error');
+      debugPrint('[ACTIVITY_LOCAL_SAVE_FAILED] id=$id error: $e');
     }
 
     // Immediately put in DataCacheService cache so liveActivity is non-null instantly
@@ -847,6 +851,13 @@ class MonitorController extends GetxController {
     // state and start the visible timer immediately.
     currentActivityId.value = id;
     _isSavingActivity = false;
+    debugPrint('[ACTIVITY_MONITOR_STATE_UPDATED] id=$id active activity set.');
+
+    _captureStartLocationInBackground(id);
+    await _markVehicleActive();
+
+    timerController.start();
+    debugPrint('[ACTIVITY_TIMER_STARTED] id=$id timer started running.');
     supervisor.text = LoginController.loginUser.fullname;
     timerController.start();
 
@@ -986,6 +997,7 @@ class MonitorController extends GetxController {
   /// this just clears the local form; otherwise it cancels the live
   /// activity record so every viewer sees it end.
   Future<void> confirmReset() async {
+    debugPrint('[ACTIVITY_RESET_REQUESTED] id=${currentActivityId.value}');
     final hasLiveRecord = currentActivityId.value.isNotEmpty;
 
     if (hasLiveRecord) {
@@ -1023,23 +1035,12 @@ class MonitorController extends GetxController {
       if (id != null && id.isNotEmpty) {
         _finalizingActivityIds.add(id);
 
-        if (cache.activities.containsKey(id)) {
-          cache.activities[id]!.status = ActivityStatus.cancelled;
-          cache.activities.refresh();
-        }
-
         final cancelData = {
           'status': ActivityStatus.cancelled,
           'cancelledBy': LoginController.loginUser.id,
           'cancelledAt': DateTime.now().toUtc().toIso8601String(),
           'updatedAt': DateTime.now().toUtc().toIso8601String(),
         };
-
-        try {
-          await firebaseService.updateRecord('activities', id, cancelData);
-        } catch (error) {
-          debugPrint('MonitorController.confirmReset firebase notice: $error');
-        }
 
         try {
           if (OfflineStorage.isAvailable) {
@@ -1063,6 +1064,11 @@ class MonitorController extends GetxController {
           debugPrint('MonitorController confirmReset offline save notice: $e');
         }
 
+        if (cache.activities.containsKey(id)) {
+          cache.activities[id]!.status = ActivityStatus.cancelled;
+          cache.activities.refresh();
+        }
+
         await AuditService.instance.log(
           action: 'activity_cancelled',
           performedBy: LoginController.loginUser.id,
@@ -1071,6 +1077,9 @@ class MonitorController extends GetxController {
           newValue: {'status': ActivityStatus.cancelled},
         );
       }
+      debugPrint('[ACTIVITY_RESET_SUCCESS] Monitor reset completed successfully.');
+    } catch (e) {
+      debugPrint('[ACTIVITY_RESET_FAILED] error=$e');
     } finally {
       if (id != null && id.isNotEmpty) {
         _finalizingActivityIds.remove(id);
@@ -1136,6 +1145,7 @@ class MonitorController extends GetxController {
   }
 
   void stopActivity() {
+    debugPrint('[ACTIVITY_STOP_REQUESTED] id=${currentActivityId.value}');
     if (!_requireControl()) return;
 
     timerController.stop();
@@ -1151,6 +1161,7 @@ class MonitorController extends GetxController {
   }
 
   Future<void> saveActivity() async {
+    debugPrint('[ACTIVITY_FINALIZATION_STARTED] id=${currentActivityId.value}');
     if (_isSavingActivity || _saveConfirmationPending) return;
 
     var customer = selectedCustomer.value;
@@ -1399,6 +1410,7 @@ class MonitorController extends GetxController {
         'serviceId': serviceId,
         'driverId': driverId,
         'supervisorId': existingAct?.supervisorId ?? LoginController.loginUser.id,
+        'startedByUserId': existingAct?.startedByUserId ?? LoginController.loginUser.id,
         'startTime': startTimeStr,
         'endTime': now.toUtc().toIso8601String(),
         'duration': duration,
@@ -1408,6 +1420,7 @@ class MonitorController extends GetxController {
         'dueAmount': amount - (existingAct?.paidAmount ?? 0),
         'description': description,
         'status': ActivityStatus.completed,
+        'createdBy': existingAct?.createdBy ?? LoginController.loginUser.id,
         'createdAt': createdAtStr,
         'updatedAt': now.toUtc().toIso8601String(),
       };
@@ -1430,8 +1443,11 @@ class MonitorController extends GetxController {
             data: updatedData,
             isNew: false,
           );
+          debugPrint('[ACTIVITY_LOCAL_UPDATE_SUCCESS] id=$activityId uId=$uId successfully saved to Sembast.');
+          debugPrint('[ACTIVITY_QUEUE_UPDATED] id=$activityId uId=$uId sync queue updated.');
         }
       } catch (e) {
+        debugPrint('[ACTIVITY_FINALIZATION_FAILED] id=$activityId error=$e');
         debugPrint('MonitorController local activity save notice: $e');
       }
 
@@ -1448,17 +1464,6 @@ class MonitorController extends GetxController {
         Get.find<ActivityController>().applyLocalFilters();
       }
 
-      // 3. THIRD: Sync Activity to Firebase in Background (asynchronously, non-blocking)
-      try {
-        await firebaseService.updateRecord(
-          'activities',
-          activityId,
-          updatedData,
-        );
-      } catch (e) {
-        debugPrint('MonitorController firebase activity sync notice: $e');
-      }
-
       if (stopLoc != null) {
         await LocationService.instance.saveStopLocation(activityId, stopLoc);
       }
@@ -1472,8 +1477,10 @@ class MonitorController extends GetxController {
       );
 
       await _clearVehicleActive();
+      debugPrint('[ACTIVITY_FINALIZATION_SUCCESS] id=$activityId uId=$uId background finalization completed.');
       debugPrint('MonitorController background save completed: $activityId');
     } catch (error) {
+      debugPrint('[ACTIVITY_FINALIZATION_FAILED] id=$activityId error=$error');
       debugPrint('MonitorController _saveActivityInBackground error: $error');
     } finally {
       _finalizingActivityIds.remove(activityId);
@@ -1543,13 +1550,6 @@ class MonitorController extends GetxController {
     // 2. SECOND: Update Local In-Memory Cache for instant UI availability
     cache.customers[customer.id] = customer;
     cache.customers.refresh();
-
-    // 3. THIRD: Sync Customer to Firebase in Background
-    try {
-      await firebaseService.saveRecord('customers', customer.id, customer.toMap());
-    } catch (e) {
-      debugPrint('MonitorController firebase customer sync notice: $e');
-    }
 
     return customer;
   }

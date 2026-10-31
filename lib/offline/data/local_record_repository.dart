@@ -621,11 +621,10 @@ class LocalRecordRepository {
     if (info == null) throw const OfflineScopeException.noWorkspace();
 
     if (info.environment != scope.environment ||
-        info.ownerUserId != scope.ownerUserId ||
-        info.authUid != scope.authUid) {
+        info.ownerUserId != scope.ownerUserId) {
       throw OfflineScopeException.mismatch(
         details:
-            'open=${info.workspaceId} (authUid=${info.authUid}) requested=${scope.workspaceId} (authUid=${scope.authUid})',
+            'open=${info.workspaceId} (owner=${info.ownerUserId}) requested=${scope.workspaceId} (owner=${scope.ownerUserId})',
       );
     }
 

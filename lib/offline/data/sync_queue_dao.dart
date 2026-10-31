@@ -49,17 +49,26 @@ class SyncQueueDao {
     return snapshots.map((s) => SyncQueueEntry.fromMap(s.value)).toList();
   }
 
-  /// Pending entries whose retry time has arrived, oldest first.
+  /// Pending/blocked/failed entries whose retry time has arrived (or all if ignoreBackoff).
   Future<List<SyncQueueEntry>> nextRunnable(
     String workspaceId,
     DateTime now, {
+    bool ignoreBackoff = false,
     DatabaseClient? client,
   }) async {
     final pending = await list(
       workspaceId,
-      statuses: const [QueueStatus.pending],
+      statuses: const [
+        QueueStatus.pending,
+        QueueStatus.blocked,
+        QueueStatus.failed,
+      ],
       client: client,
     );
+
+    if (ignoreBackoff) {
+      return pending;
+    }
 
     return pending
         .where((e) => e.nextAttemptAt == null || !e.nextAttemptAt!.isAfter(now))

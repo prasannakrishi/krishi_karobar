@@ -97,7 +97,7 @@ class OfflineStorage {
     await syncEngine.start(scope);
   }
 
-  Future<void> syncNow() => syncEngine.syncNow();
+  Future<void> syncNow({bool isManual = true}) => syncEngine.syncNow(isManual: isManual);
 
   /// Reference snapshots of [ownerUserId] live in the owner's workspace
   /// id. Use this for every snapshot read/write so the engine, the cache

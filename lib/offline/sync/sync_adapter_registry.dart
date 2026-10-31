@@ -19,6 +19,7 @@ class SyncAdapterRegistry {
       LocationSyncAdapter.activity(),
       ExpenseSyncAdapter(),
       LocationSyncAdapter.expense(),
+      PaymentSyncAdapter(),
     ]);
   }
 

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -13,6 +14,7 @@ import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/nepali_date_time.dart';
 import '../../../offline/offline_storage.dart';
+import '../../../offline/core/workspace_scope.dart';
 import '../screen/widgets/edit_activity_dialog.dart';
 import '../screen/widgets/expense_form_dialog.dart';
 import '../screen/widgets/activity_form_dialog.dart';
@@ -602,14 +604,47 @@ class ActivityController extends GetxController {
         recordId: activity.id,
       );
 
-      await firebaseService.updateRecord(
-        'activities',
-        activity.id,
-        {
-          'description': description,
-          'updatedAt': now.toUtc().toIso8601String(),
-        },
-      );
+      final patchData = {
+        'description': description,
+        'updatedAt': now.toUtc().toIso8601String(),
+      };
+
+      try {
+        if (OfflineStorage.isAvailable) {
+          final workspaceId = LoginController.loginUser.id;
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: workspaceId,
+            authUid: FirebaseAuth.instance.currentUser?.uid ?? workspaceId,
+            vehicleId: activity.vehicleId,
+          );
+          await OfflineStorage.instance.localRecords.patchRecord(
+            scope,
+            entityType: 'activities',
+            recordId: activity.id,
+            patch: patchData,
+          );
+        }
+      } catch (e) {
+        debugPrint('ActivityController local description patch notice: $e');
+      }
+
+      activity.description = description;
+      activity.updatedAt = now;
+
+      final cached = cache.activities[activity.id];
+      if (cached != null) {
+        cached.description = description;
+        cached.updatedAt = now;
+      }
+      activities.refresh();
+
+      try {
+        await firebaseService.updateRecord('activities', activity.id, patchData);
+      } catch (e) {
+        debugPrint('ActivityController firebase description sync notice: $e');
+      }
+
+      return true;
     } catch (e) {
       Get.snackbar(
         'Activity',
@@ -619,13 +654,6 @@ class ActivityController extends GetxController {
       debugPrint('ActivityController updateDescription: $e');
       return false;
     }
-
-    activity.description = description;
-    activity.updatedAt = now;
-
-    activities.refresh();
-
-    return true;
   }
 
   String customerName(String customerId) =>
@@ -737,11 +765,24 @@ class ActivityController extends GetxController {
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      await firebaseService.updateRecord(
-        'activities',
-        activity.id,
-        updateData,
-      );
+      try {
+        if (OfflineStorage.isAvailable) {
+          final workspaceId = LoginController.loginUser.id;
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: workspaceId,
+            authUid: FirebaseAuth.instance.currentUser?.uid ?? workspaceId,
+            vehicleId: vehicleId,
+          );
+          await OfflineStorage.instance.localRecords.patchRecord(
+            scope,
+            entityType: 'activities',
+            recordId: activity.id,
+            patch: updateData,
+          );
+        }
+      } catch (e) {
+        debugPrint('ActivityController local activity patch notice: $e');
+      }
 
       activity.customerId = customerId;
       activity.vehicleId = vehicleId;
@@ -771,6 +812,16 @@ class ActivityController extends GetxController {
 
       applyLocalFilters();
       activities.refresh();
+
+      try {
+        await firebaseService.updateRecord(
+          'activities',
+          activity.id,
+          updateData,
+        );
+      } catch (e) {
+        debugPrint('ActivityController firebase activity sync notice: $e');
+      }
 
       Get.snackbar(
         'Success',

@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../models/models.dart';
 import '../offline/offline_storage.dart';
+import '../offline/core/workspace_scope.dart';
 import '../utils/exceptions/app_exceptions.dart';
 import 'authorization_service.dart';
 import 'firebase_service.dart';
@@ -86,70 +88,81 @@ class DataCacheService extends GetxController {
       // 1. Load local snapshots and ops first for instant offline startup
       await _loadLocalSnapshotsAndOps(user);
 
-      // 2. Try fetching from Firebase with short timeout so offline startup never hangs
-      try {
-        await Future.wait([
-          _setupCache<VehicleModel>(
-            user: user,
-            path: 'vehicles',
-            cache: vehicles,
-            fromMap: VehicleModel.fromMap,
-          ),
-          _setupCache<UserModel>(
-            user: user,
-            path: 'users',
-            cache: users,
-            fromMap: UserModel.fromMap,
-          ),
-          _setupCache<CustomerModel>(
-            user: user,
-            path: 'customers',
-            cache: customers,
-            fromMap: CustomerModel.fromMap,
-          ),
-          _setupCache<ServiceModel>(
-            user: user,
-            path: 'services',
-            cache: services,
-            fromMap: ServiceModel.fromMap,
-          ),
-          _setupCache<ActivityModel>(
-            user: user,
-            path: 'activities',
-            cache: activities,
-            fromMap: ActivityModel.fromMap,
-            limitToLast: 50,
-          ),
-          _setupCache<PaymentModel>(
-            user: user,
-            path: 'payments',
-            cache: payments,
-            fromMap: PaymentModel.fromMap,
-          ),
-          _setupCache<ExpenseModel>(
-            user: user,
-            path: 'expenses',
-            cache: expenses,
-            fromMap: ExpenseModel.fromMap,
-            limitToLast: 100,
-          ),
-          _setupCache<ExpenseCategoryModel>(
-            user: user,
-            path: 'expensecategories',
-            cache: expenseCategories,
-            fromMap: ExpenseCategoryModel.fromMap,
-          ),
-        ]).timeout(const Duration(seconds: 3));
-      } catch (e) {
-        debugPrint('DataCacheService Firebase sync timeout/offline notice: $e');
-      }
+      // 2. Attach real-time Firebase listeners asynchronously in background
+      _setupCache<VehicleModel>(
+        user: user,
+        path: 'vehicles',
+        cache: vehicles,
+        fromMap: VehicleModel.fromMap,
+      );
+      _setupCache<UserModel>(
+        user: user,
+        path: 'users',
+        cache: users,
+        fromMap: UserModel.fromMap,
+      );
+      _setupCache<CustomerModel>(
+        user: user,
+        path: 'customers',
+        cache: customers,
+        fromMap: CustomerModel.fromMap,
+      );
+      _setupCache<ServiceModel>(
+        user: user,
+        path: 'services',
+        cache: services,
+        fromMap: ServiceModel.fromMap,
+      );
+      _setupCache<ActivityModel>(
+        user: user,
+        path: 'activities',
+        cache: activities,
+        fromMap: ActivityModel.fromMap,
+        limitToLast: 50,
+      );
+      _setupCache<PaymentModel>(
+        user: user,
+        path: 'payments',
+        cache: payments,
+        fromMap: PaymentModel.fromMap,
+      );
+      _setupCache<ExpenseModel>(
+        user: user,
+        path: 'expenses',
+        cache: expenses,
+        fromMap: ExpenseModel.fromMap,
+        limitToLast: 100,
+      );
+      _setupCache<ExpenseCategoryModel>(
+        user: user,
+        path: 'expensecategories',
+        cache: expenseCategories,
+        fromMap: ExpenseCategoryModel.fromMap,
+      );
 
       if (Authz.canCachePath('activity_locations', actor: user)) {
-        await _setupActivityLocationsCache();
+        _setupActivityLocationsCache();
       }
 
       _currentUser = user;
       _isInitialized = true;
+
+      try {
+        if (OfflineStorage.isAvailable && user.id.isNotEmpty) {
+          final authUid = FirebaseAuth.instance.currentUser?.uid ?? user.id;
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: user.id,
+            authUid: authUid,
+          );
+          await OfflineStorage.instance.activateWorkspace(
+            scope,
+            ownerPhone: user.phone,
+          );
+          debugPrint('[SYNC_ENGINE_STARTED] Workspace activated successfully for user=${user.id}');
+        }
+      } catch (e) {
+        debugPrint('DataCacheService activateWorkspace notice: $e');
+      }
     } catch (error) {
       _isInitialized = false;
       _currentUser = null;
@@ -308,73 +321,41 @@ class DataCacheService extends GetxController {
         limitToLast: limitToLast,
       );
 
-      final snapshot = await query.get().timeout(const Duration(seconds: 2));
-
-      if (snapshot.exists && snapshot.value is Map) {
-        final value = Map<Object?, Object?>.from(snapshot.value as Map);
-
-        for (final entry in value.entries) {
-          if (entry.value is! Map) continue;
-
-          final data = Map<String, dynamic>.from(
-            entry.value as Map,
-          );
-
-          final id = entry.key?.toString().trim();
-          if (id == null || id.isEmpty) continue;
-
-          data['id'] ??= id;
-
-          _addToCache(
-            path: path,
-            cache: cache,
-            data: data,
-            fromMap: fromMap,
-          );
-        }
-      }
-
       _listeners.add(
         query.onChildAdded.listen(
-              (event) => _handleChildAdded(
+          (event) => _handleChildAdded(
             path: path,
             cache: cache,
             snapshot: event.snapshot,
             fromMap: fromMap,
           ),
+          onError: (e) => debugPrint('DataCacheService $path onChildAdded notice: $e'),
         ),
       );
 
       _listeners.add(
         query.onChildChanged.listen(
-              (event) => _handleChildChanged(
+          (event) => _handleChildChanged(
             path: path,
             cache: cache,
             snapshot: event.snapshot,
             fromMap: fromMap,
           ),
+          onError: (e) => debugPrint('DataCacheService $path onChildChanged notice: $e'),
         ),
       );
 
       _listeners.add(
         query.onChildRemoved.listen(
-              (event) => _handleChildRemoved(
+          (event) => _handleChildRemoved(
             cache: cache,
             snapshot: event.snapshot,
           ),
+          onError: (e) => debugPrint('DataCacheService $path onChildRemoved notice: $e'),
         ),
       );
-    } catch (error) {
-      _logError('loading', path, error);
-
-      // The database rules are the final boundary and may be stricter than
-      // the client. A refused table degrades that feature only - it must not
-      // abort the whole session.
-      final mapped = AppException.from(error, operation: 'loading', path: path);
-
-      if (mapped is AuthorizationException) return;
-
-      rethrow;
+    } catch (e) {
+      debugPrint('DataCacheService _setupCache notice for $path: $e');
     }
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/sequences_service.dart';
@@ -50,12 +51,19 @@ class SyncEngine {
 
   /// Must be called only after WorkspaceRepository.open(scope) succeeds.
   Future<void> start(WorkspaceScope scope) async {
+    debugPrint('[SYNC_ENGINE_START_REQUESTED] scope=$scope');
     scope.validate();
+    debugPrint('[SYNC_SCOPE_RESOLVED] workspaceId=${scope.workspaceId} authUid=${scope.authUid}');
     if (_disposed) return;
+    if (_scope?.workspaceId == scope.workspaceId && _connectionSubscription != null) {
+      if (await _remote.isConnected()) unawaited(syncNow());
+      return;
+    }
     _scope = scope;
     await _connectionSubscription?.cancel();
     _connectionSubscription = _remote.connectionChanges().listen(
       (connected) {
+        debugPrint('[SYNC_CONNECTIVITY_CHANGED] connected=$connected');
         if (connected) unawaited(syncNow());
       },
       onError: (Object error, StackTrace stack) {
@@ -67,26 +75,38 @@ class SyncEngine {
 
   /// Can be called from connectivity callbacks, app resume, or a manual
   /// refresh. Concurrent calls share the same future (no duplicate writes).
-  Future<void> syncNow() {
+  Future<void> syncNow({bool isManual = false}) {
     if (_disposed || _scope == null) return Future<void>.value();
+    if (isManual) {
+      debugPrint('[SYNC_MANUAL_TRIGGER] Manual sync requested by user.');
+    }
     final active = _running;
     if (active != null) return active;
-    final run = _runQueue();
+    final run = _runQueue(isManual: isManual);
     _running = run;
     return run.whenComplete(() {
       if (identical(_running, run)) _running = null;
     });
   }
 
-  Future<void> _runQueue() async {
+  Future<void> _runQueue({bool isManual = false}) async {
     final scope = _scope;
-    if (scope == null || _disposed || !await _remote.isConnected()) return;
+    if (scope == null || _disposed) return;
+
+    final connected = await _remote.isConnected();
+    debugPrint('[SYNC_ENGINE_STARTED] Workspace=${scope.workspaceId} manual=$isManual');
+    debugPrint('[SYNC_CONNECTION_STATE] connected=$connected');
+
+    if (!connected) return;
 
     isSyncing.value = true;
     syncedCount.value = 0;
     try {
+      final counts = await _storage.queue.countsByStatus(scope.workspaceId);
       pendingCount.value = await _runnableCount(scope);
-      if (pendingCount.value == 0) {
+      debugPrint('[SYNC_QUEUE_COUNTS] statusCounts=$counts runnable=${pendingCount.value}');
+
+      if (pendingCount.value == 0 && !isManual) {
         progress.value = 1;
         return;
       }
@@ -101,18 +121,23 @@ class SyncEngine {
         final entries = (await _storage.queue.nextRunnable(
           scope.workspaceId,
           DateTime.now().toUtc(),
+          ignoreBackoff: isManual,
         ))
             // Deletion sync arrives with the entity integration stage;
             // until then a tombstone stays queued (and counted).
             .where((e) => e.operation != SyncOperation.delete)
             .toList();
 
+        debugPrint('[SYNC_QUEUE_FETCHED] Fetched ${entries.length} entries for processing.');
+
         for (final entry in entries) {
           if (_disposed || !await _remote.isConnected()) return;
+          debugPrint('[SYNC_QUEUE_ITEM_SELECTED] id=${entry.recordId} entityType=${entry.entityType} op=${entry.operation}');
           final didSync = await _syncEntry(scope, entry);
           if (didSync) {
             madeProgress = true;
             syncedCount.value++;
+            debugPrint('[SYNC_QUEUE_COMPLETED] Successfully completed id=${entry.recordId} entityType=${entry.entityType}');
           }
           pendingCount.value = await _runnableCount(scope);
           final total = syncedCount.value + pendingCount.value;
@@ -182,22 +207,48 @@ class SyncEngine {
         generateActivityUid: _sequences.generateActivityUid,
       );
 
-      // Parent-first dependency check. A queued parent is allowed to sync in
-      // an earlier pass; otherwise verify the parent is already remote.
+      debugPrint('[SYNC_ADAPTER_STARTED] id=${entry.recordId} entityType=$type adapter=${adapter.runtimeType}');
+
+      // Parent-first dependency check.
       for (final parent in adapter.parentsOf(record)) {
         final parentAdapter = _registry.tryAdapterFor(_canonicalType(parent.entityType));
         if (parentAdapter == null) continue;
-        final parentRemote = await _remote.readRecord(parentAdapter.remotePath, parent.recordId);
-        if (parentRemote == null) {
+
+        // Check if parent is queued in local sync queue
+        final parentQueueEntry = await _storage.queue.get(
+          scope.workspaceId,
+          parent.entityType,
+          parent.recordId,
+        );
+
+        if (parentQueueEntry != null && parentQueueEntry.status != QueueStatus.failed) {
+          debugPrint('[SYNC_RECORD_SELECTED] ${entry.entityType}/${entry.recordId} waiting for local queued parent ${parent.entityType}/${parent.recordId}');
           await _storage.queue.markRetryLater(
             scope.workspaceId, entry.entityType, entry.recordId,
             category: SyncErrorCategory.recordNotFound,
-            message: 'Waiting for parent ${parent.entityType}/${parent.recordId}.',
-            retryAfter: const Duration(seconds: 15),
+            message: 'Waiting for local parent ${parent.entityType}/${parent.recordId}.',
+            retryAfter: const Duration(seconds: 2),
           );
           return false;
         }
+
+        final localSnapshot = await _storage.snapshots.get(scope.workspaceId, parent.entityType, parent.recordId);
+        if (localSnapshot == null) {
+          final parentRemote = await _remote.readRecord(parentAdapter.remotePath, parent.recordId);
+          if (parentRemote == null) {
+            debugPrint('[SYNC_RECORD_SELECTED] Parent ${parent.entityType}/${parent.recordId} not found on remote or snapshot');
+            await _storage.queue.markRetryLater(
+              scope.workspaceId, entry.entityType, entry.recordId,
+              category: SyncErrorCategory.recordNotFound,
+              message: 'Waiting for remote parent ${parent.entityType}/${parent.recordId}.',
+              retryAfter: const Duration(seconds: 5),
+            );
+            return false;
+          }
+        }
       }
+
+      debugPrint('[SYNC_FIREBASE_WRITE_STARTED] id=${entry.recordId} path=${adapter.remotePath}');
 
       if (entry.operation == SyncOperation.create || record.isNew) {
         final uid = await adapter.resolveUid(context, record, uidClaimed: entry.uidClaimed);
@@ -228,6 +279,7 @@ class SyncEngine {
             verifiedServerData: server,
             referenceType: adapter.referenceType,
           );
+          debugPrint('[SYNC_FIREBASE_WRITE_SUCCESS] id=${entry.recordId} path=${adapter.remotePath}');
           return true;
         }
         final result = await _remote.createIfAbsent(adapter.remotePath, record.recordId, payload);
@@ -258,6 +310,7 @@ class SyncEngine {
           serverUpdatedAt: server['updatedAt']?.toString(),
           referenceType: adapter.referenceType,
         );
+        debugPrint('[SYNC_FIREBASE_WRITE_SUCCESS] id=${entry.recordId} path=${adapter.remotePath}');
         return true;
       }
 
@@ -305,6 +358,7 @@ class SyncEngine {
         serverUpdatedAt: verified['updatedAt']?.toString(),
         referenceType: adapter.referenceType,
       );
+      debugPrint('[SYNC_FIREBASE_WRITE_SUCCESS] id=${entry.recordId} path=${adapter.remotePath}');
       return true;
     } on SyncPreparationException catch (error) {
       await _storage.queue.markFailed(
@@ -318,8 +372,33 @@ class SyncEngine {
         category: SyncErrorCategory.validation,
         message: error.message,
       );
+    } on FirebaseException catch (error) {
+      debugPrint('[SYNC_FIREBASE_WRITE_FAILED] id=${entry.recordId} entityType=$type error=${error.code} - ${error.message}');
+      if (error.code == 'permission-denied' || (error.message?.contains('Permission denied') ?? false)) {
+        await _storage.queue.markFailed(
+          scope.workspaceId, entry.entityType, entry.recordId,
+          category: SyncErrorCategory.permission,
+          message: 'Firebase permission denied: ${error.message}',
+        );
+      } else {
+        final attempts = entry.attemptCount + 1;
+        if (attempts >= maxAttempts) {
+          await _storage.queue.markFailed(
+            scope.workspaceId, entry.entityType, entry.recordId,
+            category: SyncErrorCategory.unknown,
+            message: error.message ?? error.toString(),
+          );
+        } else {
+          await _storage.queue.markRetryLater(
+            scope.workspaceId, entry.entityType, entry.recordId,
+            category: SyncErrorCategory.network,
+            message: error.message ?? error.toString(),
+            retryAfter: OfflineBackoff.delayFor(attempts),
+          );
+        }
+      }
     } catch (error, stack) {
-      debugPrint('Offline sync failed ${entry.entityType}/${entry.recordId}: $error\n$stack');
+      debugPrint('[SYNC_FIREBASE_WRITE_FAILED] id=${entry.recordId} entityType=$type error=$error\n$stack');
       final attempts = entry.attemptCount + 1;
       if (attempts >= maxAttempts) {
         await _storage.queue.markFailed(

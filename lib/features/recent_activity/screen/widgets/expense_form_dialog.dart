@@ -169,7 +169,6 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     final dueAmount = amount - paidAmount;
     final status = dueAmount <= 0 ? 'paid' : 'due';
 
-    final firebaseService = FirebaseService();
     final sequenceService = Get.find<SequenceService>();
     final user = LoginController.loginUser;
 
@@ -184,14 +183,6 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
       final currentTime = DateTime.now();
       final id = widget.expense?.id ?? const Uuid().v4();
       final uId = widget.expense?.uId ?? await sequenceService.generateSequence('E');
-
-      // Capture GPS location at creation time for expense
-      ActivityLocationModel? expenseLoc;
-      try {
-        expenseLoc = await LocationService.instance.captureCurrentLocation();
-      } catch (e) {
-        debugPrint('Expense location capture notice: $e');
-      }
 
       final expense = ExpenseModel(
         id: id,
@@ -215,6 +206,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         updatedBy: user.id,
       );
 
+      // 1. FIRST: Save Expense to Local Database (Sembast)
       try {
         if (OfflineStorage.isAvailable) {
           final scope = WorkspaceScope.forCurrentEnvironment(
@@ -231,25 +223,12 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
           );
         }
       } catch (e) {
-        debugPrint('ExpenseFormDialog offline record save notice: $e');
+        debugPrint('ExpenseFormDialog local expense save notice: $e');
       }
 
-      await firebaseService.saveRecord('expenses', id, expense.toMap());
-
+      // 2. SECOND: Update In-Memory Cache for instant UI availability
       DataCacheService.instance.expenses[id] = expense;
       DataCacheService.instance.expenses.refresh();
-
-      if (expenseLoc != null) {
-        await firebaseService.updateRecord(
-          'expense_locations',
-          id,
-          {
-            'id': id,
-            'location': expenseLoc.toMap(),
-            'updatedAt': currentTime.toUtc().toIso8601String(),
-          },
-        );
-      }
 
       Get.back();
       Get.snackbar(

@@ -268,7 +268,6 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     final dueAmount = amount - paidAmount - discount;
     final status = (paidAmount + discount) >= amount ? 'paid' : ((paidAmount + discount) > 0 ? 'partial' : 'due');
 
-    final firebaseService = FirebaseService();
     final sequenceService = Get.find<SequenceService>();
     final user = LoginController.loginUser;
 
@@ -352,8 +351,7 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         updates['payments/$paymentId'] = payment.toMap();
       }
 
-      await firebaseService.updateRecords(updates);
-
+      // 1. FIRST: Save Activity (and Payment if created) to Local Sembast Database
       try {
         if (OfflineStorage.isAvailable) {
           final scope = WorkspaceScope.forCurrentEnvironment(
@@ -380,9 +378,10 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
           }
         }
       } catch (e) {
-        debugPrint('ActivityFormDialog offline record save notice: $e');
+        debugPrint('ActivityFormDialog local record save notice: $e');
       }
 
+      // 2. SECOND: Update In-Memory Cache for instant UI refresh
       DataCacheService.instance.activities[id] = activity;
       DataCacheService.instance.activities.refresh();
 

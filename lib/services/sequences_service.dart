@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../offline/offline_storage.dart';
+import '../offline/core/workspace_scope.dart';
+import '../features/authentication/controllers/login_controllers.dart';
+
 class SequenceService extends GetxService {
   static SequenceService get instance => Get.find<SequenceService>();
 
@@ -14,7 +18,6 @@ class SequenceService extends GetxService {
   final GetStorage _storage = GetStorage();
 
   static const String _sequencePath = 'sequences';
-  static const String _activitySequencePath = 'activity_id';
 
   Future<String> generateSequence(String prefix) async {
     final year = DateTime.now().year % 10;
@@ -58,7 +61,7 @@ class SequenceService extends GetxService {
     return '$prefix$year-${current.toString().padLeft(4, '0')}';
   }
 
-  Future<String> generateActivityUid({required String serviceType, required String vehicleUId,}) async {
+  Future<String> generateActivityUid({required String serviceType, required String vehicleUId}) async {
     final service = serviceType.trim();
     final vehicle = vehicleUId.trim();
 
@@ -70,76 +73,69 @@ class SequenceService extends GetxService {
       throw ArgumentError('Vehicle UID cannot be empty.');
     }
 
-    if (!vehicle.toUpperCase().startsWith('V')) {
-      throw ArgumentError(
-        'Vehicle UID must start with "V": "$vehicle".',
-      );
-    }
-
-    final parts = vehicle.split('-');
-    if (parts.length < 2) {
-      throw ArgumentError('Invalid vehicle UID: "$vehicle".');
-    }
-    final type = parts[0].substring(1, 2); // T or H
-    final seq = parts[1]; // 02
-    final vehiclePart = '$type$seq'; // T02
-
-    if (vehiclePart.isEmpty) {
-      throw ArgumentError('Invalid vehicle UID: "$vehicle".');
+    String vehiclePart = 'V01';
+    if (vehicle.contains('-')) {
+      final parts = vehicle.split('-');
+      if (parts.length >= 2 && parts[0].length >= 2) {
+        final type = parts[0].substring(1, 2);
+        final seq = parts[1];
+        vehiclePart = '$type$seq';
+      } else {
+        vehiclePart = vehicle.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      }
+    } else {
+      final clean = vehicle.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      vehiclePart = clean.isNotEmpty ? clean : 'V01';
     }
 
     final serviceCode = service[0].toUpperCase();
     final now = DateTime.now();
     final period = '${now.year % 10}${now.month.toString().padLeft(2, '0')}';
 
-    try {
-      final ref = _db.child('$_sequencePath/$_activitySequencePath/$period');
+    debugPrint('[ACTIVITY_UID_LOOKUP] vehicleUId=$vehicleUId period=$period');
 
-      final result = await ref.runTransaction((data) {
-        if (data == null) {
-          return Transaction.success('$period${'0001'}');
-        }
+    // Vehicle-specific sequence storage key
+    final storageKey = 'act_seq_${vehicle}_$period';
+    int current = _storage.read<int>(storageKey) ?? 0;
 
-        final current = data.toString().trim();
-
-        if (!current.startsWith(period)) {
-          return Transaction.abort();
-        }
-
-        final currentNumber = int.tryParse(current.substring(period.length));
-
-        if (currentNumber == null) {
-          return Transaction.abort();
-        }
-
-        final nextNumber = currentNumber + 1;
-
-        return Transaction.success('$period${nextNumber.toString().padLeft(4, '0')}');
-      }).timeout(const Duration(seconds: 4));
-
-      if (result.committed && result.snapshot.value != null) {
-        final storedValue = result.snapshot.value.toString().trim();
-
-        if (storedValue.startsWith(period)) {
-          final sequenceNumber = int.tryParse(storedValue.substring(period.length));
-          if (sequenceNumber != null) {
-            final sequence = sequenceNumber.toString().padLeft(3, '0');
-            return '$serviceCode$vehiclePart-$period$sequence';
+    if (current == 0 && OfflineStorage.isAvailable) {
+      try {
+        final userId = LoginController.loginUser.id;
+        if (userId.isNotEmpty) {
+          final scope = WorkspaceScope.forCurrentEnvironment(ownerUserId: userId, authUid: userId);
+          final records = await OfflineStorage.instance.localRecords.listRecords(
+            scope,
+            entityType: 'activities',
+            vehicleId: vehicle,
+          );
+          for (final r in records) {
+            final uId = r.data['uId']?.toString() ?? '';
+            if (uId.contains(period)) {
+              final parts = uId.split('-');
+              if (parts.length >= 2) {
+                final seqPart = parts.last;
+                final seqNum = int.tryParse(seqPart);
+                if (seqNum != null && seqNum > current) {
+                  current = seqNum;
+                }
+              }
+            }
           }
         }
+      } catch (e) {
+        debugPrint('[ACTIVITY_UID_LOOKUP] Sembast scan notice: $e');
       }
-    } catch (_) {
-      debugPrint('SequenceService: Offline fallback for activity UID');
     }
 
-    // Local fallback generator for activity UID
-    final storageKey = 'act_seq_$period';
-    int current = _storage.read<int>(storageKey) ?? 0;
     current++;
+    debugPrint('[ACTIVITY_UID_INCREMENTED] vehicleUId=$vehicleUId nextSequence=$current');
+
     await _storage.write(storageKey, current);
     final sequence = current.toString().padLeft(3, '0');
+    final generatedUid = '$serviceCode$vehiclePart-$period$sequence';
 
-    return '$serviceCode$vehiclePart-$period$sequence';
+    debugPrint('[ACTIVITY_UID_LOCAL_PERSISTED] generatedUid=$generatedUid');
+    return generatedUid;
   }
 
   String _validatePrefix(String prefix) {

@@ -225,10 +225,6 @@ class WorkspaceRepository {
     });
   }
 
-  Future<bool> _isDirty(String workspaceId, DatabaseClient client) async {
-    return !(await counts(workspaceId, client: client)).isClean;
-  }
-
   Future<void> _put(WorkspaceInfo info, DatabaseClient client) async {
     await _store.record(_key).put(client, info.toMap());
   }

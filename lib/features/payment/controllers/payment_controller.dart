@@ -8,6 +8,7 @@ import 'package:krishi_karobar/offline/offline_storage.dart';
 import 'package:krishi_karobar/offline/core/workspace_scope.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../authentication/controllers/login_controllers.dart';
+import '../../recent_activity/controllers/activity_controller.dart';
 
 class PaymentController extends GetxController {
   static PaymentController get instance => Get.find();
@@ -342,18 +343,51 @@ class PaymentController extends GetxController {
             data: payment.toMap(),
             isNew: true,
           );
+
+          for (final allocation in allocations) {
+            final activityIndex = customerActivities.indexWhere(
+              (item) => item.id == allocation.activityId,
+            );
+            if (activityIndex != -1) {
+              final act = customerActivities[activityIndex];
+              final cachedAct = cache.activities[act.id];
+              if (cachedAct != null) {
+                final settlement = allocation.paidAmount + allocation.discount;
+                final newPaid = cachedAct.paidAmount + settlement;
+                final newDue = cachedAct.amount - newPaid;
+                final newStatus = _paymentStatus(newPaid, cachedAct.amount);
+
+                await OfflineStorage.instance.localRecords.patchRecord(
+                  scope,
+                  entityType: 'activities',
+                  recordId: act.id,
+                  patch: {
+                    'paidAmount': newPaid,
+                    'discountAmount': cachedAct.discountAmount + allocation.discount,
+                    'dueAmount': newDue,
+                    'status': newStatus,
+                    'paidAt': now.toUtc().toIso8601String(),
+                    'receivedBy': LoginController.loginUser.id,
+                    'updatedAt': now.toUtc().toIso8601String(),
+                  },
+                );
+              }
+            }
+          }
         }
       } catch (e) {
         debugPrint('PaymentController offline payment save notice: $e');
       }
-
-      await firebaseService.updateRecords(updates);
 
       cache.payments[paymentId] = payment;
       cache.payments.refresh();
 
       _refreshLocalActivities(allocations, now);
       cache.activities.refresh();
+
+      if (Get.isRegistered<ActivityController>()) {
+        Get.find<ActivityController>().applyLocalFilters();
+      }
 
       Get.snackbar(
         'Payment Saved',

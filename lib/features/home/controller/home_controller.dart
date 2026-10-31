@@ -125,7 +125,6 @@ class HomeController extends GetxController {
 
     // Keep the local workspace aligned with the dashboard's selected vehicle.
     ever(selectedVehicleId, (_) => _activateOfflineWorkspace());
-    _activateOfflineWorkspace();
     _checkPendingQueue();
   }
 

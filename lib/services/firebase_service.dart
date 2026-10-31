@@ -223,14 +223,16 @@ class FirebaseService {
 
   bool _isNetworkError(Object error) {
     final msg = error.toString().toLowerCase();
+    if (msg.contains('permission-denied') || msg.contains('permission denied')) {
+      return false;
+    }
     return msg.contains('socket') ||
            msg.contains('network') ||
            msg.contains('timeout') ||
            msg.contains('disconnected') ||
            msg.contains('unavailable') ||
            msg.contains('failed host lookup') ||
-           msg.contains('network-request-failed') ||
-           msg.contains('permission-denied');
+           msg.contains('network-request-failed');
   }
 
   String? _cleanPath(String path) {

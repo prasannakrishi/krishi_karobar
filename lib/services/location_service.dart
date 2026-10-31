@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../utils/exceptions/app_exceptions.dart';
+import '../offline/offline_storage.dart';
+import '../offline/core/workspace_scope.dart';
+import '../offline/offline_constants.dart';
+import '../features/authentication/controllers/login_controllers.dart';
 import 'firebase_service.dart';
 
 /// GPS Location service for capturing, validating, saving, and launching maps
@@ -162,36 +167,92 @@ class LocationService {
     return fallback;
   }
 
-  /// Saves the Start GPS location object to `activity_locations/$activityId`.
+  /// Saves the Start GPS location object to Sembast local records and queues for sync.
   Future<void> saveStartLocation(
     String activityId,
     ActivityLocationModel startLoc,
   ) async {
-    await _firebaseService.updateRecord(
-      'activity_locations',
-      activityId,
-      {
-        'id': activityId,
-        'startLocation': startLoc.toMap(),
-        'updatedAt': DateTime.now().toUtc().toIso8601String(),
-      },
-    );
+    final locationData = {
+      'id': activityId,
+      'startLocation': startLoc.toMap(),
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      if (OfflineStorage.isAvailable) {
+        final userId = LoginController.loginUser.id;
+        final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
+        if (userId.isNotEmpty) {
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: userId,
+            authUid: authUid,
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: SyncEntity.activityLocation,
+            recordId: activityId,
+            data: locationData,
+            isNew: true,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('LocationService saveStartLocation local save error: $e');
+    }
+
+    try {
+      await _firebaseService.updateRecord(
+        'activity_locations',
+        activityId,
+        locationData,
+      );
+    } catch (e) {
+      debugPrint('LocationService saveStartLocation firebase sync notice: $e');
+    }
   }
 
-  /// Saves the Stop GPS location object to `activity_locations/$activityId`.
+  /// Saves the Stop GPS location object to Sembast local records and queues for sync.
   Future<void> saveStopLocation(
     String activityId,
     ActivityLocationModel stopLoc,
   ) async {
-    await _firebaseService.updateRecord(
-      'activity_locations',
-      activityId,
-      {
-        'id': activityId,
-        'stopLocation': stopLoc.toMap(),
-        'updatedAt': DateTime.now().toUtc().toIso8601String(),
-      },
-    );
+    final locationData = {
+      'id': activityId,
+      'stopLocation': stopLoc.toMap(),
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      if (OfflineStorage.isAvailable) {
+        final userId = LoginController.loginUser.id;
+        final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
+        if (userId.isNotEmpty) {
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: userId,
+            authUid: authUid,
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: SyncEntity.activityLocation,
+            recordId: activityId,
+            data: locationData,
+            isNew: false,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('LocationService saveStopLocation local save error: $e');
+    }
+
+    try {
+      await _firebaseService.updateRecord(
+        'activity_locations',
+        activityId,
+        locationData,
+      );
+    } catch (e) {
+      debugPrint('LocationService saveStopLocation firebase sync notice: $e');
+    }
   }
 
   /// Fetches saved locations for [activityId] from `activity_locations`.
