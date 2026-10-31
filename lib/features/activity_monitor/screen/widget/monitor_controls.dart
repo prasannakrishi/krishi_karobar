@@ -17,7 +17,7 @@ class MonitorControls extends GetView<MonitorController> {
 
           final live = controller.liveActivity;
           final currentId = controller.currentActivityId.value;
-          final hasActiveId = currentId != null && currentId.isNotEmpty;
+          final hasActiveId = currentId.isNotEmpty;
 
           // Online हुँदा मात्र live activity control restriction
           if (isOnline &&
