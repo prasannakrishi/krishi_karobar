@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
+import 'package:krishi_karobar/offline/core/workspace_scope.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 import 'package:krishi_karobar/utils/helper/nepali_date_time.dart';
@@ -212,7 +215,29 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         updatedBy: user.id,
       );
 
+      try {
+        if (OfflineStorage.isAvailable) {
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: user.id,
+            authUid: FirebaseAuth.instance.currentUser?.uid ?? user.id,
+            vehicleId: selectedVehicleId ?? 'default',
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: 'expenses',
+            recordId: id,
+            data: expense.toMap(),
+            isNew: widget.expense == null,
+          );
+        }
+      } catch (e) {
+        debugPrint('ExpenseFormDialog offline record save notice: $e');
+      }
+
       await firebaseService.saveRecord('expenses', id, expense.toMap());
+
+      DataCacheService.instance.expenses[id] = expense;
+      DataCacheService.instance.expenses.refresh();
 
       if (expenseLoc != null) {
         await firebaseService.updateRecord(

@@ -1,3 +1,5 @@
+import '../utils/helper/helper_method.dart';
+
 class PaymentAllocationModel {
   final String activityId;
   final int previousDue;
@@ -131,10 +133,6 @@ class PaymentModel {
   }
 
   static DateTime? _toDateTime(dynamic value) {
-    if (value == null) return null;
-
-    if (value is DateTime) return value;
-
-    return DateTime.tryParse(value.toString());
+    return toDateTime(value);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:sembast/sembast.dart';
 
+import '../core/workspace_access.dart';
 import '../core/workspace_scope.dart';
 import '../offline_constants.dart';
 import '../offline_exceptions.dart';
@@ -9,12 +10,11 @@ import 'reference_snapshot_dao.dart';
 import 'sync_conflict_dao.dart';
 import 'sync_queue_dao.dart';
 
-/// Owns the single offline workspace on this device.
-///
-/// A database holds at most one workspace (one owner, one vehicle). While
-/// that workspace has unsynchronized data it can only be re-opened by the
-/// same owner and vehicle - which is what prevents cross-user and
-/// cross-vehicle mixing.
+/// Owns the offline workspace on this device: ONE per environment and
+/// owner. While it holds unsynchronized data it can only be re-opened by the
+/// same owner (same auth identity), which prevents cross-user mixing.
+/// Vehicles are not workspaces - a record carries its own `vehicleId` and
+/// the stored [WorkspaceAccess] decides which vehicles the owner may use.
 class WorkspaceRepository {
   WorkspaceRepository({
     required Database database,
@@ -58,13 +58,15 @@ class WorkspaceRepository {
 
   /// Opens (or re-activates) the workspace for [scope].
   ///
-  /// * none exists            -> create it
-  /// * same owner + vehicle   -> re-activate (owner returning)
-  /// * different workspace    -> refused while the old one has unsynced
-  ///   data; wiped and replaced only when it is completely clean.
+  /// * none exists          -> create it
+  /// * same owner           -> re-activate (owner returning, or the
+  ///   access profile refreshed after a vehicle assignment change)
+  /// * different owner      -> refused while the old owner has
+  ///   unsynchronized data; wiped and replaced only when completely clean.
   Future<WorkspaceInfo> open(
     WorkspaceScope scope, {
     required String ownerPhone,
+    WorkspaceAccess? access,
   }) {
     scope.validate();
 
@@ -75,7 +77,7 @@ class WorkspaceRepository {
       if (existing != null) {
         if (existing.workspaceId == scope.workspaceId) {
           if (existing.authUid != scope.authUid &&
-              await _isDirty(existing.workspaceId, txn)) {
+              !(await ownerCounts(existing, client: txn)).isClean) {
             throw const WorkspaceOwnershipException.differentAuthIdentity();
           }
 
@@ -84,27 +86,25 @@ class WorkspaceRepository {
             ownerPhone: normalizePhone(ownerPhone),
             state: WorkspaceState.active,
             updatedAt: now,
+            access: access,
           );
           await _put(reopened, txn);
           return reopened;
         }
 
-        if (await _isDirty(existing.workspaceId, txn)) {
-          throw existing.ownerUserId == scope.ownerUserId
-              ? const WorkspaceOwnershipException.vehicleSwitchPending()
-              : const WorkspaceOwnershipException.differentOwner();
+        if (!(await ownerCounts(existing, client: txn)).isClean) {
+          throw const WorkspaceOwnershipException.differentOwner();
         }
-
-        await _wipe(existing.workspaceId, txn);
+        await _wipeOwner(existing, txn);
       }
 
       final created = WorkspaceInfo(
+        access: access,
         workspaceId: scope.workspaceId,
         environment: scope.environment,
         ownerUserId: scope.ownerUserId,
         authUid: scope.authUid,
         ownerPhone: normalizePhone(ownerPhone),
-        vehicleId: scope.vehicleId,
         state: WorkspaceState.active,
         createdAt: now,
         updatedAt: now,
@@ -164,7 +164,37 @@ class WorkspaceRepository {
   Future<WorkspaceCounts> currentCounts() async {
     final info = await current();
     if (info == null) return const WorkspaceCounts();
-    return counts(info.workspaceId);
+    return ownerCounts(info);
+  }
+
+  /// Sync health of everything the open workspace's owner has on this
+  /// device: the workspace itself plus any other workspace id that still
+  /// holds records (a pre-v2 `environment|owner|vehicle` one that migration
+  /// could not re-home is kept and counted, never dropped). This is what
+  /// pending counts and the logout/login guards use.
+  Future<WorkspaceCounts> ownerCounts(
+    WorkspaceInfo info, {
+    DatabaseClient? client,
+  }) async {
+    var total = const WorkspaceCounts();
+    for (final id in await _ownerWorkspaceIds(info, client)) {
+      total = total + await counts(id, client: client);
+    }
+    return total;
+  }
+
+  Future<Set<String>> _ownerWorkspaceIds(
+    WorkspaceInfo info,
+    DatabaseClient? client,
+  ) async {
+    return {
+      info.workspaceId,
+      ...await _records.workspaceIdsForOwner(
+        info.ownerUserId,
+        environment: info.environment,
+        client: client,
+      ),
+    };
   }
 
   Future<bool> isDirty() async => !(await currentCounts()).isClean;
@@ -187,10 +217,10 @@ class WorkspaceRepository {
       final info = await current(client: txn);
       if (info == null) return true;
 
-      final health = await counts(info.workspaceId, client: txn);
+      final health = await ownerCounts(info, client: txn);
       if (!health.isClean) return false;
 
-      await _wipe(info.workspaceId, txn);
+      await _wipeOwner(info, txn);
       return true;
     });
   }
@@ -203,11 +233,19 @@ class WorkspaceRepository {
     await _store.record(_key).put(client, info.toMap());
   }
 
-  Future<void> _wipe(String workspaceId, DatabaseClient client) async {
+  Future<void> _wipeData(String workspaceId, DatabaseClient client) async {
     await _records.deleteWorkspace(workspaceId, client: client);
     await _queue.deleteWorkspace(workspaceId, client: client);
     await _conflicts.deleteWorkspace(workspaceId, client: client);
     await _snapshots.deleteWorkspace(workspaceId, client: client);
+  }
+
+  /// Wipes every workspace of the owner. Callers verify the owner is clean
+  /// first; local sequences are never touched.
+  Future<void> _wipeOwner(WorkspaceInfo info, DatabaseClient client) async {
+    for (final id in await _ownerWorkspaceIds(info, client)) {
+      await _wipeData(id, client);
+    }
     await _store.record(_key).delete(client);
   }
 }

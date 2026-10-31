@@ -12,6 +12,7 @@ import 'package:krishi_karobar/services/firebase_service.dart';
 import 'package:krishi_karobar/services/authorization_service.dart';
 import 'package:krishi_karobar/services/sequences_service.dart';
 import 'package:krishi_karobar/services/session_service.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 
 class VehicleController extends GetxController {
@@ -285,10 +286,40 @@ class VehicleController extends GetxController {
       if (user.id.isNotEmpty) {
         user.recentVehicleIds = cachedVehicle.id;
         SessionService.instance.updateUserSnapshot(user);
-        firebaseService.setValue('users/${user.id}/recentVehicleIds', cachedVehicle.id).catchError((e) {
-          debugPrint('VehicleController: remote recentVehicleIds sync skipped: $e');
-          return false;
-        });
+
+        if (DataCacheService.instance.users.containsKey(user.id)) {
+          DataCacheService.instance.users[user.id] = user;
+          DataCacheService.instance.users.refresh();
+        }
+
+        try {
+          if (OfflineStorage.isAvailable) {
+            OfflineStorage.instance.snapshots.put(
+              workspaceId: OfflineStorage.snapshotNamespace(user.id),
+              type: 'users',
+              recordId: user.id,
+              data: user.toMap(),
+            );
+            OfflineStorage.instance.snapshots.put(
+              workspaceId: OfflineStorage.snapshotNamespace(user.id),
+              type: 'vehicles',
+              recordId: cachedVehicle.id,
+              data: cachedVehicle.toMap(),
+            );
+          }
+        } catch (e) {
+          debugPrint('VehicleController user snapshot notice: $e');
+        }
+
+        OfflineStorage.saveLocal(
+          entityType: 'users',
+          recordId: user.id,
+          data: {
+            'recentVehicleIds': cachedVehicle.id,
+            'updatedAt': DateTime.now().toUtc().toIso8601String(),
+          },
+          isNew: false,
+        );
       }
     }
 
@@ -629,10 +660,11 @@ class VehicleController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      await firebaseService.saveRecord(
-        'vehicles',
-        newVehicle.id,
-        newVehicle.toMap(),
+      await OfflineStorage.saveLocal(
+        entityType: 'vehicles',
+        recordId: newVehicle.id,
+        data: newVehicle.toMap(),
+        isNew: true,
       );
 
       await loadVehicles();
@@ -689,10 +721,11 @@ class VehicleController extends GetxController {
         'updatedBy': LoginController.loginUser.id,
       };
 
-      await firebaseService.updateRecord(
-        'vehicles',
-        target.id,
-        updatedData,
+      await OfflineStorage.saveLocal(
+        entityType: 'vehicles',
+        recordId: target.id,
+        data: updatedData,
+        isNew: false,
       );
 
       await loadVehicles();
@@ -797,7 +830,12 @@ class VehicleController extends GetxController {
 
     try {
       for (final id in deletableIds) {
-        await firebaseService.deleteRecord('vehicles', id);
+        await OfflineStorage.saveLocal(
+          entityType: 'vehicles',
+          recordId: id,
+          data: {'status': 'inactive', 'isDeleted': true},
+          isNew: false,
+        );
       }
 
       await loadVehicles();

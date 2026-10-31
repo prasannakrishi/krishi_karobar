@@ -1,7 +1,17 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sembast/sembast.dart';
+
+import '../features/authentication/controllers/login_controllers.dart';
+import '../services/sequences_service.dart';
+import '../utils/exceptions/app_exceptions.dart';
 
 import '../utils/constants/environment_config.dart';
 import 'core/local_database.dart';
+import 'core/workspace_access.dart';
+import 'core/workspace_scope.dart';
 import 'data/local_record_dao.dart';
 import 'data/local_record_repository.dart';
 import 'data/local_sequence_dao.dart';
@@ -10,6 +20,11 @@ import 'data/sync_conflict_dao.dart';
 import 'data/sync_queue_dao.dart';
 import 'data/workspace_repository.dart';
 import 'offline_exceptions.dart';
+import 'offline_models.dart';
+import 'sync/sync_engine.dart';
+import 'sync/sync_remote_gateway.dart';
+import 'sync/sync_adapter_registry.dart';
+import 'uid/expense_uid_service.dart';
 
 /// Single entry point to the offline workspace storage. Later stages (UID
 /// service, sync engine, guards) reach the DAOs and repositories through
@@ -36,6 +51,10 @@ class OfflineStorage {
       queue: queue,
       conflicts: conflicts,
       snapshots: snapshots,
+      onQueued: () {
+        final engine = _syncEngine;
+        if (engine != null) unawaited(engine.syncNow());
+      },
     );
   }
 
@@ -49,6 +68,56 @@ class OfflineStorage {
   final LocalRecordDao records;
   late final WorkspaceRepository workspaces;
   late final LocalRecordRepository localRecords;
+  SyncEngine? _syncEngine;
+
+  /// The single background sync worker for this local database. Access it
+  /// only after app services (including SequenceService) are registered.
+  SyncEngine get syncEngine => _syncEngine ??= SyncEngine(
+        storage: this,
+        remote: FirebaseSyncRemoteGateway(),
+        sequences: SequenceService.instance,
+        expenseUid: ExpenseUidService.forApp(),
+        registry: SyncAdapterRegistry.standard(),
+      );
+
+  /// Opens the owner/vehicle workspace and resumes queued sync safely.
+  /// Call after successful authentication and after a vehicle is selected.
+  ///
+  /// One workspace per environment and owner: opening it again for a
+  /// different vehicle (or after the access profile changed) just refreshes
+  /// the stored [access] - the owner's assigned vehicles and roles, which
+  /// the repository enforces per record.
+  Future<void> activateWorkspace(
+    WorkspaceScope scope, {
+    required String ownerPhone,
+    WorkspaceAccess? access,
+  }) async {
+    await workspaces.open(scope, ownerPhone: ownerPhone, access: access);
+    await queue.resetSyncingToPending(scope.workspaceId);
+    await syncEngine.start(scope);
+  }
+
+  Future<void> syncNow() => syncEngine.syncNow();
+
+  /// Reference snapshots of [ownerUserId] live in the owner's workspace
+  /// id. Use this for every snapshot read/write so the engine, the cache
+  /// and the controllers agree on one namespace.
+  static String snapshotNamespace(String ownerUserId) => WorkspaceScope.idFor(
+        EnvironmentConfig.currentEnvironment.name,
+        ownerUserId,
+      );
+
+  /// Sync health of everything the open workspace's owner has on this
+  /// device. Zero when no workspace is open.
+  Future<WorkspaceCounts> pendingCounts() => workspaces.currentCounts();
+
+  Future<int> retryFailedSync() async {
+    final info = await workspaces.current();
+    if (info == null) return 0;
+    final retried = await queue.retryFailed(info.workspaceId);
+    if (retried > 0) unawaited(syncEngine.syncNow());
+    return retried;
+  }
 
   Database get database => local.database;
 
@@ -60,20 +129,61 @@ class OfflineStorage {
     return storage;
   }
 
+  static OfflineStorageException? _initializationError;
+
+  /// Why the local database could not be opened, or `null` when it opened
+  /// (or was never attempted). While this is set [isAvailable] is false and
+  /// the app runs on its existing online path; nothing local is lost, since
+  /// the file is never deleted or recreated on failure.
+  static OfflineStorageException? get initializationError =>
+      _initializationError;
+
   /// Opens the database for the running environment. Called once at app
-  /// start; safe to call again (returns the open instance).
-  static Future<OfflineStorage> initialize() async {
+  /// start; safe to call again (returns the open instance). Failures are
+  /// recorded in [initializationError] and rethrown - never swallowed here.
+  static Future<OfflineStorage> initialize() {
+    return initializeWith(
+      () => LocalDatabase.open(
+        environmentName: EnvironmentConfig.currentEnvironment.name,
+      ),
+    );
+  }
+
+  @visibleForTesting
+  static Future<OfflineStorage> initializeWith(
+    Future<LocalDatabase> Function() opener,
+  ) async {
     final existing = _instance;
     if (existing != null) return existing;
 
     try {
-      final local = await LocalDatabase.open(
-        environmentName: EnvironmentConfig.currentEnvironment.name,
-      );
+      final local = await opener();
+      _initializationError = null;
       return _instance = OfflineStorage._(local);
-    } catch (error) {
-      throw OfflineStorageException.unavailable(details: error);
+    } catch (error, stack) {
+      final failure = error is OfflineStorageException
+          ? error
+          : OfflineStorageException.unavailable(details: error);
+      _initializationError = failure;
+      Error.throwWithStackTrace(failure, stack);
     }
+  }
+
+  /// Makes a failed start visible (console / crash reporting) instead of
+  /// printing a notice and moving on. The app keeps running without offline
+  /// storage.
+  static void reportInitializationFailure(Object error, StackTrace stack) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'offline storage',
+        context: ErrorDescription(
+          'while opening the local Sembast database; offline mode is '
+          'unavailable for this session',
+        ),
+      ),
+    );
   }
 
   /// Storage over an already opened database (tests). Does not replace
@@ -82,7 +192,69 @@ class OfflineStorage {
     return OfflineStorage._(LocalDatabase.fromDatabase(database));
   }
 
+  @visibleForTesting
+  static void resetForTest() {
+    _instance = null;
+    _initializationError = null;
+    lastSaveError = null;
+  }
+
+  /// The reason the most recent [saveLocal] did not save, or `null`.
+  static String? lastSaveError;
+
+  /// Saves a record to the local workspace and queues it for sync.
+  ///
+  /// Returns `true` when the record was saved. Errors are logged and
+  /// recorded in [lastSaveError] and reported as `false`; existing callers
+  /// are not interrupted (their workflows are unchanged), but a failed save
+  /// is never invisible.
+  ///
+  /// [vehicleId] is accepted for existing callers but does not choose a
+  /// workspace; the record's own `vehicleId` field is what the access
+  /// policy checks.
+  static Future<bool> saveLocal({
+    required String entityType,
+    required String recordId,
+    required Map<String, dynamic> data,
+    bool isNew = false,
+    String? vehicleId,
+  }) async {
+    if (!isAvailable) return false;
+    try {
+      final userId = LoginController.loginUser.id;
+      if (userId.isEmpty) {
+        throw const OfflineScopeException.noWorkspace(
+          details: 'no signed-in user',
+        );
+      }
+      final authUid = FirebaseAuth.instance.currentUser?.uid ?? userId;
+
+      final scope = WorkspaceScope.forCurrentEnvironment(
+        ownerUserId: userId,
+        authUid: authUid,
+      );
+
+      await instance.localRecords.saveRecord(
+        scope,
+        entityType: entityType,
+        recordId: recordId,
+        data: data,
+        isNew: isNew,
+      );
+      lastSaveError = null;
+      return true;
+    } catch (error, stack) {
+      lastSaveError = AppException.messageOf(error);
+      debugPrint(
+        'OfflineStorage saveLocal failed for $entityType/$recordId: '
+        '$error\n$stack',
+      );
+      return false;
+    }
+  }
+
   Future<void> close() async {
+    await _syncEngine?.dispose();
     await local.close();
     if (identical(_instance, this)) _instance = null;
   }

@@ -12,6 +12,7 @@ import '../../../services/firebase_service.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/nepali_date_time.dart';
+import '../../../offline/offline_storage.dart';
 import '../screen/widgets/edit_activity_dialog.dart';
 import '../screen/widgets/expense_form_dialog.dart';
 import '../screen/widgets/activity_form_dialog.dart';
@@ -82,6 +83,10 @@ class ActivityController extends GetxController {
     setFilter('Today');
 
     ever(cache.activities, (_) => applyLocalFilters());
+    ever(cache.expenses, (_) {
+      applyLocalFilters();
+      update();
+    });
     ever(cache.vehicles, (_) {
       _loadDefaultVehicle();
       update();
@@ -156,7 +161,7 @@ class ActivityController extends GetxController {
       todayNepali.day,
     ).toDateTime();
 
-    switch (filter) {
+    switch (selectedFilter.value) {
       case 'Today':
         _filterStart = nepalCalendarDayBoundary(todayCalendarDay);
         _filterEnd = nepalCalendarDayBoundary(
@@ -274,10 +279,10 @@ class ActivityController extends GetxController {
 
       switch (section) {
         case ActivityState.payed:
-          return amount > 0 && due <= 0;
+          return due <= 0;  //amount > 0 &&
 
         case ActivityState.due:
-          return amount > 0 && due > 0;
+          return due > 0; //amount > 0 &&
 
         case ActivityState.expences:
           return false;
@@ -373,11 +378,17 @@ class ActivityController extends GetxController {
             onPressed: () async {
               Get.back();
               try {
-                await firebaseService.updateRecord('expenses', expense.id, {
+                final updateData = {
                   'status': 'cancelled',
                   'updatedAt': DateTime.now().toUtc().toIso8601String(),
                   'updatedBy': LoginController.loginUser.id,
-                });
+                };
+                await OfflineStorage.saveLocal(
+                  entityType: 'expenses',
+                  recordId: expense.id,
+                  data: updateData,
+                  isNew: false,
+                );
                 Get.snackbar('Success', 'Expense cancelled successfully.', snackPosition: SnackPosition.BOTTOM);
               } catch (e) {
                 Get.snackbar('Error', AppException.messageOf(e), snackPosition: SnackPosition.BOTTOM);
@@ -813,12 +824,18 @@ class ActivityController extends GetxController {
     try {
       Authz.requirePermission(Permissions.activityEdit);
 
-      await firebaseService.updateRecord('activities', activity.id, {
+      final cancelData = {
         'status': ActivityStatus.cancelled,
         'cancelledBy': LoginController.loginUser.id,
         'cancelledAt': DateTime.now().toUtc().toIso8601String(),
         'updatedAt': DateTime.now().toUtc().toIso8601String(),
-      });
+      };
+      await OfflineStorage.saveLocal(
+        entityType: 'activities',
+        recordId: activity.id,
+        data: cancelData,
+        isNew: false,
+      );
 
       final cached = cache.activities[activity.id];
       if (cached != null) {

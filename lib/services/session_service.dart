@@ -294,7 +294,7 @@ class SessionService extends GetxService with WidgetsBindingObserver {
     if (userId.isEmpty) return false;
 
     if (Get.isRegistered<MonitorController>() &&
-        Get.find<MonitorController>().currentActivityId != null) {
+        Get.find<MonitorController>().currentActivityId.value != null) {
       return true;
     }
 

@@ -14,6 +14,14 @@ class OfflineStorageException extends AppException {
           code: 'offline-storage-unavailable',
           details: details,
         );
+
+  const OfflineStorageException.migrationFailed({Object? details})
+      : this(
+          'The offline database could not be upgraded. Existing local data '
+          'was left untouched.',
+          code: 'offline-migration-failed',
+          details: details,
+        );
 }
 
 /// A local read/write was attempted outside the current workspace
@@ -36,6 +44,20 @@ class OfflineScopeException extends AppException {
       : this(
           'This data belongs to a different user or vehicle workspace.',
           code: 'workspace-mismatch',
+          details: details,
+        );
+
+  const OfflineScopeException.invalid({Object? details})
+      : this(
+          'The offline workspace identity is invalid.',
+          code: 'workspace-invalid',
+          details: details,
+        );
+
+  const OfflineScopeException.notAllowed({Object? details})
+      : this(
+          'You are not allowed to use this vehicle or save this data offline.',
+          code: 'workspace-not-allowed',
           details: details,
         );
 
@@ -93,6 +115,22 @@ class OfflineDataException extends AppException {
       : this(
           message ?? 'The offline record is invalid and was not saved.',
           code: 'offline-invalid-record',
+          details: details,
+        );
+
+  const OfflineDataException.stale({Object? details})
+      : this(
+          'A newer value for this record is already saved on this device. '
+          'The older change was not applied.',
+          code: 'offline-record-stale',
+          details: details,
+        );
+
+  const OfflineDataException.tombstoned({Object? details})
+      : this(
+          'This record was deleted locally and cannot be edited. Its '
+          'deletion is waiting to be synchronized.',
+          code: 'offline-record-tombstoned',
           details: details,
         );
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/nepali_date_time.dart';
@@ -13,6 +14,9 @@ class TimerController extends GetxController {
   final amount = 0.0.obs;
   final startTimeText = ''.obs;
   final endTimeText = ''.obs;
+
+  final startTimeController = TextEditingController();
+  final endTimeController = TextEditingController();
 
   DateTime? startTime;
   DateTime? endTime;
@@ -36,6 +40,8 @@ class TimerController extends GetxController {
 
     startTimeText.value = _formatTime(startTime!);
     endTimeText.value = '';
+    startTimeController.text = startTimeText.value;
+    endTimeController.text = '';
 
     state.value = TimerState.running;
     _startTimer();
@@ -77,6 +83,8 @@ class TimerController extends GetxController {
     endTime = null;
     startTimeText.value = _formatTime(startTime);
     endTimeText.value = '';
+    startTimeController.text = startTimeText.value;
+    endTimeController.text = '';
 
     if (runningSince != null) {
       _runningSince = runningSince;
@@ -98,8 +106,18 @@ class TimerController extends GetxController {
 
     endTime = DateTime.now();
     endTimeText.value = _formatTime(endTime!);
+    endTimeController.text = endTimeText.value;
 
     _updateElapsed();
+
+    if (elapsedMilliseconds.value <= 0 && startTime != null && endTime != null) {
+      final diff = endTime!.difference(startTime!);
+      if (diff > Duration.zero) {
+        accumulated = diff;
+        _updateElapsed();
+      }
+    }
+
     state.value = TimerState.stopped;
     _stopTimer();
   }
@@ -108,7 +126,7 @@ class TimerController extends GetxController {
     _updateElapsed();
 
     final totalSeconds = elapsedMilliseconds.value / 1000;
-    final billableMinutes = (totalSeconds / 60).ceil();
+    final billableMinutes = totalSeconds > 0 ? (totalSeconds / 60).ceil() : 0;
     final ratePerMinute = ratePerHour / 60;
 
     final rawAmount = billableMinutes * ratePerMinute;
@@ -131,6 +149,8 @@ class TimerController extends GetxController {
 
     startTimeText.value = '';
     endTimeText.value = '';
+    startTimeController.text = '';
+    endTimeController.text = '';
   }
 
   void _startTimer() {
@@ -173,6 +193,8 @@ class TimerController extends GetxController {
   @override
   void onClose() {
     _stopTimer();
+    startTimeController.dispose();
+    endTimeController.dispose();
     super.onClose();
   }
 }

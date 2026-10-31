@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../models/models.dart';
+import '../offline/offline_storage.dart';
 import '../utils/exceptions/app_exceptions.dart';
 import 'authorization_service.dart';
 import 'firebase_service.dart';
@@ -82,60 +83,66 @@ class DataCacheService extends GetxController {
       await _cancelListeners();
       await _clearData();
 
-      // Vehicles first: the users/activities scope checks read from it.
-      await _setupCache<VehicleModel>(
-        user: user,
-        path: 'vehicles',
-        cache: vehicles,
-        fromMap: VehicleModel.fromMap,
-      );
+      // 1. Load local snapshots and ops first for instant offline startup
+      await _loadLocalSnapshotsAndOps(user);
 
-      await Future.wait([
-        _setupCache<UserModel>(
-          user: user,
-          path: 'users',
-          cache: users,
-          fromMap: UserModel.fromMap,
-        ),
-        _setupCache<CustomerModel>(
-          user: user,
-          path: 'customers',
-          cache: customers,
-          fromMap: CustomerModel.fromMap,
-        ),
-        _setupCache<ServiceModel>(
-          user: user,
-          path: 'services',
-          cache: services,
-          fromMap: ServiceModel.fromMap,
-        ),
-        _setupCache<ActivityModel>(
-          user: user,
-          path: 'activities',
-          cache: activities,
-          fromMap: ActivityModel.fromMap,
-          limitToLast: 50,
-        ),
-        _setupCache<PaymentModel>(
-          user: user,
-          path: 'payments',
-          cache: payments,
-          fromMap: PaymentModel.fromMap,
-        ),
-        _setupCache<ExpenseModel>(
-          user: user,
-          path: 'expenses',
-          cache: expenses,
-          fromMap: ExpenseModel.fromMap,
-          limitToLast: 100,
-        ),
-        _setupCache<ExpenseCategoryModel>(
-          user: user,
-          path: 'expensecategories',
-          cache: expenseCategories,
-          fromMap: ExpenseCategoryModel.fromMap,
-        ),
-      ]);
+      // 2. Try fetching from Firebase with short timeout so offline startup never hangs
+      try {
+        await Future.wait([
+          _setupCache<VehicleModel>(
+            user: user,
+            path: 'vehicles',
+            cache: vehicles,
+            fromMap: VehicleModel.fromMap,
+          ),
+          _setupCache<UserModel>(
+            user: user,
+            path: 'users',
+            cache: users,
+            fromMap: UserModel.fromMap,
+          ),
+          _setupCache<CustomerModel>(
+            user: user,
+            path: 'customers',
+            cache: customers,
+            fromMap: CustomerModel.fromMap,
+          ),
+          _setupCache<ServiceModel>(
+            user: user,
+            path: 'services',
+            cache: services,
+            fromMap: ServiceModel.fromMap,
+          ),
+          _setupCache<ActivityModel>(
+            user: user,
+            path: 'activities',
+            cache: activities,
+            fromMap: ActivityModel.fromMap,
+            limitToLast: 50,
+          ),
+          _setupCache<PaymentModel>(
+            user: user,
+            path: 'payments',
+            cache: payments,
+            fromMap: PaymentModel.fromMap,
+          ),
+          _setupCache<ExpenseModel>(
+            user: user,
+            path: 'expenses',
+            cache: expenses,
+            fromMap: ExpenseModel.fromMap,
+            limitToLast: 100,
+          ),
+          _setupCache<ExpenseCategoryModel>(
+            user: user,
+            path: 'expensecategories',
+            cache: expenseCategories,
+            fromMap: ExpenseCategoryModel.fromMap,
+          ),
+        ]).timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('DataCacheService Firebase sync timeout/offline notice: $e');
+      }
 
       if (Authz.canCachePath('activity_locations', actor: user)) {
         await _setupActivityLocationsCache();
@@ -148,6 +155,141 @@ class DataCacheService extends GetxController {
       _currentUser = null;
       _logError('initializing cache', null, error);
       rethrow;
+    }
+  }
+
+  Future<void> _loadLocalSnapshotsAndOps(UserModel user) async {
+    try {
+      if (!OfflineStorage.isAvailable || user.id.isEmpty) return;
+
+      // 1. Load cached reference snapshots from local DB (Sembast). They
+      // live in the owner's global namespace (see OfflineStorage).
+      final ns = OfflineStorage.snapshotNamespace(user.id);
+      try {
+        final localVehicles = await OfflineStorage.instance.snapshots.list(ns, 'vehicles');
+        for (final data in localVehicles) {
+          try {
+            final v = VehicleModel.fromMap(data);
+            if (Authz.canViewVehicle(v, actor: user)) {
+              vehicles[v.id] = v;
+            }
+          } catch (e) {
+            debugPrint('DataCacheService parse local vehicle error: $e');
+          }
+        }
+
+        final localUsers = await OfflineStorage.instance.snapshots.list(ns, 'users');
+        for (final data in localUsers) {
+          try {
+            final u = UserModel.fromMap(data);
+            users[u.id] = u;
+          } catch (_) {}
+        }
+
+        final localServices = await OfflineStorage.instance.snapshots.list(ns, 'services');
+        for (final data in localServices) {
+          try {
+            final s = ServiceModel.fromMap(data);
+            services[s.id] = s;
+          } catch (_) {}
+        }
+
+        final localCustomers = await OfflineStorage.instance.snapshots.list(ns, 'customers');
+        for (final data in localCustomers) {
+          try {
+            final c = CustomerModel.fromMap(data);
+            customers[c.id] = c;
+          } catch (_) {}
+        }
+
+        final localActivities = await OfflineStorage.instance.snapshots.list(ns, 'activities');
+        for (final data in localActivities) {
+          try {
+            final a = ActivityModel.fromMap(data);
+            activities[a.id] = a;
+          } catch (_) {}
+        }
+
+        final localPayments = await OfflineStorage.instance.snapshots.list(ns, 'payments');
+        for (final data in localPayments) {
+          try {
+            final p = PaymentModel.fromMap(data);
+            payments[p.id] = p;
+          } catch (_) {}
+        }
+
+        final localExpenses = await OfflineStorage.instance.snapshots.list(ns, 'expenses');
+        for (final data in localExpenses) {
+          try {
+            final e = ExpenseModel.fromMap(data);
+            expenses[e.id] = e;
+          } catch (_) {}
+        }
+
+        final localCategories = await OfflineStorage.instance.snapshots.list(ns, 'expensecategories');
+        for (final data in localCategories) {
+          try {
+            final cat = ExpenseCategoryModel.fromMap(data);
+            expenseCategories[cat.id] = cat;
+          } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('DataCacheService local snapshot load notice: $e');
+      }
+
+      // 2. Load pending ops records on top of snapshots
+      try {
+        final localRecords =
+            await OfflineStorage.instance.localRecords.dao.listAllForOwner(user.id, includeDeleted: false);
+
+        for (final record in localRecords) {
+          final data = Map<String, dynamic>.from(record.data);
+          final type = record.entityType;
+
+          if (type == 'activities' || type == 'activity') {
+            try {
+              final act = ActivityModel.fromMap(data);
+              activities[act.id] = act;
+            } catch (e) {
+              debugPrint('DataCacheService parse activity error: $e');
+            }
+          } else if (type == 'expenses' || type == 'expense') {
+            try {
+              final exp = ExpenseModel.fromMap(data);
+              expenses[exp.id] = exp;
+            } catch (e) {
+              debugPrint('DataCacheService parse expense error: $e');
+            }
+          } else if (type == 'customers' || type == 'customer') {
+            try {
+              final cust = CustomerModel.fromMap(data);
+              customers[cust.id] = cust;
+            } catch (e) {
+              debugPrint('DataCacheService parse customer error: $e');
+            }
+          } else if (type == 'payments' || type == 'payment') {
+            try {
+              final pay = PaymentModel.fromMap(data);
+              payments[pay.id] = pay;
+            } catch (e) {
+              debugPrint('DataCacheService parse payment error: $e');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('DataCacheService local record load notice: $e');
+      }
+
+      vehicles.refresh();
+      users.refresh();
+      services.refresh();
+      activities.refresh();
+      expenses.refresh();
+      customers.refresh();
+      payments.refresh();
+      expenseCategories.refresh();
+    } catch (e) {
+      debugPrint('DataCacheService _loadLocalSnapshotsAndOps notice: $e');
     }
   }
 
@@ -166,7 +308,7 @@ class DataCacheService extends GetxController {
         limitToLast: limitToLast,
       );
 
-      final snapshot = await query.get();
+      final snapshot = await query.get().timeout(const Duration(seconds: 2));
 
       if (snapshot.exists && snapshot.value is Map) {
         final value = Map<Object?, Object?>.from(snapshot.value as Map);
@@ -327,6 +469,20 @@ class DataCacheService extends GetxController {
     }
 
     cache[id] = record;
+
+    final user = _currentUser;
+    if (OfflineStorage.isAvailable && user != null && user.id.isNotEmpty) {
+      try {
+        OfflineStorage.instance.snapshots.put(
+          workspaceId: OfflineStorage.snapshotNamespace(user.id),
+          type: path,
+          recordId: id,
+          data: data,
+        );
+      } catch (e) {
+        debugPrint('DataCacheService snapshot save notice: $e');
+      }
+    }
   }
 
   /// Record-level read scope for the current session.
@@ -400,7 +556,7 @@ class DataCacheService extends GetxController {
         'activity_locations',
         limitToLast: 50,
       );
-      final snapshot = await query.get();
+      final snapshot = await query.get().timeout(const Duration(seconds: 2));
       if (snapshot.exists && snapshot.value is Map) {
         final value = Map<Object?, Object?>.from(snapshot.value as Map);
         for (final entry in value.entries) {

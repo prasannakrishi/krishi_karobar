@@ -5,6 +5,7 @@ import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/features/controllers.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
 
 class ServiceController extends GetxController {
   static ServiceController get instance => Get.find<ServiceController>();
@@ -246,10 +247,11 @@ class ServiceController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      await firebaseService.saveRecord(
-        'services',
-        id,
-        service.toMap(),
+      await OfflineStorage.saveLocal(
+        entityType: 'services',
+        recordId: id,
+        data: service.toMap(),
+        isNew: true,
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -299,10 +301,11 @@ class ServiceController extends GetxController {
         updatedBy: LoginController.loginUser.id,
       );
 
-      await firebaseService.saveRecord(
-        'services',
-        updatedService.id,
-        updatedService.toMap(),
+      await OfflineStorage.saveLocal(
+        entityType: 'services',
+        recordId: updatedService.id,
+        data: updatedService.toMap(),
+        isNew: false,
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -372,7 +375,12 @@ class ServiceController extends GetxController {
 
     try {
       for (final id in deletableIds) {
-        await firebaseService.deleteRecord('services', id);
+        await OfflineStorage.saveLocal(
+          entityType: 'services',
+          recordId: id,
+          data: {'status': 'inactive', 'isDeleted': true},
+          isNew: false,
+        );
       }
 
       await Future<void>.delayed(const Duration(milliseconds: 300));

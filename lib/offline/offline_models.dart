@@ -1,3 +1,4 @@
+import 'core/workspace_access.dart';
 import 'core/workspace_scope.dart';
 import 'offline_constants.dart';
 
@@ -50,20 +51,24 @@ class WorkspaceInfo {
     required this.ownerUserId,
     required this.authUid,
     required this.ownerPhone,
-    required this.vehicleId,
     required this.state,
     required this.createdAt,
     required this.updatedAt,
+    this.access,
   });
 
   factory WorkspaceInfo.fromMap(Map<String, Object?> map) {
+    final rawAccess = map['access'];
+
     return WorkspaceInfo(
+      access: rawAccess is Map
+          ? WorkspaceAccess.fromMap(deepCopyMap(rawAccess))
+          : null,
       workspaceId: _string(map['workspaceId']),
       environment: _string(map['environment']),
       ownerUserId: _string(map['ownerUserId']),
       authUid: _string(map['authUid']),
       ownerPhone: _string(map['ownerPhone']),
-      vehicleId: _string(map['vehicleId']),
       state: _string(map['state']),
       createdAt: _time(map['createdAt']),
       updatedAt: _time(map['updatedAt']),
@@ -78,10 +83,14 @@ class WorkspaceInfo {
   /// Normalized phone of the owner; lets the login guard compare a
   /// *typed* phone number with the owner before any Firebase sign-in.
   final String ownerPhone;
-  final String vehicleId;
   final String state;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Owner type, roles and vehicle access recorded when the workspace was
+  /// opened. `null` for workspaces created before schema v2 (no restriction
+  /// is applied until the owner re-opens it).
+  final WorkspaceAccess? access;
 
   bool get isLocked => state == WorkspaceState.locked;
 
@@ -89,7 +98,6 @@ class WorkspaceInfo {
         environment: environment,
         ownerUserId: ownerUserId,
         authUid: authUid,
-        vehicleId: vehicleId,
       );
 
   WorkspaceInfo copyWith({
@@ -97,14 +105,15 @@ class WorkspaceInfo {
     String? ownerPhone,
     String? state,
     DateTime? updatedAt,
+    WorkspaceAccess? access,
   }) {
     return WorkspaceInfo(
+      access: access ?? this.access,
       workspaceId: workspaceId,
       environment: environment,
       ownerUserId: ownerUserId,
       authUid: authUid ?? this.authUid,
       ownerPhone: ownerPhone ?? this.ownerPhone,
-      vehicleId: vehicleId,
       state: state ?? this.state,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -117,10 +126,10 @@ class WorkspaceInfo {
         'ownerUserId': ownerUserId,
         'authUid': authUid,
         'ownerPhone': ownerPhone,
-        'vehicleId': vehicleId,
         'state': state,
         'createdAt': _iso(createdAt),
         'updatedAt': _iso(updatedAt),
+        'access': access?.toMap(),
       };
 }
 
@@ -144,6 +153,13 @@ class WorkspaceCounts {
   final int orphanRecords;
 
   int get unsynced => pending + failed + conflicts + orphanRecords;
+
+  WorkspaceCounts operator +(WorkspaceCounts other) => WorkspaceCounts(
+        pending: pending + other.pending,
+        failed: failed + other.failed,
+        conflicts: conflicts + other.conflicts,
+        orphanRecords: orphanRecords + other.orphanRecords,
+      );
   bool get isClean => unsynced == 0;
 
   @override
@@ -167,12 +183,22 @@ class LocalRecord {
     required this.createdAt,
     required this.updatedAt,
     this.baseUpdatedAt,
+    this.vehicleId = '',
+    this.customerId = '',
+    this.recordStatus = '',
+    this.ownerType = '',
+    this.deletedAt,
   });
 
   factory LocalRecord.fromMap(Map<String, Object?> map) {
     final rawData = map['data'];
 
     return LocalRecord(
+      vehicleId: _string(map['vehicleId']),
+      customerId: _string(map['customerId']),
+      recordStatus: _string(map['recordStatus']),
+      ownerType: _string(map['ownerType']),
+      deletedAt: _timeOrNull(map['deletedAt']),
       workspaceId: _string(map['workspaceId']),
       entityType: _string(map['entityType']),
       recordId: _string(map['recordId']),
@@ -206,6 +232,25 @@ class LocalRecord {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Index fields. Sembast has no secondary indexes, so these are copied to
+  // top-level keys of the stored map and queried with Finder filters
+  // instead of reaching into `data`. They are derived from [data] on every
+  // save (see `LocalRecordIndex`) and never replace it.
+  final String vehicleId;
+  final String customerId;
+
+  /// Business status (`paid`, `due`, ...) copied from `data['status']`.
+  final String recordStatus;
+
+  /// Owner's user type (organization / external) the record was saved under.
+  final String ownerType;
+
+  /// Tombstone: set when the record was deleted locally. The record itself
+  /// is kept until the deletion is synchronized.
+  final DateTime? deletedAt;
+
+  bool get isDeleted => deletedAt != null;
+
   static String keyOf(String entityType, String recordId) =>
       '$entityType|$recordId';
 
@@ -218,8 +263,18 @@ class LocalRecord {
     String? baseUpdatedAt,
     bool clearBaseUpdatedAt = false,
     DateTime? updatedAt,
+    String? vehicleId,
+    String? customerId,
+    String? recordStatus,
+    String? ownerType,
+    DateTime? deletedAt,
   }) {
     return LocalRecord(
+      vehicleId: vehicleId ?? this.vehicleId,
+      customerId: customerId ?? this.customerId,
+      recordStatus: recordStatus ?? this.recordStatus,
+      ownerType: ownerType ?? this.ownerType,
+      deletedAt: deletedAt ?? this.deletedAt,
       workspaceId: workspaceId,
       entityType: entityType,
       recordId: recordId,
@@ -243,6 +298,12 @@ class LocalRecord {
         'baseUpdatedAt': baseUpdatedAt,
         'createdAt': _iso(createdAt),
         'updatedAt': _iso(updatedAt),
+        'vehicleId': vehicleId,
+        'customerId': customerId,
+        'recordStatus': recordStatus,
+        'ownerType': ownerType,
+        'deletedAt': deletedAt == null ? null : _iso(deletedAt!),
+        'isDeleted': isDeleted,
       };
 }
 
@@ -253,6 +314,10 @@ enum SyncCompletion {
   /// The user edited the record while it was syncing. It stays local and
   /// is re-queued as an update on top of the now-existing server record.
   changedDuringSync,
+
+  /// The record is a tombstone: its deletion has not been synchronized, so
+  /// nothing is removed.
+  keptTombstone,
 }
 
 // ---------------------------------------------------------------------------

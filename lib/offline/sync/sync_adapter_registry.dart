@@ -2,6 +2,7 @@ import 'adapters/activity_sync_adapter.dart';
 import 'adapters/customer_sync_adapter.dart';
 import 'adapters/expense_sync_adapter.dart';
 import 'adapters/location_sync_adapter.dart';
+import 'adapters/payment_sync_adapter.dart';
 import 'sync_adapter.dart';
 
 /// Looks up the adapter for an entity type. A `user` (or any later)

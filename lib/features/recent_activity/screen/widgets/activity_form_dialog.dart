@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
+import '../../../../offline/offline_storage.dart';
+import '../../../../offline/core/workspace_scope.dart';
 import '../../../../common/widgets/customer_search_field.dart';
 import '../../../../common/widgets/description_autocomplete.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
@@ -11,6 +14,7 @@ import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart'
 import 'package:krishi_karobar/utils/validators/validation.dart';
 import 'package:krishi_karobar/utils/helper/nepali_date_time.dart';
 import '../../../authentication/controllers/login_controllers.dart';
+import '../../controllers/activity_controller.dart';
 
 class ActivityFormDialog extends StatefulWidget {
   const ActivityFormDialog({super.key});
@@ -206,6 +210,30 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
     );
 
     await firebaseService.saveRecord('customers', customer.id, customer.toMap());
+
+    try {
+      if (OfflineStorage.isAvailable) {
+        final userId = LoginController.loginUser.id;
+        final scope = WorkspaceScope.forCurrentEnvironment(
+          ownerUserId: userId,
+          authUid: FirebaseAuth.instance.currentUser?.uid ?? userId,
+          vehicleId: selectedVehicleId ?? 'default',
+        );
+        await OfflineStorage.instance.localRecords.saveRecord(
+          scope,
+          entityType: 'customers',
+          recordId: customer.id,
+          data: customer.toMap(),
+          isNew: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('ActivityFormDialog offline customer save notice: $e');
+    }
+
+    cache.customers[customer.id] = customer;
+    cache.customers.refresh();
+
     selectedCustomer = customer;
     return customer;
   }
@@ -294,10 +322,13 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         'activities/$id': activity.toMap(),
       };
 
+      String? paymentId;
+      PaymentModel? payment;
+
       if (paidAmount > 0 || discount > 0) {
-        final paymentId = const Uuid().v4();
+        paymentId = const Uuid().v4();
         final paymentUid = await SequenceService.instance.generateSequence('P');
-        final payment = PaymentModel(
+        payment = PaymentModel(
           id: paymentId,
           uId: paymentUid,
           customerId: customer.id,
@@ -322,6 +353,48 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
       }
 
       await firebaseService.updateRecords(updates);
+
+      try {
+        if (OfflineStorage.isAvailable) {
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: user.id,
+            authUid: FirebaseAuth.instance.currentUser?.uid ?? user.id,
+            vehicleId: selectedVehicleId ?? 'default',
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: 'activities',
+            recordId: id,
+            data: activity.toMap(),
+            isNew: true,
+          );
+
+          if (paymentId != null && payment != null) {
+            await OfflineStorage.instance.localRecords.saveRecord(
+              scope,
+              entityType: 'payments',
+              recordId: paymentId,
+              data: payment.toMap(),
+              isNew: true,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('ActivityFormDialog offline record save notice: $e');
+      }
+
+      DataCacheService.instance.activities[id] = activity;
+      DataCacheService.instance.activities.refresh();
+
+      if (paymentId != null && payment != null) {
+        DataCacheService.instance.payments[paymentId] = payment;
+        DataCacheService.instance.payments.refresh();
+      }
+
+      if (Get.isRegistered<ActivityController>()) {
+        Get.find<ActivityController>().applyLocalFilters();
+      }
+
       if (startLoc != null) {
         await LocationService.instance.saveStartLocation(id, startLoc);
       }
