@@ -1,3 +1,5 @@
+import '../utils/helper/helper_method.dart';
+
 class ExpenseModel {
   final String id;
   final String uId;
@@ -107,8 +109,6 @@ class ExpenseModel {
   }
 
   static DateTime? _toDateTime(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    return DateTime.tryParse(value.toString());
+    return toDateTime(value);
   }
 }

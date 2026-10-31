@@ -52,38 +52,34 @@ class ActivityForm extends StatelessWidget {
         // Start and End Time
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Obx(
-                () => Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    key: ValueKey(timer.startTimeText.value),
-                    initialValue: timer.startTimeText.value,
-                    readOnly: true,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                    decoration: const InputDecoration(
-                      labelText: 'Start Time',
-                      contentPadding: EdgeInsets.all(8),
-                    ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: timer.startTimeController,
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                  decoration: const InputDecoration(
+                    labelText: 'Start Time',
+                    contentPadding: EdgeInsets.all(8),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    key: ValueKey(timer.endTimeText.value),
-                    initialValue: timer.endTimeText.value,
-                    readOnly: true,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                    decoration: const InputDecoration(
-                      labelText: 'End Time',
-                      contentPadding: EdgeInsets.all(8),
-                    ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: timer.endTimeController,
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                  decoration: const InputDecoration(
+                    labelText: 'End Time',
+                    contentPadding: EdgeInsets.all(8),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),

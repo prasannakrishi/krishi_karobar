@@ -134,6 +134,48 @@ class SyncQueueDao {
     return updated;
   }
 
+  /// Called inside the same transaction as a tombstone write. The entry's
+  /// operation becomes `delete`; an in-flight (`syncing`) or conflicted
+  /// entry keeps its status so it is not run twice or silently reopened.
+  Future<SyncQueueEntry> upsertForDelete({
+    required String workspaceId,
+    required String entityType,
+    required String recordId,
+    DatabaseClient? client,
+  }) async {
+    final existing = await get(
+      workspaceId,
+      entityType,
+      recordId,
+      client: client,
+    );
+
+    if (existing == null) {
+      final entry = SyncQueueEntry(
+        workspaceId: workspaceId,
+        entityType: entityType,
+        recordId: recordId,
+        operation: SyncOperation.delete,
+        status: QueueStatus.pending,
+        attemptCount: 0,
+        createdAt: DateTime.now().toUtc(),
+      );
+      await _put(entry, client);
+      return entry;
+    }
+
+    final keepStatus = existing.status == QueueStatus.syncing ||
+        existing.status == QueueStatus.conflict;
+
+    final updated = existing.copyWith(
+      operation: SyncOperation.delete,
+      status: keepStatus ? existing.status : QueueStatus.pending,
+      clearNextAttemptAt: true,
+    );
+    await _put(updated, client);
+    return updated;
+  }
+
   Future<void> markSyncing(
     String workspaceId,
     String entityType,

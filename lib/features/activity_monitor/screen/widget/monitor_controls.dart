@@ -12,23 +12,16 @@ class MonitorControls extends GetView<MonitorController> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Obx(() {
           final live = controller.liveActivity;
+          final currentId = controller.currentActivityId.value;
+          final hasActiveId = currentId != null && currentId.isNotEmpty;
 
           // Someone else started this activity - view only, no controls
-          // (spec sections 6/17: UI hiding is reinforced by
-          // Authz.canControlActivity on every action too).
           if (live != null && !controller.isController) {
             return _ViewOnlyBanner(startedBy: controller.startedByName(live));
           }
 
-          // THE FIX: derive "nothing is running" directly from the fresh
-          // cache-backed liveActivity, not from timerController.state.
-          // liveActivity updates the instant Firebase reports the activity
-          // as no longer live; timerController.state is only a manually
-          // managed mirror of that (reset by _onActivitiesCacheChanged) -
-          // if that side effect is ever a beat late, a viewer would
-          // otherwise stay stuck seeing PAUSE/STOP after the controller
-          // has already completed the activity.
-          if (live == null) {
+          // Show START button only if nothing is running and timer is in initial state
+          if (live == null && !hasActiveId && controller.timerController.state.value == TimerState.initial) {
             return _button(
               context,
               'START',
@@ -39,6 +32,29 @@ class MonitorControls extends GetView<MonitorController> {
 
           switch (controller.timerController.state.value) {
             case TimerState.initial:
+              if (live != null || hasActiveId) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _button(
+                        context,
+                        'PAUSE',
+                        Icons.pause,
+                        controller.pauseActivity,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _button(
+                        context,
+                        'STOP',
+                        Icons.stop,
+                        controller.stopActivity,
+                      ),
+                    ),
+                  ],
+                );
+              }
               return _button(
                 context,
                 'START',
@@ -118,11 +134,11 @@ class MonitorControls extends GetView<MonitorController> {
   }
 
   Widget _button(
-      BuildContext context,
-      String label,
-      IconData icon,
-      VoidCallback onPressed,
-      ) {
+    BuildContext context,
+    String label,
+    IconData icon,
+    VoidCallback onPressed,
+  ) {
     return ElevatedButton.icon(
       onPressed: controller.isLoading.value ? null : onPressed,
       icon: Icon(icon),
@@ -151,7 +167,7 @@ class _ViewOnlyBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'You are viewing this activity. Only $startedBy '
-                  '(who started it) can control it.',
+              '(who started it) can control it.',
             ),
           ),
         ],

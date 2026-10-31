@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:krishi_karobar/features/authentication/controllers/login_controllers.dart';
 import 'package:krishi_karobar/models/models.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
 import 'package:krishi_karobar/services/services.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 
@@ -168,10 +169,11 @@ class CustomerController extends GetxController {
           'updatedBy': user.id,
         };
 
-        await firebaseService.updateRecord(
-          'customers',
-          editingCustomer!.id,
-          updatedData,
+        await OfflineStorage.saveLocal(
+          entityType: 'customers',
+          recordId: editingCustomer!.id,
+          data: updatedData,
+          isNew: false,
         );
 
         Get.back();
@@ -194,7 +196,12 @@ class CustomerController extends GetxController {
           updatedBy: user.id,
         );
 
-        await firebaseService.saveRecord('customers', id, customer.toMap());
+        await OfflineStorage.saveLocal(
+          entityType: 'customers',
+          recordId: id,
+          data: customer.toMap(),
+          isNew: true,
+        );
 
         Get.back();
         Get.snackbar('Success', 'Customer added successfully.');
@@ -243,7 +250,12 @@ class CustomerController extends GetxController {
       Authz.requirePermission(Permissions.customerDelete);
 
       for (final id in selectedCustomerIds.toList()) {
-        await firebaseService.deleteRecord('customers', id);
+        await OfflineStorage.saveLocal(
+          entityType: 'customers',
+          recordId: id,
+          data: {'status': 'inactive', 'isDeleted': true},
+          isNew: false,
+        );
       }
 
       clearSelection();

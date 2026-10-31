@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../features/authentication/controllers/login_controllers.dart';
+import '../../../features/recent_activity/controllers/activity_controller.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import '../../../offline/offline_storage.dart';
+import '../../../offline/core/workspace_scope.dart';
+import '../../../offline/offline_constants.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import 'timer_controller.dart';
@@ -48,7 +53,7 @@ class MonitorController extends GetxController {
   final selectedVehicle = Rxn<VehicleModel>();
   late final selectedService = Rxn<ServiceModel>();
   final selectedDriver = Rxn<UserModel>();
-  String? currentActivityId;
+  final currentActivityId = ''.obs;
   ActivityLocationModel? _capturedStopLocation;
   final _finalizingActivityIds = <String>{};
 
@@ -91,11 +96,18 @@ class MonitorController extends GetxController {
     }).toList();
   }
 
-  bool get isCustomerEmpty => customerName.text.trim().isEmpty && phone.text.trim().isEmpty;
+  //bool get isCustomerEmpty => customerName.text.trim().isEmpty && phone.text.trim().isEmpty;
+  bool get isCustomerEmpty => customerName.text.trim().isEmpty && address.text.trim().isEmpty;
 
-  ActivityModel? get liveActivity {
+  ActivityModel? get liveActivity => _liveActivity.value;
+  final _liveActivity = Rxn<ActivityModel>();
+
+  void _updateLiveActivity() {
     final vehicle = selectedVehicle.value;
-    if (vehicle == null) return null;
+    if (vehicle == null) {
+      _liveActivity.value = null;
+      return;
+    }
 
     final matches = cache.activities.values
         .where((a) =>
@@ -104,7 +116,7 @@ class MonitorController extends GetxController {
             !_finalizingActivityIds.contains(a.id))
         .toList();
 
-    return matches.isEmpty ? null : matches.first;
+    _liveActivity.value = matches.isEmpty ? null : matches.first;
   }
 
   bool get isController {
@@ -137,8 +149,8 @@ class MonitorController extends GetxController {
   final Map<String, Timer> _syncTimers = {};
 
   void _debouncedSync(String key, Map<String, dynamic> data) {
-    final id = currentActivityId;
-    if (id == null || !isController) return;
+    final id = currentActivityId.value;
+    if (id.isEmpty || !isController) return;
 
     _syncTimers[key]?.cancel();
     _syncTimers[key] = Timer(const Duration(milliseconds: 600), () {
@@ -177,6 +189,10 @@ class MonitorController extends GetxController {
 
     ever(cache.activities, (_) => _onActivitiesCacheChanged());
     ever(cache.vehicles, (_) => _onSelectedVehicleCacheChanged());
+    ever(cache.activities, (_) => _updateLiveActivity());
+    ever(selectedVehicle, (_) => _updateLiveActivity());
+    ever(currentActivityId, (_) => _updateLiveActivity());
+    _updateLiveActivity();
   }
 
   void _onSelectedVehicleCacheChanged() {
@@ -220,14 +236,14 @@ class MonitorController extends GetxController {
     final live = matches.isEmpty ? null : matches.first;
 
     if (live == null) {
-      if (currentActivityId == null) {
+      if (currentActivityId.value.isEmpty) {
         return;
       }
 
-      final cachedCurrent = cache.activities[currentActivityId!];
+      final cachedCurrent = cache.activities[currentActivityId.value];
 
       if (cachedCurrent != null && !cachedCurrent.isLive && !_isFinalizingActivity) {
-        currentActivityId = null;
+        currentActivityId.value = '';
         timerController.reset();
         resetForm();
       }
@@ -235,7 +251,7 @@ class MonitorController extends GetxController {
       return;
     }
 
-    if (currentActivityId != live.id || !isController) {
+    if (currentActivityId.value != live.id || !isController) {
       _bindToLiveActivity(live);
     }
   }
@@ -319,6 +335,7 @@ class MonitorController extends GetxController {
     selectedCustomer.value = null;
     filteredCustomers.clear();
     customerCollapsed.value = false;
+    currentActivityId.value = '';
 
     final currentVehicle = selectedVehicle.value;
     if (currentVehicle != null) {
@@ -493,28 +510,18 @@ class MonitorController extends GetxController {
       return;
     }
 
-    currentActivityId = null;
+    currentActivityId.value = '';
     driverWarning.value = false;
     supervisor.clear();
     description.clear();
 
-    // THE FIX: the customer section is per-vehicle draft data, exactly
-    // like driverWarning/supervisor/description above - it was just
-    // missing from this reset. Without this, switching from a vehicle
-    // with a live activity (or any vehicle you'd previously typed a
-    // customer for) straight to a different vehicle left the OLD
-    // customer's name/phone/selection sitting in the form. If the user
-    // then only edited the name (or nothing at all) before starting a
-    // new activity, saveCustomer() would silently reuse that stale
-    // customer - either directly (still selected) or by re-matching the
-    // old phone number that never got overwritten.
     customerName.clear();
     phone.clear();
     address.clear();
     selectedCustomer.value = null;
   }
   void _bindToLiveActivity(ActivityModel activity) {
-    currentActivityId = activity.id;
+    currentActivityId.value = activity.id;
 
     driver.text = _userName(activity.driverId);
     selectedDriver.value = cache.users[activity.driverId];
@@ -605,8 +612,8 @@ class MonitorController extends GetxController {
   /// Same as [_debouncedSync] but fires immediately - used for discrete
   /// picks (service/driver/customer) rather than free-text typing.
   void _syncNow(Map<String, dynamic> data) {
-    final id = currentActivityId;
-    if (id == null || !isController) return;
+    final id = currentActivityId.value;
+    if (id.isEmpty || !isController) return;
 
     for (final timer in _syncTimers.values) {
       timer.cancel();
@@ -692,6 +699,12 @@ class MonitorController extends GetxController {
     if (selectedDriver.value == null) {
       driverWarning.value = true;
       showMessage('Driver required', 'Please select a driver before starting the activity.');
+      /*return;
+    }
+
+    if (selectedCustomer.value == null && (customerName.text.trim().isEmpty || address.text.trim().isEmpty)) {
+      customerCollapsed.value = false;
+      showMessage('Customer Required', 'Please enter Customer Name and Address.');*/
       return;
     }
 
@@ -711,7 +724,7 @@ class MonitorController extends GetxController {
   }
 
   Future<void> _startConfirmed() async {
-    if (_isSavingActivity || currentActivityId != null || liveActivity != null) {
+    if (_isSavingActivity || currentActivityId.value.isNotEmpty || liveActivity != null) {
       return;
     }
 
@@ -780,8 +793,6 @@ class MonitorController extends GetxController {
       serviceId: service.id,
       driverId: selectedDriver.value?.id,
       supervisorId: LoginController.loginUser.id,
-      // Recorded ONLY here, at creation - never updated afterward. This is
-      // the "started-by" ownership that decides who can control it.
       startedByUserId: LoginController.loginUser.id,
       monitorBy: LoginController.loginUser.id,
       startTime: now,
@@ -795,6 +806,28 @@ class MonitorController extends GetxController {
       updatedAt: now,
     );
 
+    // Save directly into local Sembast offline database
+    try {
+      if (OfflineStorage.isAvailable) {
+        final workspaceId = LoginController.loginUser.id;
+        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final scope = WorkspaceScope.forCurrentEnvironment(
+          ownerUserId: workspaceId,
+          authUid: authUid,
+          vehicleId: vehicle.id,
+        );
+        await OfflineStorage.instance.localRecords.saveRecord(
+          scope,
+          entityType: 'activities',
+          recordId: id,
+          data: activity.toMap(),
+          isNew: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('MonitorController offline activity start save notice: $e');
+    }
+
     try {
       await firebaseService.saveRecord(
         'activities',
@@ -802,18 +835,17 @@ class MonitorController extends GetxController {
         activity.toMap(),
       );
     } catch (error) {
-      _isSavingActivity = false;
-      if (customerIsNewlyCreated) {
-        await _rollbackNewCustomer(customer);
-      }
-      debugPrint('MonitorController.startActivity (save): $error');
-      showMessage('Error', AppException.messageOf(error));
-      return;
+      debugPrint('MonitorController.startActivity firebase save notice: $error');
     }
+
+    // Immediately put in DataCacheService cache so liveActivity is non-null instantly
+    cache.activities[id] = activity;
+    cache.activities.refresh();
+    _updateLiveActivity();
 
     // Only now that the activity is confirmed persisted do we commit local
     // state and start the visible timer immediately.
-    currentActivityId = id;
+    currentActivityId.value = id;
     _isSavingActivity = false;
     supervisor.text = LoginController.loginUser.fullname;
     timerController.start();
@@ -954,10 +986,10 @@ class MonitorController extends GetxController {
   /// this just clears the local form; otherwise it cancels the live
   /// activity record so every viewer sees it end.
   Future<void> confirmReset() async {
-    final hasLiveRecord = currentActivityId != null;
+    final hasLiveRecord = currentActivityId.value.isNotEmpty;
 
     if (hasLiveRecord) {
-      final activity = cache.activities[currentActivityId!];
+      final activity = cache.activities[currentActivityId.value];
       if (activity != null) {
         if (!Authz.canControlActivity(activity) && !Authz.can(Permissions.activityCancel)) {
           showMessage('Not allowed', 'You do not have permission to cancel this activity.');
@@ -985,42 +1017,75 @@ class MonitorController extends GetxController {
     if (confirmed != true) return;
 
     _isFinalizingActivity = hasLiveRecord;
+    final id = hasLiveRecord ? currentActivityId.value : null;
 
-    if (hasLiveRecord) {
-      final id = currentActivityId!;
+    try {
+      if (id != null && id.isNotEmpty) {
+        _finalizingActivityIds.add(id);
 
-      try {
-        await firebaseService.updateRecord('activities', id, {
+        if (cache.activities.containsKey(id)) {
+          cache.activities[id]!.status = ActivityStatus.cancelled;
+          cache.activities.refresh();
+        }
+
+        final cancelData = {
           'status': ActivityStatus.cancelled,
           'cancelledBy': LoginController.loginUser.id,
           'cancelledAt': DateTime.now().toUtc().toIso8601String(),
-        });
-      } catch (error) {
-        _isFinalizingActivity = false;
-        debugPrint('MonitorController.confirmReset: $error');
-        showMessage('Error', AppException.messageOf(error));
-        return;
+          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        };
+
+        try {
+          await firebaseService.updateRecord('activities', id, cancelData);
+        } catch (error) {
+          debugPrint('MonitorController.confirmReset firebase notice: $error');
+        }
+
+        try {
+          if (OfflineStorage.isAvailable) {
+            final workspaceId = LoginController.loginUser.id;
+            final vehicle = selectedVehicle.value;
+            final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+            final scope = WorkspaceScope.forCurrentEnvironment(
+              ownerUserId: workspaceId,
+              authUid: authUid,
+              vehicleId: vehicle?.id ?? 'default',
+            );
+            await OfflineStorage.instance.localRecords.saveRecord(
+              scope,
+              entityType: 'activities',
+              recordId: id,
+              data: cancelData,
+              isNew: false,
+            );
+          }
+        } catch (e) {
+          debugPrint('MonitorController confirmReset offline save notice: $e');
+        }
+
+        await AuditService.instance.log(
+          action: 'activity_cancelled',
+          performedBy: LoginController.loginUser.id,
+          targetRecordId: id,
+          oldValue: {'status': ActivityStatus.running},
+          newValue: {'status': ActivityStatus.cancelled},
+        );
       }
+    } finally {
+      if (id != null && id.isNotEmpty) {
+        _finalizingActivityIds.remove(id);
+      }
+      currentActivityId.value = '';
+      timerController.reset();
+      resetForm();
+      _isFinalizingActivity = false;
+      _updateLiveActivity();
 
-      await AuditService.instance.log(
-        action: 'activity_cancelled',
-        performedBy: LoginController.loginUser.id,
-        targetRecordId: id,
-        oldValue: {'status': ActivityStatus.running},
-        newValue: {'status': ActivityStatus.cancelled},
-      );
+      for (final timer in _syncTimers.values) {
+        timer.cancel();
+      }
+      _syncTimers.clear();
     }
-
-    currentActivityId = null;
-    //await _clearVehicleActive();
-    timerController.reset();
-    resetForm();
-    _isFinalizingActivity = false;
-
-    for (final timer in _syncTimers.values) {
-      timer.cancel();
-    }
-    _syncTimers.clear();
   }
 
   void pauseActivity() {
@@ -1029,8 +1094,8 @@ class MonitorController extends GetxController {
     timerController.pause();
     timerController.computeAmount(_rate);
 
-    final id = currentActivityId;
-    if (id == null) return;
+    final id = currentActivityId.value;
+    if (id.isEmpty) return;
 
     _background('activities', id, {
       'status': ActivityStatus.paused,
@@ -1053,8 +1118,8 @@ class MonitorController extends GetxController {
 
     timerController.resume();
 
-    final id = currentActivityId;
-    if (id == null) return;
+    final id = currentActivityId.value;
+    if (id.isEmpty) return;
 
     _background('activities', id, {
       'status': ActivityStatus.running,
@@ -1106,10 +1171,19 @@ class MonitorController extends GetxController {
       return;
     }
 
-    if (isCustomerEmpty && customer == null) {
+    if (selectedCustomer.value == null && (customerName.text.trim().isEmpty || address.text.trim().isEmpty)) {
       customerCollapsed.value = false;
-      showMessage('Warning', 'Please enter customer details.');
+      showMessage('Customer Required', 'Please enter Customer Name and Address.');
       return;
+    }
+
+    if (customer == null && !isCustomerEmpty) {
+      try {
+        customer = await saveCustomer();
+      } catch (error) {
+        showMessage('Error', AppException.messageOf(error));
+        return;
+      }
     }
 
     if (timerController.state.value != TimerState.stopped) {
@@ -1120,7 +1194,7 @@ class MonitorController extends GetxController {
     if (!_requirePermission(Permissions.activityComplete)) return;
     if (!_requireControl()) return;
 
-    String? activityId = currentActivityId;
+    String? activityId = currentActivityId.value.isEmpty ? null : currentActivityId.value;
 
     // 1. Use the currently bound live activity first.
     if (activityId == null || activityId.isEmpty) {
@@ -1198,10 +1272,34 @@ class MonitorController extends GetxController {
     final targetActivityId = activityId;
     _finalizingActivityIds.add(targetActivityId);
 
-    final finalDriverId = selectedDriver.value?.id;
-    final finalDuration = timerController.durationSeconds;
+    int finalDuration = timerController.durationSeconds;
+    if (finalDuration <= 0 && timerController.startTime != null) {
+      finalDuration = DateTime.now().difference(timerController.startTime!).inSeconds;
+    }
+    if (finalDuration <= 0) {
+      finalDuration = 60;
+    }
+
     final finalRate = _rate;
-    final finalAmount = timerController.amount.value.toInt();
+    int finalAmount = timerController.amount.value.toInt();
+    if (finalAmount <= 0 && finalRate > 0) {
+      final billableMinutes = (finalDuration / 60.0).ceil();
+      final ratePerMinute = finalRate / 60;
+      final rawAmount = billableMinutes * ratePerMinute;
+      finalAmount = ((rawAmount / 10).round() * 10.0).toInt();
+    }
+
+    if (cache.activities.containsKey(targetActivityId)) {
+      final act = cache.activities[targetActivityId]!;
+      act.status = ActivityStatus.completed;
+      act.endTime = DateTime.now();
+      act.duration = finalDuration;
+      act.amount = finalAmount;
+      act.dueAmount = act.amount - act.paidAmount;
+      cache.activities.refresh();
+    }
+
+    final finalDriverId = selectedDriver.value?.id;
     final finalDescription = description.text.trim().isEmpty ? null : description.text.trim();
     final preCapturedStopLoc = _capturedStopLocation;
 
@@ -1213,7 +1311,7 @@ class MonitorController extends GetxController {
 
     // Clean form and reset local timer IMMEDIATELY so new activity can start right away
     _isFinalizingActivity = true;
-    currentActivityId = null;
+    currentActivityId.value = '';
     _capturedStopLocation = null;
     timerController.reset();
     resetForm();
@@ -1259,17 +1357,18 @@ class MonitorController extends GetxController {
     ActivityLocationModel? preCapturedStopLoc,
   }) async {
     try {
-      final latest = await firebaseService.getRecordById(
-        'activities',
-        activityId,
-      );
-
-      final latestStatus = latest?['status']?.toString();
+      final existingAct = cache.activities[activityId];
+      final String uId = existingAct?.uId ?? '';
+      final String vehicleId = existingAct?.vehicleId ?? selectedVehicle.value?.id ?? '';
+      final String serviceId = existingAct?.serviceId ?? selectedService.value?.id ?? '';
+      final String startTimeStr = existingAct?.startTime.toUtc().toIso8601String() ?? DateTime.now().toUtc().toIso8601String();
+      final String createdAtStr = existingAct?.createdAt.toUtc().toIso8601String() ?? DateTime.now().toUtc().toIso8601String();
+      final String? latestStatus = existingAct?.status;
 
       String customerId = '';
       if (customer != null) {
         customerId = customer.id;
-      } else if (typedName.isNotEmpty || typedPhone.isNotEmpty) {
+      } else {
         try {
           final newCustomer = await _saveNewCustomerFromDetails(
             name: typedName,
@@ -1293,24 +1392,72 @@ class MonitorController extends GetxController {
       final now = DateTime.now();
 
       final updatedData = {
+        'id': activityId,
+        'uId': uId,
         'customerId': customerId,
+        'vehicleId': vehicleId,
+        'serviceId': serviceId,
         'driverId': driverId,
+        'supervisorId': existingAct?.supervisorId ?? LoginController.loginUser.id,
+        'startTime': startTimeStr,
         'endTime': now.toUtc().toIso8601String(),
         'duration': duration,
         'rate': rate,
         'amount': amount,
-        'paidAmount': 0,
-        'dueAmount': amount,
+        'paidAmount': existingAct?.paidAmount ?? 0,
+        'dueAmount': amount - (existingAct?.paidAmount ?? 0),
         'description': description,
         'status': ActivityStatus.completed,
+        'createdAt': createdAtStr,
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      await firebaseService.updateRecord(
-        'activities',
-        activityId,
-        updatedData,
-      );
+      // 1. FIRST: Save Activity to Local Database (Sembast)
+      try {
+        if (OfflineStorage.isAvailable) {
+          final workspaceId = LoginController.loginUser.id;
+          final vehicleIdStr = updatedData['vehicleId'].toString();
+          final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: workspaceId,
+            authUid: authUid,
+            vehicleId: vehicleIdStr.isNotEmpty ? vehicleIdStr : 'default',
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: SyncEntity.activity,
+            recordId: activityId,
+            data: updatedData,
+            isNew: false,
+          );
+        }
+      } catch (e) {
+        debugPrint('MonitorController local activity save notice: $e');
+      }
+
+      // 2. SECOND: Update Local In-Memory Cache for instant UI update
+      try {
+        final completedActivity = ActivityModel.fromMap(updatedData);
+        cache.activities[activityId] = completedActivity;
+        cache.activities.refresh();
+      } catch (e) {
+        debugPrint('MonitorController cache activity update notice: $e');
+      }
+
+      if (Get.isRegistered<ActivityController>()) {
+        Get.find<ActivityController>().applyLocalFilters();
+      }
+
+      // 3. THIRD: Sync Activity to Firebase in Background (asynchronously, non-blocking)
+      try {
+        await firebaseService.updateRecord(
+          'activities',
+          activityId,
+          updatedData,
+        );
+      } catch (e) {
+        debugPrint('MonitorController firebase activity sync notice: $e');
+      }
 
       if (stopLoc != null) {
         await LocationService.instance.saveStopLocation(activityId, stopLoc);
@@ -1338,6 +1485,14 @@ class MonitorController extends GetxController {
     required String phone,
     required String address,
   }) async {
+    final customerNameStr = name.trim();
+    if (customerNameStr.isEmpty || customerNameStr.toLowerCase() == 'customer') {
+      throw const DataValidationException(
+        code: 'customer-name-required',
+        details: 'Please enter a valid customer name.',
+      );
+    }
+
     final customerPhone = phone.trim();
 
     if (customerPhone.isNotEmpty) {
@@ -1354,7 +1509,7 @@ class MonitorController extends GetxController {
     final customer = CustomerModel(
       id: const Uuid().v4(),
       uId: uId,
-      name: name.trim().isEmpty ? 'Customer' : name.trim(),
+      name: customerNameStr,
       phone: customerPhone,
       address: address.trim(),
       createdAt: now,
@@ -1363,7 +1518,39 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
-    await firebaseService.saveRecord('customers', customer.id, customer.toMap());
+    // 1. FIRST: Save Customer to Local Database (Sembast)
+    try {
+      if (OfflineStorage.isAvailable) {
+        final workspaceId = LoginController.loginUser.id;
+        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final scope = WorkspaceScope.forCurrentEnvironment(
+          ownerUserId: workspaceId,
+          authUid: authUid,
+          vehicleId: selectedVehicle.value?.id ?? 'default',
+        );
+        await OfflineStorage.instance.localRecords.saveRecord(
+          scope,
+          entityType: SyncEntity.customer,
+          recordId: customer.id,
+          data: customer.toMap(),
+          isNew: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('MonitorController local customer save notice: $e');
+    }
+
+    // 2. SECOND: Update Local In-Memory Cache for instant UI availability
+    cache.customers[customer.id] = customer;
+    cache.customers.refresh();
+
+    // 3. THIRD: Sync Customer to Firebase in Background
+    try {
+      await firebaseService.saveRecord('customers', customer.id, customer.toMap());
+    } catch (e) {
+      debugPrint('MonitorController firebase customer sync notice: $e');
+    }
+
     return customer;
   }
 
@@ -1406,10 +1593,18 @@ class MonitorController extends GetxController {
       );
     }
 
+    final customerNameStr = customerName.text.trim();
+    if (customerNameStr.isEmpty || customerNameStr.toLowerCase() == 'customer') {
+      throw const DataValidationException(
+        code: 'customer-name-required',
+        details: 'Please enter a valid customer name.',
+      );
+    }
+
     final customer = CustomerModel(
       id: const Uuid().v4(),
       uId: uId,
-      name: customerName.text.trim(),
+      name: customerNameStr,
       phone: customerPhone,
       address: address.text.trim(),
       createdAt: now,
@@ -1418,7 +1613,35 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
-    await firebaseService.saveRecord('customers',customer.id,customer.toMap(),);
+    try {
+      if (OfflineStorage.isAvailable) {
+        final workspaceId = LoginController.loginUser.id;
+        final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+        final scope = WorkspaceScope.forCurrentEnvironment(
+          ownerUserId: workspaceId,
+          authUid: authUid,
+          vehicleId: selectedVehicle.value?.id ?? 'default',
+        );
+        await OfflineStorage.instance.localRecords.saveRecord(
+          scope,
+          entityType: SyncEntity.customer,
+          recordId: customer.id,
+          data: customer.toMap(),
+          isNew: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('MonitorController offline customer save notice: $e');
+    }
+
+    try {
+      await firebaseService.saveRecord('customers', customer.id, customer.toMap());
+    } catch (e) {
+      debugPrint('MonitorController firebase customer save notice: $e');
+    }
+
+    cache.customers[customer.id] = customer;
+    cache.customers.refresh();
 
     selectedCustomer.value = customer;
     return customer;
@@ -1438,7 +1661,13 @@ class MonitorController extends GetxController {
     }
   }
 
-  int get _rate => int.tryParse(rate.text.trim()) ?? 0;
+  int get _rate {
+    final parsed = int.tryParse(rate.text.trim());
+    if (parsed != null && parsed > 0) return parsed;
+    final serviceRate = selectedService.value?.rate;
+    if (serviceRate != null && serviceRate > 0) return serviceRate.toInt();
+    return 0;
+  }
 
   void showMessage(String title, String message) {
     Get.snackbar(title, message);

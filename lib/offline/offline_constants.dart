@@ -37,6 +37,37 @@ class SyncEntity {
   /// GPS location documents written next to an activity / expense.
   static const String activityLocation = 'activity_location';
   static const String expenseLocation = 'expense_location';
+
+  /// One spelling per entity. Controllers historically used both plural
+  /// collection names (`customers`) and singular names (`customer`); the
+  /// local store keys records by type, so both spellings must map to one.
+  static String canonical(String type) {
+    switch (type.trim()) {
+      case 'customers':
+      case 'customer':
+        return customer;
+      case 'activities':
+      case 'activity':
+        return activity;
+      case 'expenses':
+      case 'expense':
+        return expense;
+      case 'payments':
+      case 'payment':
+        return payment;
+      case 'users':
+      case 'user':
+        return user;
+      case 'activity_locations':
+      case 'activity_location':
+        return activityLocation;
+      case 'expense_locations':
+      case 'expense_location':
+        return expenseLocation;
+      default:
+        return type.trim();
+    }
+  }
 }
 
 class SyncOperation {
@@ -44,6 +75,10 @@ class SyncOperation {
 
   static const String create = 'create';
   static const String update = 'update';
+
+  /// Tombstone: the record was deleted locally. The original record is kept
+  /// (never discarded) until a later stage syncs the deletion.
+  static const String delete = 'delete';
 }
 
 class QueueStatus {
@@ -112,12 +147,43 @@ class ReferenceType {
   ReferenceType._();
 
   static const String vehicle = 'vehicle';
+  static const String user = 'user';
   static const String service = 'service';
   static const String customer = 'customer';
   static const String activity = 'activity';
   static const String expense = 'expense';
+  static const String payment = 'payment';
   static const String expenseCategory = 'expense_category';
   static const String activityLocation = 'activity_location';
+
+  /// Collection names used by `DataCacheService` / controllers map to the
+  /// one reference type the engine reads (`vehicles` -> `vehicle`).
+  static String canonical(String type) {
+    switch (type.trim()) {
+      case 'vehicles':
+        return vehicle;
+      case 'users':
+        return user;
+      case 'services':
+        return service;
+      case 'customers':
+        return customer;
+      case 'activities':
+        return activity;
+      case 'expenses':
+        return expense;
+      case 'payments':
+        return payment;
+      case 'expensecategories':
+      case 'expense_categories':
+      case 'expenseCategory':
+        return expenseCategory;
+      case 'activity_locations':
+        return activityLocation;
+      default:
+        return type.trim();
+    }
+  }
 }
 
 class OfflineBackoff {

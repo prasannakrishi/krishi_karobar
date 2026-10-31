@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../common/widgets/app_scaffold.dart';
+import '../../../utils/helper/helper_widgets.dart';
 import '../controller/home_controller.dart';
 import '../widgets/dashboard_filter_bar.dart';
 import '../widgets/dashboard_info_card.dart';
@@ -120,6 +121,21 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          Obx(() {
+            final count = controller.pendingQueueCount.value;
+            if (count <= 0) return const SizedBox.shrink();
+            return IconButton(
+              tooltip: '$count records waiting to sync. Tap to sync now.',
+              icon: Badge(
+                label: Text('$count'),
+                child: const Icon(Iconsax.refresh, color: Colors.white),
+              ),
+              onPressed: () async {
+                await controller.triggerSync();
+                successSnackBar(title: 'Syncing', message: 'Syncing offline records...');
+              },
+            );
+          }),
           IconButton(
             tooltip: 'Notifications',
             icon: const Icon(Iconsax.notification, color: Colors.white),
@@ -188,36 +204,39 @@ class _DashboardWelcome extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-          decoration: BoxDecoration(
-            color: controller.syncStatusBgColor,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: controller.syncStatusColor,
+        GestureDetector(
+          onTap: () => controller.triggerSync(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              color: controller.syncStatusBgColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: controller.syncStatusColor,
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: controller.syncStatusColor,
-                  shape: BoxShape.circle,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: controller.syncStatusColor,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                controller.syncStatusText,
-                style: TextStyle(
-                  color: controller.syncStatusColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(width: 5),
+                Text(
+                  controller.syncStatusText,
+                  style: TextStyle(
+                    color: controller.syncStatusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],

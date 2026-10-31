@@ -17,7 +17,10 @@ class ReferenceSnapshotDao {
 
   DatabaseClient _c(DatabaseClient? client) => client ?? _db;
 
-  static String keyOf(String type, String recordId) => '$type|$recordId';
+  /// Keys use the canonical reference type, so `vehicles` (cache path) and
+  /// `vehicle` (engine) address the same snapshot.
+  static String keyOf(String type, String recordId) =>
+      '${ReferenceType.canonical(type)}|$recordId';
 
   Future<void> put({
     required String workspaceId,
@@ -26,9 +29,10 @@ class ReferenceSnapshotDao {
     required Map<String, Object?> data,
     DatabaseClient? client,
   }) async {
-    await _store.record(keyOf(type, recordId)).put(_c(client), {
+    final canonical = ReferenceType.canonical(type);
+    await _store.record(keyOf(canonical, recordId)).put(_c(client), {
       'workspaceId': workspaceId,
-      'type': type,
+      'type': canonical,
       'recordId': recordId,
       'data': deepCopyMap(data),
       'loadedAt': nowUtcIso(),
@@ -43,6 +47,8 @@ class ReferenceSnapshotDao {
     required List<Map<String, Object?>> records,
     DatabaseClient? client,
   }) {
+    type = ReferenceType.canonical(type);
+
     Future<void> run(DatabaseClient c) async {
       for (final record in records) {
         final id = record['id']?.toString().trim() ?? '';
@@ -103,7 +109,7 @@ class ReferenceSnapshotDao {
       finder: Finder(
         filter: Filter.and([
           Filter.equals('workspaceId', workspaceId),
-          Filter.equals('type', type),
+          Filter.equals('type', ReferenceType.canonical(type)),
         ]),
       ),
     );

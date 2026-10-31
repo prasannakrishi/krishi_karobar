@@ -5,6 +5,7 @@ import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/features/controllers.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
 
 class UserController extends GetxController {
   static UserController get instance => Get.find<UserController>();
@@ -319,10 +320,11 @@ class UserController extends GetxController {
         createdBy: LoginController.loginUser.id,
       );
 
-      await firebaseService.saveRecord(
-        'users',
-        id,
-        user.toMap(),
+      await OfflineStorage.saveLocal(
+        entityType: 'users',
+        recordId: id,
+        data: user.toMap(),
+        isNew: true,
       );
 
       await AuditService.instance.log(
@@ -423,10 +425,11 @@ class UserController extends GetxController {
         'updatedBy': LoginController.loginUser.id,
       };
 
-      await firebaseService.updateRecord(
-        'users',
-        user.id,
-        updatedData,
+      await OfflineStorage.saveLocal(
+        entityType: 'users',
+        recordId: user.id,
+        data: updatedData,
+        isNew: false,
       );
 
       if (identityChanged) {
@@ -491,7 +494,12 @@ class UserController extends GetxController {
 
     try {
       for (final id in ids) {
-        await firebaseService.deleteRecord('users', id);
+        await OfflineStorage.saveLocal(
+          entityType: 'users',
+          recordId: id,
+          data: {'status': 'inactive', 'isDeleted': true},
+          isNew: false,
+        );
       }
 
       await Future<void>.delayed(const Duration(milliseconds: 300));

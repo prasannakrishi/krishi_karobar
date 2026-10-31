@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 
 class SequenceService extends GetxService {
   static SequenceService get instance => Get.find<SequenceService>();
@@ -8,6 +11,7 @@ class SequenceService extends GetxService {
       : _db = databaseReference ?? FirebaseDatabase.instance.ref();
 
   final DatabaseReference _db;
+  final GetStorage _storage = GetStorage();
 
   static const String _sequencePath = 'sequences';
   static const String _activitySequencePath = 'activity_id';
@@ -15,36 +19,46 @@ class SequenceService extends GetxService {
   Future<String> generateSequence(String prefix) async {
     final year = DateTime.now().year % 10;
     final key = _validatePrefix(prefix);
-    final ref = _db.child('$_sequencePath/$key');
-    final result = await ref.runTransaction((data) {
-      if (data == null) {
-        return Transaction.success('$prefix$year-0001');
+
+    try {
+      final ref = _db.child('$_sequencePath/$key');
+      final result = await ref.runTransaction((data) {
+        if (data == null) {
+          return Transaction.success('$prefix$year-0001');
+        }
+
+        final current = data.toString().trim();
+        final match = RegExp(r'^(.*-)(\d+)$').firstMatch(current);
+
+        if (match == null) return Transaction.abort();
+
+        final numberText = match.group(2)!;
+        final number = int.tryParse(numberText);
+
+        if (number == null) return Transaction.abort();
+
+        final nextNumber =
+            (number + 1).toString().padLeft(numberText.length, '0');
+
+        return Transaction.success('$prefix$year-$nextNumber');
+      }).timeout(const Duration(seconds: 4));
+
+      if (result.committed && result.snapshot.value != null) {
+        return result.snapshot.value.toString();
       }
-
-      final current = data.toString().trim();
-      final match = RegExp(r'^(.*-)(\d+)$').firstMatch(current);
-
-      if (match == null) return Transaction.abort();
-
-      final numberText = match.group(2)!;
-      final number = int.tryParse(numberText);
-
-      if (number == null) return Transaction.abort();
-
-      final nextNumber =
-      (number + 1).toString().padLeft(numberText.length, '0');
-
-      return Transaction.success('$prefix$year-$nextNumber');
-    });
-
-    if (!result.committed || result.snapshot.value == null) {
-      throw StateError('Failed to generate sequence for "$key".');
+    } catch (_) {
+      debugPrint('SequenceService: Offline fallback for sequence $prefix');
     }
 
-    return result.snapshot.value.toString();
+    // Local fallback generator
+    final storageKey = 'seq_$key';
+    int current = _storage.read<int>(storageKey) ?? 0;
+    current++;
+    await _storage.write(storageKey, current);
+    return '$prefix$year-${current.toString().padLeft(4, '0')}';
   }
 
-  Future<String> generateActivityUid({required String serviceType,required String vehicleUId,}) async {
+  Future<String> generateActivityUid({required String serviceType, required String vehicleUId,}) async {
     final service = serviceType.trim();
     final vehicle = vehicleUId.trim();
 
@@ -67,8 +81,8 @@ class SequenceService extends GetxService {
       throw ArgumentError('Invalid vehicle UID: "$vehicle".');
     }
     final type = parts[0].substring(1, 2); // T or H
-    final seq = parts[1];                  // 02
-    final vehiclePart = '$type$seq';       // T02
+    final seq = parts[1]; // 02
+    final vehiclePart = '$type$seq'; // T02
 
     if (vehiclePart.isEmpty) {
       throw ArgumentError('Invalid vehicle UID: "$vehicle".');
@@ -76,55 +90,54 @@ class SequenceService extends GetxService {
 
     final serviceCode = service[0].toUpperCase();
     final now = DateTime.now();
-    final period ='${now.year % 10}${now.month.toString().padLeft(2, '0')}';
+    final period = '${now.year % 10}${now.month.toString().padLeft(2, '0')}';
 
-    final ref =_db.child('$_sequencePath/$_activitySequencePath/$period');
+    try {
+      final ref = _db.child('$_sequencePath/$_activitySequencePath/$period');
 
-    final result = await ref.runTransaction((data) {
-      if (data == null) {
-        return Transaction.success('$period${'0001'}');
+      final result = await ref.runTransaction((data) {
+        if (data == null) {
+          return Transaction.success('$period${'0001'}');
+        }
+
+        final current = data.toString().trim();
+
+        if (!current.startsWith(period)) {
+          return Transaction.abort();
+        }
+
+        final currentNumber = int.tryParse(current.substring(period.length));
+
+        if (currentNumber == null) {
+          return Transaction.abort();
+        }
+
+        final nextNumber = currentNumber + 1;
+
+        return Transaction.success('$period${nextNumber.toString().padLeft(4, '0')}');
+      }).timeout(const Duration(seconds: 4));
+
+      if (result.committed && result.snapshot.value != null) {
+        final storedValue = result.snapshot.value.toString().trim();
+
+        if (storedValue.startsWith(period)) {
+          final sequenceNumber = int.tryParse(storedValue.substring(period.length));
+          if (sequenceNumber != null) {
+            final sequence = sequenceNumber.toString().padLeft(3, '0');
+            return '$serviceCode$vehiclePart-$period$sequence';
+          }
+        }
       }
-
-      final current = data.toString().trim();
-
-      if (!current.startsWith(period)) {
-        return Transaction.abort();
-      }
-
-      final currentNumber = int.tryParse(current.substring(period.length));
-
-      if (currentNumber == null) {
-        return Transaction.abort();
-      }
-
-      final nextNumber = currentNumber + 1;
-
-      return Transaction.success('$period${nextNumber.toString().padLeft(4, '0')}');
-    });
-
-    if (!result.committed || result.snapshot.value == null) {
-      throw StateError(
-        'Failed to generate activity sequence for "$period".',
-      );
+    } catch (_) {
+      debugPrint('SequenceService: Offline fallback for activity UID');
     }
 
-    final storedValue = result.snapshot.value.toString().trim();
-
-    if (!storedValue.startsWith(period)) {
-      throw StateError(
-        'Invalid activity sequence value: "$storedValue".',
-      );
-    }
-
-    final sequenceNumber = int.tryParse(storedValue.substring(period.length));
-
-    if (sequenceNumber == null) {
-      throw StateError(
-        'Invalid activity sequence value: "$storedValue".',
-      );
-    }
-
-    final sequence = sequenceNumber.toString().padLeft(3, '0');
+    // Local fallback generator for activity UID
+    final storageKey = 'act_seq_$period';
+    int current = _storage.read<int>(storageKey) ?? 0;
+    current++;
+    await _storage.write(storageKey, current);
+    final sequence = current.toString().padLeft(3, '0');
 
     return '$serviceCode$vehiclePart-$period$sequence';
   }

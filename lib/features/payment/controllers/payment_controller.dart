@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
+import 'package:krishi_karobar/offline/offline_storage.dart';
+import 'package:krishi_karobar/offline/core/workspace_scope.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../authentication/controllers/login_controllers.dart';
 
@@ -323,9 +326,34 @@ class PaymentController extends GetxController {
         updates['$activityPath/updatedAt'] = now.toUtc().toIso8601String();
       }
 
+      try {
+        if (OfflineStorage.isAvailable) {
+          final workspaceId = LoginController.loginUser.id;
+          final authUid = FirebaseAuth.instance.currentUser?.uid ?? workspaceId;
+          final scope = WorkspaceScope.forCurrentEnvironment(
+            ownerUserId: workspaceId,
+            authUid: authUid,
+            vehicleId: 'default',
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: 'payments',
+            recordId: paymentId,
+            data: payment.toMap(),
+            isNew: true,
+          );
+        }
+      } catch (e) {
+        debugPrint('PaymentController offline payment save notice: $e');
+      }
+
       await firebaseService.updateRecords(updates);
 
+      cache.payments[paymentId] = payment;
+      cache.payments.refresh();
+
       _refreshLocalActivities(allocations, now);
+      cache.activities.refresh();
 
       Get.snackbar(
         'Payment Saved',

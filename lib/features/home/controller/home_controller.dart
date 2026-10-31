@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
@@ -9,6 +10,8 @@ import '../../../services/data_cache_service.dart';
 import '../../../utils/helper/nepali_date_time.dart';
 import '../../../utils/helper/network_manager.dart';
 import '../../../offline/offline_storage.dart';
+import '../../../offline/core/workspace_access_user.dart';
+import '../../../offline/core/workspace_scope.dart';
 import '../../authentication/controllers/login_controllers.dart';
 import '../../user_setting/controller/vehicle_controller.dart';
 import '../../user_setting/screen/customer_management_screen.dart';
@@ -111,29 +114,86 @@ class HomeController extends GetxController {
       }
     });
 
+    // Auto sync when online connectivity resumes
+    if (Get.isRegistered<NetworkManager>()) {
+      ever(NetworkManager.instance.connectionStatus, (status) {
+        if (status != ConnectivityResult.none) {
+          triggerSync();
+        }
+      });
+    }
+
+    // Keep the local workspace aligned with the dashboard's selected vehicle.
+    ever(selectedVehicleId, (_) => _activateOfflineWorkspace());
+    _activateOfflineWorkspace();
     _checkPendingQueue();
+  }
+
+  Future<void> _activateOfflineWorkspace() async {
+    if (!OfflineStorage.isAvailable) return;
+    final currentUser = LoginController.loginUser;
+    final vehicleId = selectedVehicleId.value;
+    final authUid = FirebaseAuth.instance.currentUser?.uid ?? currentUser.id;
+    if (currentUser.id.isEmpty || authUid.isEmpty) return;
+
+    // One workspace per owner. The selected vehicle is not part of its
+    // identity; re-opening it refreshes the owner's access profile.
+    try {
+      final scope = WorkspaceScope.forCurrentEnvironment(
+        ownerUserId: currentUser.id,
+        authUid: authUid,
+        vehicleId: vehicleId,
+      );
+      await OfflineStorage.instance.activateWorkspace(
+        scope,
+        ownerPhone: currentUser.phone,
+        access: workspaceAccessFor(
+          currentUser,
+          ownedVehicleIds: _cache.vehicles.values
+              .where((vehicle) => vehicle.ownerId == currentUser.id)
+              .map((vehicle) => vehicle.id),
+        ),
+      );
+    } catch (e) {
+      debugPrint('HomeController _activateOfflineWorkspace notice: $e');
+    }
+    await _checkPendingQueue();
   }
 
   Future<void> _checkPendingQueue() async {
     try {
       if (OfflineStorage.isAvailable) {
-        final workspaceId = LoginController.loginUser.id;
-        final total = await OfflineStorage.instance.queue.total(workspaceId);
-        pendingQueueCount.value = total;
+        final counts = await OfflineStorage.instance.pendingCounts();
+        pendingQueueCount.value = counts.unsynced;
       }
     } catch (_) {}
   }
 
+  /// Refresh dashboard data
   Future<void> refreshDashboard() async {
     await _checkPendingQueue();
   }
 
+  /// Manual / Tap sync trigger
+  Future<void> triggerSync() async {
+    try {
+      if (OfflineStorage.isAvailable) {
+        await OfflineStorage.instance.syncNow();
+      }
+    } catch (e) {
+      debugPrint('HomeController triggerSync notice: $e');
+    }
+    await refreshDashboard();
+  }
+
+  /// Update selected vehicle filter
   void setSelectedVehicle(String? vehicleId) {
     if (vehicleId != null) {
       selectedVehicleId.value = vehicleId;
     }
   }
 
+  /// Update selected period filter (syncs with ActivityController)
   void setSelectedPeriod(String? period) {
     if (period != null) {
       selectedPeriod.value = period;
@@ -439,7 +499,7 @@ class HomeController extends GetxController {
   }
 
   String get currentNepaliDateFormatted {
-    return formatNepaliDateTime(DateTime.now(), pattern: 'yyyy MMMM d, hh:mm a');
+    return formatNepaliDate(DateTime.now(), pattern: 'yyyy MMMM d, EEEE');
   }
 
   String get userInitial {
