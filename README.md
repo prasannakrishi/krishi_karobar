@@ -1,56 +1,80 @@
 # Krishi Karobar
 
-**Krishi Karobar** is a comprehensive Flutter mobile application designed for recording and managing day-to-day agricultural-service operations. It centralizes vehicle tracking, customer records, service management, activity monitoring, expense tracking, billing receipts, and periodic financial reporting into a single platform.
+Krishi Karobar is a Flutter application for managing agricultural-service operations for Prasanna Aadhunik Krishi Kendra. It brings vehicle and service management, live activity monitoring, customer records, expenses, payments, billing, and financial summaries into one application.
 
-The application is developed for **Prasanna Aadhunik Krishi Kendra** to streamline agricultural service operations, real-time activity monitoring, and payment workflows.
+> **Development status:** The `phase-1` branch contains the first integrated offline-storage and synchronization foundation. It is not yet a complete full-offline release. See [Offline Sync Implementation Status](OFFLINE_SYNC_IMPLEMENTATION_STATUS.md) for implemented components, integration gaps, and verification requirements.
 
----
+## Core application features
 
-## 🚀 Key Features & Recent Updates
+### Operations
+- Vehicle, service, driver, and supervisor management.
+- Activity monitoring with start, pause/resume, stop, reset/cancellation, and activity details.
+- Activity GPS capture and manual location tagging.
+- Customer search/autocomplete and customer details.
+- Recent Activity and expense records.
 
-### 🚜 Vehicle & Activity Management
-- **Vehicle & Service Selection**: Assign vehicles, drivers, and supervisors with persistent user session caching (`recentVehicleIds`).
-- **GPS Location Tracking**: Capture start/stop GPS locations for activities with Admin-only access rules and reverse geocoding for place names.
-- **Manual GPS Tagging**: Support manual GPS tagging for both Activity and Expense creation forms.
-- **Activity State Management**: Real-time tracking of running, paused, and completed activities, with soft-reset/cancellation (`status = 'cancelled'`) preserving audit trails.
+### Finance
+- Activity rates, discounts, paid/due amounts, and payment allocations.
+- Payment history and bill/payment-slip views.
+- Expense records and expense details.
+- Dashboard summaries and daily, weekly, monthly (Bikram Sambat), and yearly reporting.
 
-### 👥 Customer & Search Enhancements
-- **Customer Search & Autocomplete**: Real-time search suggestions with auto-fill for customer names, phone numbers, and addresses across forms.
+### Access and security
+- Centralized role/permission checks through `AuthorizationService`.
+- User and vehicle record-scope checks.
+- Firebase Realtime Database security rules in [firebase_rtdb.rules.json](firebase_rtdb.rules.json). Client-side permission checks improve the UI and application workflow; Firebase rules remain the server-side security boundary.
 
-### 💰 Financials, Billing & Expenses
-- **Discount & Due Calculation**: Dedicated discount tracking (`discountAmount`) across activities, expenses, and payments.
-- **View Bill & Multi-Activity Payment Slips**: Generate and view detailed payment receipts (`PaymentSlip`) supporting multi-activity payment allocations in a single transaction.
-- **Expense Table & Details**: Comprehensive expense management with row selection, type filters, and detail views.
+## Technology stack
 
-### 📊 Dashboard & Periodic Reporting
-- **Periodic Reports**: Daily, Weekly, Monthly (Bikram Sambat), and Yearly Income, Expense, and Net Profit/Loss summaries.
-- **Vehicle-Filtered Dashboards**: Dashboard reports automatically filter by the vehicle selected in Settings (or locked to the single assigned vehicle for normal users).
+| Area | Technology |
+|---|---|
+| UI and application | Flutter, Dart |
+| State management and navigation | GetX |
+| Remote authentication and data | Firebase Authentication, Firebase Realtime Database |
+| Local offline database | Sembast (`sembast`, `sembast_web`) |
+| Connectivity | `connectivity_plus` |
+| Local preferences/session support | GetStorage, SharedPreferences |
+| Identifiers | UUID and existing application sequence services |
+| Date handling | Nepali Utils, Nepali Date Picker, Intl |
 
-### 🔒 Security & Synchronization
-- **Role-Based Authorization**: Granular permissions for Admins, Managers, Supervisors, Drivers, and Accountants.
-- **Firebase Real-Time DB**: Real-time data synchronization with robust offline caching and session management.
+## Offline architecture (Phase 1)
 
----
+The offline foundation uses a local Sembast database and a scoped workspace:
 
-## 🛠️ Technology Stack
+- A workspace is identified by the build environment and business owner: `environment|ownerUserId`. Firebase Auth UID is retained separately for remote authorization.
+- Vehicle selection is a record-level filter, not a separate local workspace. Vehicle access is checked against the workspace access profile and assigned/owned vehicles.
+- Local records and their sync-queue references are persisted together. Queue entries track create/update/delete operations and statuses such as pending, syncing, failed, blocked, and conflict.
+- A serialized sync engine listens for connectivity changes, retries eligible work, checks parent dependencies, verifies remote writes by reading records back, and retains conflicts for review.
+- Registered sync adapters currently cover customers, activities, expenses, activity/expense locations, and payments.
+- Expense IDs use the dedicated vehicle/year/sequence convention (for example, `EV01-30001`). Existing Activity and other model UID generators are preserved.
 
-- [Flutter](https://flutter.dev/) & Dart
-- Firebase Authentication & Firebase Realtime Database
-- GetX (State Management & Navigation)
-- Get Storage & SharedPreferences (Local Caching)
-- Nepali Utils & Nepali Date Picker (Bikram Sambat & NPT support)
+**Important limitations:** Not every screen or service has been migrated to local-first reads and writes. Some workflows still call Firebase directly; reference-data seeding, payment/due reconciliation, deletion handling, conflict resolution UX, and complete logout/session integration require further work and testing. Offline support should therefore be treated as partial until the remaining migration and device tests are complete.
 
----
+## Project structure
 
-## 📦 Getting Started
+```text
+lib/
+├── common/       # Shared UI components
+├── features/     # Authentication, activity, dashboard, payment, expense, settings
+├── models/       # Business and user models
+├── offline/
+│   ├── core/     # Workspace scope, access policy, schema, database factories
+│   ├── data/     # Local records, queue, conflicts, reference snapshots
+│   ├── sync/     # Sync engine, gateway, adapters, record comparison
+│   └── uid/      # Offline Expense UID allocation and reconciliation
+├── services/     # Firebase, cache, session, authorization, sequence services
+├── utils/        # Constants, helpers, themes, validation
+└── widgets/      # Reusable application widgets
+```
 
-### Prerequisites
+## Getting started
 
-- Install the [Flutter SDK](https://docs.flutter.dev/get-started/install)
-- Set up an Android emulator/device or target
-- Configure Firebase credentials (`google-services.json`)
+### Requirements
+- Flutter SDK compatible with the Dart constraint in `pubspec.yaml`.
+- Android Studio or another Flutter-compatible IDE.
+- A configured Firebase project and the matching platform configuration files.
 
-### Run Locally
+### Run locally
 
 ```bash
 git clone https://github.com/prasannakrishi/krishi_karobar.git
@@ -59,30 +83,23 @@ flutter pub get
 flutter run
 ```
 
----
+The Android project contains separate `dev` and `prod` source configurations. Use the matching Firebase configuration and build flavor for the intended environment.
 
-## 📁 Project Structure
+Before submitting changes, run:
 
-```text
-lib/
-├── common/         # Shared widgets (Customer search, App scaffolds, etc.)
-├── features/       # Feature modules:
-│   ├── activity_monitor/ # Live activity timer, GPS tracking, vehicle/customer info
-│   ├── authentication/   # Login, session management, and auth gates
-│   ├── home/             # Dashboard periodic reporting & vehicle summaries
-│   ├── payment/          # Payment dialogs, allocations, and bill slips
-│   ├── payment_history/  # Historical payment records and summaries
-│   ├── recent_activity/  # Activity logs, tables, edit forms, and expenses
-│   └── user_setting/     # User, vehicle, customer, and service management screens
-├── models/         # Data models (Activity, Customer, Expense, Payment, Vehicle, User, etc.)
-├── offline/        # Offline sync adapters
-├── services/       # Firebase, caching, audit, and authorization services
-├── utils/          # Themes, helpers, constants, validation, and exceptions
-└── widgets/        # Core UI building blocks
+```bash
+dart format .
+flutter analyze
+flutter test
 ```
 
----
+Also build and manually verify the Android and Web targets when changes affect platform-specific database or connectivity behavior.
 
-## 📄 License
+## Documentation
 
-This project is private and maintained exclusively for **Prasanna Aadhunik Krishi Kendra**.
+- [Offline Sync Implementation Status](OFFLINE_SYNC_IMPLEMENTATION_STATUS.md) — current implementation, known gaps, and next milestones.
+- [Firebase Realtime Database rules](firebase_rtdb.rules.json) — server-side access policy.
+
+## License
+
+This application is maintained for Prasanna Aadhunik Krishi Kendra. It is not intended for public package distribution.
