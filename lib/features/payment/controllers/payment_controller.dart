@@ -4,7 +4,9 @@ import 'package:uuid/uuid.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import 'package:krishi_karobar/offline/offline_storage.dart';
+import 'package:krishi_karobar/offline/data/local_record_repository.dart';
 import 'package:krishi_karobar/offline/offline_constants.dart';
+import 'package:krishi_karobar/offline/offline_exceptions.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
 import '../../authentication/controllers/login_controllers.dart';
 import '../../recent_activity/controllers/activity_controller.dart';
@@ -24,6 +26,15 @@ class PaymentController extends GetxController {
   final descriptionController = TextEditingController();
 
   final customerActivities = <ActivityModel>[].obs;
+
+  /// Raw server copies of the activities loaded by the dues query, by id.
+  /// The base of an older activity that is not stored locally yet.
+  final Map<String, Map<String, Object?>> _serverActivityBase = {};
+
+  /// Id and number of the payment being attempted; kept across a failed save
+  /// so a retry reuses them and is never a second payment.
+  String? _attemptPaymentId;
+  String? _attemptPaymentUid;
   final selectedCustomer = Rxn<CustomerModel>();
 
   final isLoadingActivities = false.obs;
@@ -57,6 +68,8 @@ class PaymentController extends GetxController {
   Future<void> selectCustomer(String customerId) async {
     selectedCustomerId.value = customerId;
     selectedCustomer.value = cache.customers[customerId];
+    _attemptPaymentId = null;
+    _attemptPaymentUid = null;
 
     paymentAmountController.clear();
     discountController.clear();
@@ -68,6 +81,7 @@ class PaymentController extends GetxController {
 
   Future<void> _loadCustomerDues(String customerId) async {
     isLoadingActivities.value = true;
+    _serverActivityBase.clear();
 
     try {
       final query = firebaseService.getQuery(
@@ -103,6 +117,8 @@ class PaymentController extends GetxController {
           activity.dueAmount = due;
 
           activities.add(activity);
+          _serverActivityBase[activity.id] =
+              Map<String, Object?>.from(activityData);
         }
       }
 
@@ -112,6 +128,7 @@ class PaymentController extends GetxController {
     } catch (error) {
       debugPrint('PaymentController: Failed to load dues: $error');
       customerActivities.clear();
+      _serverActivityBase.clear();
       _showError(AppException.messageOf(error));
     } finally {
       isLoadingActivities.value = false;
@@ -280,19 +297,25 @@ class PaymentController extends GetxController {
       await OfflineStorage.instance.requireWritable(
         const [SyncEntity.payment, SyncEntity.activity],
       );
+
+      // Only activities returned by this customer's dues query can be paid;
+      // they need not be in the latest-50 cache.
       for (final allocation in allocations) {
-        if (cache.activities[allocation.activityId] == null) {
-          _showError(
-            'An activity in this payment is not available on this device. '
-            'Refresh and try again.',
-          );
+        final loaded = customerActivities.any(
+          (item) => item.id == allocation.activityId,
+        );
+        if (!loaded || _serverActivityBase[allocation.activityId] == null) {
+          _showError('An activity in this payment no longer exists.');
           return null;
         }
       }
 
       final now = DateTime.now();
-      final paymentId = const Uuid().v4();
-      final paymentUid = await sequenceService.generateSequence('P');
+      // One id and number per attempt: a retry after a failed save reuses
+      // them, so the same money can never be collected under a new id.
+      final paymentId = _attemptPaymentId ??= const Uuid().v4();
+      final paymentUid =
+          _attemptPaymentUid ??= await sequenceService.generateSequence('P');
 
       final payment = PaymentModel(
         id: paymentId,
@@ -311,75 +334,25 @@ class PaymentController extends GetxController {
         createdAt: now,
       );
 
-      final updates = <String, dynamic>{'payments/$paymentId': payment.toMap()};
-
-      for (final allocation in allocations) {
-        final activityIndex = customerActivities.indexWhere(
-          (item) => item.id == allocation.activityId,
-        );
-
-        if (activityIndex == -1) {
-          _showError('An activity in this payment no longer exists.');
-          return null;
-        }
-
-        final activity = customerActivities[activityIndex];
-        final oldPaid = activity.paidAmount;
-        final activityAmount = activity.amount;
-        final paidAmount = allocation.paidAmount;
-        final discountAmount = allocation.discount;
-        final newPaid = oldPaid + paidAmount + discountAmount;
-
-        if (newPaid > activityAmount) {
-          _showError('Payment exceeds activity amount.');
-          return null;
-        }
-
-        final newDue = activityAmount - newPaid;
-        final status = _paymentStatus(newPaid, activityAmount);
-        final activityPath = 'activities/${activity.id}';
-
-        updates['$activityPath/paidAmount'] = newPaid;
-        updates['$activityPath/discountAmount'] = discountAmount;
-        updates['$activityPath/dueAmount'] = newDue;
-        updates['$activityPath/status'] = status;
-        updates['$activityPath/paidAt'] = now.toUtc().toIso8601String();
-        updates['$activityPath/receivedBy'] = LoginController.loginUser.id;
-        updates['$activityPath/updatedAt'] = now.toUtc().toIso8601String();
-      }
-
-      // A failure here propagates to the catch below: no success message and
-      // no cache update for a payment that was not saved.
-      await OfflineStorage.instance.localRecords.saveRecord(
+      // Payment + every activity balance change in ONE local transaction.
+      // A failure rolls all of it back and propagates to the catch below:
+      // no success message and no cache update for an unsaved payment.
+      await OfflineStorage.instance.localRecords.savePaymentWithSettlements(
         scope,
-        entityType: 'payments',
-        recordId: paymentId,
-        data: payment.toMap(),
-        isNew: true,
+        paymentId: paymentId,
+        payment: payment.toMap(),
+        settlements: [
+          for (final allocation in allocations)
+            ActivitySettlement(
+              activityId: allocation.activityId,
+              serverBase: _serverActivityBase[allocation.activityId],
+              buildPatch: (base) => _settlementPatch(base, allocation, now),
+            ),
+        ],
       );
 
-      for (final allocation in allocations) {
-        final cachedAct = cache.activities[allocation.activityId]!;
-        final settlement = allocation.paidAmount + allocation.discount;
-        final newPaid = cachedAct.paidAmount + settlement;
-        final newDue = cachedAct.amount - newPaid;
-        final newStatus = _paymentStatus(newPaid, cachedAct.amount);
-
-        await OfflineStorage.instance.localRecords.patchRecord(
-          scope,
-          entityType: 'activities',
-          recordId: cachedAct.id,
-          patch: {
-            'paidAmount': newPaid,
-            'discountAmount': cachedAct.discountAmount + allocation.discount,
-            'dueAmount': newDue,
-            'status': newStatus,
-            'paidAt': now.toUtc().toIso8601String(),
-            'receivedBy': LoginController.loginUser.id,
-            'updatedAt': now.toUtc().toIso8601String(),
-          },
-        );
-      }
+      _attemptPaymentId = null;
+      _attemptPaymentUid = null;
 
       cache.payments[paymentId] = payment;
       cache.payments.refresh();
@@ -449,6 +422,41 @@ class PaymentController extends GetxController {
     cache.activities.refresh();
 
     customerActivities.removeWhere((activity) => _activityDue(activity) <= 0);
+  }
+
+  /// Balance change of one activity, computed against its authoritative base
+  /// (the local record, or the server copy) inside the repository
+  /// transaction. Throws to refuse an overpayment, which rolls the whole
+  /// payment back.
+  Map<String, Object?> _settlementPatch(
+    Map<String, Object?> base,
+    PaymentAllocationModel allocation,
+    DateTime now,
+  ) {
+    final activityAmount = _intOf(base['amount']);
+    final newPaid =
+        _intOf(base['paidAmount']) + allocation.paidAmount + allocation.discount;
+
+    if (newPaid > activityAmount) {
+      throw const OfflineDataException.invalid(
+        message: 'Payment exceeds activity amount.',
+      );
+    }
+
+    return {
+      'paidAmount': newPaid,
+      'discountAmount': _intOf(base['discountAmount']) + allocation.discount,
+      'dueAmount': activityAmount - newPaid,
+      'status': _paymentStatus(newPaid, activityAmount),
+      'paidAt': now.toUtc().toIso8601String(),
+      'receivedBy': LoginController.loginUser.id,
+      'updatedAt': now.toUtc().toIso8601String(),
+    };
+  }
+
+  int _intOf(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   int _activityDue(ActivityModel activity) {

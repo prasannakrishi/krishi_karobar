@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
 import 'package:krishi_karobar/offline/offline_storage.dart';
-import 'package:krishi_karobar/offline/core/workspace_scope.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
 import 'package:krishi_karobar/utils/theme/widget_themes/custom_decoration.dart';
 import 'package:krishi_karobar/utils/helper/nepali_date_time.dart';
@@ -205,25 +204,18 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         updatedBy: user.id,
       );
 
-      // 1. FIRST: Save Expense to Local Database (Sembast)
-      try {
-        if (OfflineStorage.isAvailable) {
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: user.id,
-            authUid: OfflineStorage.requireAuthUid(),
-            vehicleId: selectedVehicleId ?? 'default',
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
-            entityType: 'expenses',
-            recordId: id,
-            data: expense.toMap(),
-            isNew: widget.expense == null,
-          );
-        }
-      } catch (e) {
-        debugPrint('ExpenseFormDialog local expense save notice: $e');
-      }
+      // 1. FIRST: Save Expense to Local Database (Sembast). A failure aborts:
+      // the outer catch shows the error, and the cache, the dialog and the
+      // success message are untouched.
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(vehicleId: selectedVehicleId ?? ''),
+        entityType: 'expenses',
+        recordId: id,
+        data: expense.toMap(),
+        isNew: widget.expense == null,
+        baseUpdatedAt: widget.expense?.updatedAt.toUtc().toIso8601String(),
+      );
 
       // 2. SECOND: Update In-Memory Cache for instant UI availability
       DataCacheService.instance.expenses[id] = expense;

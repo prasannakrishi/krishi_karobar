@@ -13,7 +13,6 @@ import '../../../utils/exceptions/app_exceptions.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/helper/nepali_date_time.dart';
 import '../../../offline/offline_storage.dart';
-import '../../../offline/core/workspace_scope.dart';
 import '../screen/widgets/edit_activity_dialog.dart';
 import '../screen/widgets/expense_form_dialog.dart';
 import '../screen/widgets/activity_form_dialog.dart';
@@ -384,7 +383,7 @@ class ActivityController extends GetxController {
                   'updatedAt': DateTime.now().toUtc().toIso8601String(),
                   'updatedBy': LoginController.loginUser.id,
                 };
-                await OfflineStorage.saveLocal(
+                await OfflineStorage.saveLocalOrThrow(
                   entityType: 'expenses',
                   recordId: expense.id,
                   data: updateData,
@@ -608,24 +607,17 @@ class ActivityController extends GetxController {
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      try {
-        if (OfflineStorage.isAvailable) {
-          final workspaceId = LoginController.loginUser.id;
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: workspaceId,
-            authUid: OfflineStorage.requireAuthUid(),
-            vehicleId: activity.vehicleId,
-          );
-          await OfflineStorage.instance.localRecords.patchRecord(
-            scope,
-            entityType: 'activities',
-            recordId: activity.id,
-            patch: patchData,
-          );
-        }
-      } catch (e) {
-        debugPrint('ActivityController local description patch notice: $e');
-      }
+      // A failed local save aborts: the outer catch shows the error, and
+      // neither the model, the cache nor Firebase is changed.
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(vehicleId: activity.vehicleId),
+        entityType: 'activities',
+        recordId: activity.id,
+        data: {...activity.toMap(), ...patchData},
+        isNew: false,
+        baseUpdatedAt: activity.updatedAt.toUtc().toIso8601String(),
+      );
 
       activity.description = description;
       activity.updatedAt = now;
@@ -764,24 +756,17 @@ class ActivityController extends GetxController {
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      try {
-        if (OfflineStorage.isAvailable) {
-          final workspaceId = LoginController.loginUser.id;
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: workspaceId,
-            authUid: OfflineStorage.requireAuthUid(),
-            vehicleId: vehicleId,
-          );
-          await OfflineStorage.instance.localRecords.patchRecord(
-            scope,
-            entityType: 'activities',
-            recordId: activity.id,
-            patch: updateData,
-          );
-        }
-      } catch (e) {
-        debugPrint('ActivityController local activity patch notice: $e');
-      }
+      // A failed local save aborts: the outer catch shows the error, and
+      // neither the model, the cache nor Firebase is changed.
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(vehicleId: vehicleId),
+        entityType: 'activities',
+        recordId: activity.id,
+        data: {...activity.toMap(), ...updateData},
+        isNew: false,
+        baseUpdatedAt: activity.updatedAt.toUtc().toIso8601String(),
+      );
 
       activity.customerId = customerId;
       activity.vehicleId = vehicleId;
@@ -880,7 +865,7 @@ class ActivityController extends GetxController {
         'cancelledAt': DateTime.now().toUtc().toIso8601String(),
         'updatedAt': DateTime.now().toUtc().toIso8601String(),
       };
-      await OfflineStorage.saveLocal(
+      await OfflineStorage.saveLocalOrThrow(
         entityType: 'activities',
         recordId: activity.id,
         data: cancelData,

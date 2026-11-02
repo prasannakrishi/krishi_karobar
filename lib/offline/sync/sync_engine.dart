@@ -73,6 +73,25 @@ class SyncEngine {
     if (await _remote.isConnected()) unawaited(syncNow());
   }
 
+  /// Startup recovery: puts entries an INTERRUPTED run left in `syncing` back
+  /// to `pending`. While a sync is in flight its `syncing` entries are live,
+  /// not stale, so nothing is reset then (repeated workspace activation can
+  /// never push in-flight entries back to pending). Runs under the same
+  /// single-flight guard as [syncNow], so a sync cannot start halfway
+  /// through the reset. Returns how many entries were reset.
+  Future<int> recoverInterruptedEntries(String workspaceId) async {
+    if (_disposed || _running != null) return 0;
+
+    final recovery = _storage.queue.resetSyncingToPending(workspaceId);
+    final run = recovery.then<void>((_) {}, onError: (Object _) {});
+    _running = run;
+    try {
+      return await recovery;
+    } finally {
+      if (identical(_running, run)) _running = null;
+    }
+  }
+
   /// Can be called from connectivity callbacks, app resume, or a manual
   /// refresh. Concurrent calls share the same future (no duplicate writes).
   Future<void> syncNow({bool isManual = false}) {

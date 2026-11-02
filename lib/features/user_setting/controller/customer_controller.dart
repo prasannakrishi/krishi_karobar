@@ -169,7 +169,7 @@ class CustomerController extends GetxController {
           'updatedBy': user.id,
         };
 
-        await OfflineStorage.saveLocal(
+        await OfflineStorage.saveLocalOrThrow(
           entityType: 'customers',
           recordId: editingCustomer!.id,
           data: updatedData,
@@ -196,7 +196,7 @@ class CustomerController extends GetxController {
           updatedBy: user.id,
         );
 
-        await OfflineStorage.saveLocal(
+        await OfflineStorage.saveLocalOrThrow(
           entityType: 'customers',
           recordId: id,
           data: customer.toMap(),
@@ -250,7 +250,7 @@ class CustomerController extends GetxController {
       Authz.requirePermission(Permissions.customerDelete);
 
       for (final id in selectedCustomerIds.toList()) {
-        await OfflineStorage.saveLocal(
+        await OfflineStorage.saveLocalOrThrow(
           entityType: 'customers',
           recordId: id,
           data: {'status': 'inactive', 'isDeleted': true},

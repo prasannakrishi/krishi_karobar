@@ -91,10 +91,29 @@ class OfflineStorage {
     WorkspaceScope scope, {
     required String ownerPhone,
     WorkspaceAccess? access,
+  }) {
+    // Activations run one after another (startup, vehicle change, cache
+    // init can all ask at once). The chain only orders them: a failed
+    // activation never blocks the next one, so switching and recovery work.
+    final run = _activationTail.then(
+      (_) => _activate(scope, ownerPhone: ownerPhone, access: access),
+    );
+    _activationTail = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
+  }
+
+  Future<void> _activationTail = Future<void>.value();
+
+  Future<void> _activate(
+    WorkspaceScope scope, {
+    required String ownerPhone,
+    WorkspaceAccess? access,
   }) async {
     try {
       await workspaces.open(scope, ownerPhone: ownerPhone, access: access);
-      await queue.resetSyncingToPending(scope.workspaceId);
+      // Only entries of an interrupted run are reset; a sync already in
+      // flight keeps its `syncing` entries.
+      await syncEngine.recoverInterruptedEntries(scope.workspaceId);
       await syncEngine.start(scope);
       activationError = null;
     } catch (error) {
@@ -104,7 +123,8 @@ class OfflineStorage {
   }
 
   /// Why the last [activateWorkspace] failed, or `null` after a successful
-  /// one. While set, local saves are refused with a specific reason.
+  /// one. For the UI: a workspace that could not be opened refuses local
+  /// writes with a specific reason.
   static String? activationError;
 
   Future<void> syncNow({bool isManual = true}) => syncEngine.syncNow(isManual: isManual);
@@ -222,6 +242,30 @@ class OfflineStorage {
         const OfflineStorageException.unavailable().message;
   }
 
+  /// Throws the specific reason when the local database could not be
+  /// opened. Every save path calls this instead of skipping persistence
+  /// silently when offline storage is unavailable.
+  static void requireAvailable() {
+    if (isAvailable) return;
+    throw _initializationError ?? const OfflineStorageException.unavailable();
+  }
+
+  /// Whether [error] means the LOCAL save failed (storage, workspace scope,
+  /// access or record validation) - as opposed to an unrelated failure such
+  /// as a sequence lookup.
+  static bool isLocalSaveFailure(Object error) =>
+      error is OfflineStorageException ||
+      error is OfflineScopeException ||
+      error is OfflineDataException ||
+      error is WorkspaceOwnershipException;
+
+  /// [error] itself when it already is a local save failure, otherwise an
+  /// [OfflineStorageException.saveFailed] carrying it. Lets a catch block
+  /// rethrow something callers can recognise with [isLocalSaveFailure].
+  static Object asSaveFailure(Object error) => isLocalSaveFailure(error)
+      ? error
+      : OfflineStorageException.saveFailed(details: error);
+
   /// Firebase Auth uid of the signed-in session. The business record id
   /// (`users/{id}`) is a different identity and is NEVER substituted for it;
   /// without an Auth session this throws [OfflineScopeException].
@@ -316,6 +360,36 @@ class OfflineStorage {
         '$error\n$stack',
       );
       return false;
+    }
+  }
+
+  /// Like [saveLocal], but a failure is thrown (as a local save failure with
+  /// the specific reason) instead of reported as `false`. Use it where the
+  /// caller would otherwise show success, update a cache or close a dialog
+  /// after a save that did not happen.
+  static Future<void> saveLocalOrThrow({
+    required String entityType,
+    required String recordId,
+    required Map<String, dynamic> data,
+    bool isNew = false,
+  }) async {
+    try {
+      requireAvailable();
+      await instance.localRecords.saveRecord(
+        currentScope(),
+        entityType: entityType,
+        recordId: recordId,
+        data: data,
+        isNew: isNew,
+      );
+      lastSaveError = null;
+    } catch (error, stack) {
+      lastSaveError = AppException.messageOf(error);
+      debugPrint(
+        'OfflineStorage saveLocalOrThrow failed for $entityType/$recordId: '
+        '$error\n$stack',
+      );
+      Error.throwWithStackTrace(asSaveFailure(error), stack);
     }
   }
 

@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../models/models.dart';
 import '../../../../services/services.dart';
 import '../../../../offline/offline_storage.dart';
-import '../../../../offline/core/workspace_scope.dart';
+import '../../../../offline/data/local_record_repository.dart';
 import '../../../../common/widgets/customer_search_field.dart';
 import '../../../../common/widgets/description_autocomplete.dart';
 import 'package:krishi_karobar/utils/exceptions/app_exceptions.dart';
@@ -210,24 +210,20 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
 
     await firebaseService.saveRecord('customers', customer.id, customer.toMap());
 
+    // A failed local save aborts: the customer is neither cached nor linked
+    // to the activity, and _submit shows the error.
     try {
-      if (OfflineStorage.isAvailable) {
-        final userId = LoginController.loginUser.id;
-        final scope = WorkspaceScope.forCurrentEnvironment(
-          ownerUserId: userId,
-          authUid: OfflineStorage.requireAuthUid(),
-          vehicleId: selectedVehicleId ?? 'default',
-        );
-        await OfflineStorage.instance.localRecords.saveRecord(
-          scope,
-          entityType: 'customers',
-          recordId: customer.id,
-          data: customer.toMap(),
-          isNew: true,
-        );
-      }
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(vehicleId: selectedVehicleId ?? ''),
+        entityType: 'customers',
+        recordId: customer.id,
+        data: customer.toMap(),
+        isNew: true,
+      );
     } catch (e) {
-      debugPrint('ActivityFormDialog offline customer save notice: $e');
+      debugPrint('ActivityFormDialog local customer save failed: $e');
+      throw OfflineStorage.asSaveFailure(e);
     }
 
     cache.customers[customer.id] = customer;
@@ -350,35 +346,26 @@ class _ActivityFormDialogState extends State<ActivityFormDialog> {
         updates['payments/$paymentId'] = payment.toMap();
       }
 
-      // 1. FIRST: Save Activity (and Payment if created) to Local Sembast Database
-      try {
-        if (OfflineStorage.isAvailable) {
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: user.id,
-            authUid: OfflineStorage.requireAuthUid(),
-            vehicleId: selectedVehicleId ?? 'default',
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
+      // 1. FIRST: Save Activity (and Payment if created) to the local Sembast
+      // database in ONE transaction. A failure aborts: the outer catch shows
+      // the error, and nothing is cached, saved or closed.
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveNewRecords(
+        OfflineStorage.currentScope(vehicleId: selectedVehicleId ?? ''),
+        [
+          NewLocalRecord(
             entityType: 'activities',
             recordId: id,
             data: activity.toMap(),
-            isNew: true,
-          );
-
-          if (paymentId != null && payment != null) {
-            await OfflineStorage.instance.localRecords.saveRecord(
-              scope,
+          ),
+          if (paymentId != null && payment != null)
+            NewLocalRecord(
               entityType: 'payments',
               recordId: paymentId,
               data: payment.toMap(),
-              isNew: true,
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('ActivityFormDialog local record save notice: $e');
-      }
+            ),
+        ],
+      );
 
       // 2. SECOND: Update In-Memory Cache for instant UI refresh
       DataCacheService.instance.activities[id] = activity;

@@ -15,6 +15,13 @@ class OfflineStorageException extends AppException {
           details: details,
         );
 
+  const OfflineStorageException.saveFailed({Object? details})
+      : this(
+          'The data could not be saved on this device.',
+          code: 'offline-save-failed',
+          details: details,
+        );
+
   const OfflineStorageException.migrationFailed({Object? details})
       : this(
           'The offline database could not be upgraded. Existing local data '

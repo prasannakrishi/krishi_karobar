@@ -8,7 +8,6 @@ import '../../../features/controllers.dart';
 import '../../../models/models.dart';
 import '../../../services/services.dart';
 import '../../../offline/offline_storage.dart';
-import '../../../offline/core/workspace_scope.dart';
 import '../../../offline/offline_constants.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/exceptions/app_exceptions.dart';
@@ -816,29 +815,29 @@ class MonitorController extends GetxController {
       updatedAt: now,
     );
 
-    // Save directly into local Sembast offline database
+    // Save directly into local Sembast offline database. A failed save aborts
+    // the start: nothing is cached, no timer runs, no activity is shown.
     debugPrint('[ACTIVITY_LOCAL_SAVE_STARTED] id=$id workspace=${LoginController.loginUser.id}');
     try {
-      if (OfflineStorage.isAvailable) {
-        final workspaceId = LoginController.loginUser.id;
-        final authUid = OfflineStorage.requireAuthUid();
-        final scope = WorkspaceScope.forCurrentEnvironment(
-          ownerUserId: workspaceId,
-          authUid: authUid,
-          vehicleId: vehicle.id,
-        );
-        await OfflineStorage.instance.localRecords.saveRecord(
-          scope,
-          entityType: 'activities',
-          recordId: id,
-          data: activity.toMap(),
-          isNew: true,
-        );
-        debugPrint('[ACTIVITY_LOCAL_SAVE_SUCCESS] id=$id saved to Sembast.');
-        debugPrint('[ACTIVITY_SYNC_QUEUE_INSERTED] id=$id enqueued in sync queue.');
-      }
+      OfflineStorage.requireAvailable();
+      final scope = OfflineStorage.currentScope(vehicleId: vehicle.id);
+      await OfflineStorage.instance.localRecords.saveRecord(
+        scope,
+        entityType: 'activities',
+        recordId: id,
+        data: activity.toMap(),
+        isNew: true,
+      );
+      debugPrint('[ACTIVITY_LOCAL_SAVE_SUCCESS] id=$id saved to Sembast.');
+      debugPrint('[ACTIVITY_SYNC_QUEUE_INSERTED] id=$id enqueued in sync queue.');
     } catch (e) {
       debugPrint('[ACTIVITY_LOCAL_SAVE_FAILED] id=$id error: $e');
+      _isSavingActivity = false;
+      if (customerIsNewlyCreated) {
+        await _rollbackNewCustomer(customer);
+      }
+      showMessage('Error', AppException.messageOf(e));
+      return;
     }
 
     // Immediately put in DataCacheService cache so liveActivity is non-null instantly
@@ -1029,6 +1028,7 @@ class MonitorController extends GetxController {
 
     _isFinalizingActivity = hasLiveRecord;
     final id = hasLiveRecord ? currentActivityId.value : null;
+    var resetAborted = false;
 
     try {
       if (id != null && id.isNotEmpty) {
@@ -1041,26 +1041,28 @@ class MonitorController extends GetxController {
           'updatedAt': DateTime.now().toUtc().toIso8601String(),
         };
 
+        // A failed save aborts the cancel: the activity is still running in
+        // the local database, so the monitor must not show it as reset.
         try {
-          if (OfflineStorage.isAvailable) {
-            final workspaceId = LoginController.loginUser.id;
-            final vehicle = selectedVehicle.value;
-            final authUid = OfflineStorage.requireAuthUid();
-            final scope = WorkspaceScope.forCurrentEnvironment(
-              ownerUserId: workspaceId,
-              authUid: authUid,
-              vehicleId: vehicle?.id ?? 'default',
-            );
-            await OfflineStorage.instance.localRecords.saveRecord(
-              scope,
-              entityType: 'activities',
-              recordId: id,
-              data: cancelData,
-              isNew: false,
-            );
-          }
+          OfflineStorage.requireAvailable();
+          final scope = OfflineStorage.currentScope(
+            vehicleId: selectedVehicle.value?.id ?? '',
+          );
+          await OfflineStorage.instance.localRecords.saveRecord(
+            scope,
+            entityType: 'activities',
+            recordId: id,
+            data: cancelData,
+            isNew: false,
+          );
         } catch (e) {
-          debugPrint('MonitorController confirmReset offline save notice: $e');
+          debugPrint('MonitorController confirmReset local save failed: $e');
+          resetAborted = true;
+          showMessage(
+            'Error',
+            'The activity was not cancelled. ${AppException.messageOf(e)}',
+          );
+          return;
         }
 
         if (cache.activities.containsKey(id)) {
@@ -1083,16 +1085,20 @@ class MonitorController extends GetxController {
       if (id != null && id.isNotEmpty) {
         _finalizingActivityIds.remove(id);
       }
-      currentActivityId.value = '';
-      timerController.reset();
-      resetForm();
+      if (!resetAborted) {
+        currentActivityId.value = '';
+        timerController.reset();
+        resetForm();
+      }
       _isFinalizingActivity = false;
       _updateLiveActivity();
 
-      for (final timer in _syncTimers.values) {
-        timer.cancel();
+      if (!resetAborted) {
+        for (final timer in _syncTimers.values) {
+          timer.cancel();
+        }
+        _syncTimers.clear();
       }
-      _syncTimers.clear();
     }
   }
 
@@ -1299,8 +1305,26 @@ class MonitorController extends GetxController {
       finalAmount = ((rawAmount / 10).round() * 10.0).toInt();
     }
 
+    // Undo of the optimistic "completed" cache change below, used only when
+    // the local save of the finalized activity fails.
+    void Function()? rollbackCache;
+
     if (cache.activities.containsKey(targetActivityId)) {
       final act = cache.activities[targetActivityId]!;
+      final priorStatus = act.status;
+      final priorEndTime = act.endTime;
+      final priorDuration = act.duration;
+      final priorAmount = act.amount;
+      final priorDueAmount = act.dueAmount;
+      rollbackCache = () {
+        act.status = priorStatus;
+        act.endTime = priorEndTime;
+        act.duration = priorDuration;
+        act.amount = priorAmount;
+        act.dueAmount = priorDueAmount;
+        cache.activities.refresh();
+        _updateLiveActivity();
+      };
       act.status = ActivityStatus.completed;
       act.endTime = DateTime.now();
       act.duration = finalDuration;
@@ -1350,6 +1374,7 @@ class MonitorController extends GetxController {
       amount: finalAmount,
       description: finalDescription,
       preCapturedStopLoc: preCapturedStopLoc,
+      rollbackCache: rollbackCache,
     );
   }
 
@@ -1365,6 +1390,7 @@ class MonitorController extends GetxController {
     required int amount,
     String? description,
     ActivityLocationModel? preCapturedStopLoc,
+    void Function()? rollbackCache,
   }) async {
     try {
       final existingAct = cache.activities[activityId];
@@ -1388,6 +1414,17 @@ class MonitorController extends GetxController {
           customerId = newCustomer.id;
         } catch (e) {
           debugPrint('MonitorController background customer save error: $e');
+          if (OfflineStorage.isLocalSaveFailure(e)) {
+            // The typed customer could not be stored: saving the activity
+            // without its customer would silently lose that link.
+            rollbackCache?.call();
+            showMessage(
+              'Activity not saved',
+              'The customer could not be saved. ${AppException.messageOf(e)} '
+              'The activity is still running.',
+            );
+            return;
+          }
         }
       }
 
@@ -1424,30 +1461,29 @@ class MonitorController extends GetxController {
         'updatedAt': now.toUtc().toIso8601String(),
       };
 
-      // 1. FIRST: Save Activity to Local Database (Sembast)
+      // 1. FIRST: Save Activity to Local Database (Sembast). A failure aborts
+      // the finalization: the optimistic cache change is undone and the user
+      // is told, instead of showing a completed activity that was not stored.
       try {
-        if (OfflineStorage.isAvailable) {
-          final workspaceId = LoginController.loginUser.id;
-          final vehicleIdStr = updatedData['vehicleId'].toString();
-          final authUid = OfflineStorage.requireAuthUid();
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: workspaceId,
-            authUid: authUid,
-            vehicleId: vehicleIdStr.isNotEmpty ? vehicleIdStr : 'default',
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
-            entityType: SyncEntity.activity,
-            recordId: activityId,
-            data: updatedData,
-            isNew: false,
-          );
-          debugPrint('[ACTIVITY_LOCAL_UPDATE_SUCCESS] id=$activityId uId=$uId successfully saved to Sembast.');
-          debugPrint('[ACTIVITY_QUEUE_UPDATED] id=$activityId uId=$uId sync queue updated.');
-        }
+        OfflineStorage.requireAvailable();
+        final scope = OfflineStorage.currentScope(vehicleId: vehicleId);
+        await OfflineStorage.instance.localRecords.saveRecord(
+          scope,
+          entityType: SyncEntity.activity,
+          recordId: activityId,
+          data: updatedData,
+          isNew: false,
+        );
+        debugPrint('[ACTIVITY_LOCAL_UPDATE_SUCCESS] id=$activityId uId=$uId successfully saved to Sembast.');
+        debugPrint('[ACTIVITY_QUEUE_UPDATED] id=$activityId uId=$uId sync queue updated.');
       } catch (e) {
         debugPrint('[ACTIVITY_FINALIZATION_FAILED] id=$activityId error=$e');
-        debugPrint('MonitorController local activity save notice: $e');
+        rollbackCache?.call();
+        showMessage(
+          'Activity not saved',
+          '${AppException.messageOf(e)} The activity is still running.',
+        );
+        return;
       }
 
       // 2. SECOND: Update Local In-Memory Cache for instant UI update
@@ -1524,26 +1560,23 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
-    // 1. FIRST: Save Customer to Local Database (Sembast)
+    // 1. FIRST: Save Customer to Local Database (Sembast). A failure aborts:
+    // the customer is neither cached nor linked to the activity.
     try {
-      if (OfflineStorage.isAvailable) {
-        final workspaceId = LoginController.loginUser.id;
-        final authUid = OfflineStorage.requireAuthUid();
-        final scope = WorkspaceScope.forCurrentEnvironment(
-          ownerUserId: workspaceId,
-          authUid: authUid,
-          vehicleId: selectedVehicle.value?.id ?? 'default',
-        );
-        await OfflineStorage.instance.localRecords.saveRecord(
-          scope,
-          entityType: SyncEntity.customer,
-          recordId: customer.id,
-          data: customer.toMap(),
-          isNew: true,
-        );
-      }
+      OfflineStorage.requireAvailable();
+      final scope = OfflineStorage.currentScope(
+        vehicleId: selectedVehicle.value?.id ?? '',
+      );
+      await OfflineStorage.instance.localRecords.saveRecord(
+        scope,
+        entityType: SyncEntity.customer,
+        recordId: customer.id,
+        data: customer.toMap(),
+        isNew: true,
+      );
     } catch (e) {
-      debugPrint('MonitorController local customer save notice: $e');
+      debugPrint('MonitorController local customer save failed: $e');
+      throw OfflineStorage.asSaveFailure(e);
     }
 
     // 2. SECOND: Update Local In-Memory Cache for instant UI availability
@@ -1612,25 +1645,23 @@ class MonitorController extends GetxController {
       updatedBy: LoginController.loginUser.id,
     );
 
+    // A failed local save aborts: the caller shows the error, and the
+    // customer is neither written to Firebase nor cached.
     try {
-      if (OfflineStorage.isAvailable) {
-        final workspaceId = LoginController.loginUser.id;
-        final authUid = OfflineStorage.requireAuthUid();
-        final scope = WorkspaceScope.forCurrentEnvironment(
-          ownerUserId: workspaceId,
-          authUid: authUid,
-          vehicleId: selectedVehicle.value?.id ?? 'default',
-        );
-        await OfflineStorage.instance.localRecords.saveRecord(
-          scope,
-          entityType: SyncEntity.customer,
-          recordId: customer.id,
-          data: customer.toMap(),
-          isNew: true,
-        );
-      }
+      OfflineStorage.requireAvailable();
+      final scope = OfflineStorage.currentScope(
+        vehicleId: selectedVehicle.value?.id ?? '',
+      );
+      await OfflineStorage.instance.localRecords.saveRecord(
+        scope,
+        entityType: SyncEntity.customer,
+        recordId: customer.id,
+        data: customer.toMap(),
+        isNew: true,
+      );
     } catch (e) {
-      debugPrint('MonitorController offline customer save notice: $e');
+      debugPrint('MonitorController local customer save failed: $e');
+      throw OfflineStorage.asSaveFailure(e);
     }
 
     try {

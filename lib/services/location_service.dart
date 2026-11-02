@@ -1,15 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../utils/exceptions/app_exceptions.dart';
 import '../offline/offline_storage.dart';
-import '../offline/core/workspace_scope.dart';
 import '../offline/offline_constants.dart';
-import '../features/authentication/controllers/login_controllers.dart';
 import 'firebase_service.dart';
 
 /// GPS Location service for capturing, validating, saving, and launching maps
@@ -167,7 +166,9 @@ class LocationService {
   }
 
   /// Saves the Start GPS location object to Sembast local records and queues for sync.
-  Future<void> saveStartLocation(
+  /// Returns whether the LOCAL save succeeded; a failure is reported to the
+  /// user and never silent.
+  Future<bool> saveStartLocation(
     String activityId,
     ActivityLocationModel startLoc,
   ) async {
@@ -177,26 +178,20 @@ class LocationService {
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
     };
 
+    var savedLocally = false;
     try {
-      if (OfflineStorage.isAvailable) {
-        final userId = LoginController.loginUser.id;
-        final authUid = OfflineStorage.requireAuthUid();
-        if (userId.isNotEmpty) {
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: userId,
-            authUid: authUid,
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
-            entityType: SyncEntity.activityLocation,
-            recordId: activityId,
-            data: locationData,
-            isNew: true,
-          );
-        }
-      }
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(),
+        entityType: SyncEntity.activityLocation,
+        recordId: activityId,
+        data: locationData,
+        isNew: true,
+      );
+      savedLocally = true;
     } catch (e) {
-      debugPrint('LocationService saveStartLocation local save error: $e');
+      debugPrint('LocationService saveStartLocation local save failed: $e');
+      _reportLocalSaveFailure(e);
     }
 
     try {
@@ -208,10 +203,14 @@ class LocationService {
     } catch (e) {
       debugPrint('LocationService saveStartLocation firebase sync notice: $e');
     }
+
+    return savedLocally;
   }
 
   /// Saves the Stop GPS location object to Sembast local records and queues for sync.
-  Future<void> saveStopLocation(
+  /// Returns whether the LOCAL save succeeded; a failure is reported to the
+  /// user and never silent.
+  Future<bool> saveStopLocation(
     String activityId,
     ActivityLocationModel stopLoc,
   ) async {
@@ -221,26 +220,20 @@ class LocationService {
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
     };
 
+    var savedLocally = false;
     try {
-      if (OfflineStorage.isAvailable) {
-        final userId = LoginController.loginUser.id;
-        final authUid = OfflineStorage.requireAuthUid();
-        if (userId.isNotEmpty) {
-          final scope = WorkspaceScope.forCurrentEnvironment(
-            ownerUserId: userId,
-            authUid: authUid,
-          );
-          await OfflineStorage.instance.localRecords.saveRecord(
-            scope,
-            entityType: SyncEntity.activityLocation,
-            recordId: activityId,
-            data: locationData,
-            isNew: false,
-          );
-        }
-      }
+      OfflineStorage.requireAvailable();
+      await OfflineStorage.instance.localRecords.saveRecord(
+        OfflineStorage.currentScope(),
+        entityType: SyncEntity.activityLocation,
+        recordId: activityId,
+        data: locationData,
+        isNew: false,
+      );
+      savedLocally = true;
     } catch (e) {
-      debugPrint('LocationService saveStopLocation local save error: $e');
+      debugPrint('LocationService saveStopLocation local save failed: $e');
+      _reportLocalSaveFailure(e);
     }
 
     try {
@@ -251,6 +244,20 @@ class LocationService {
       );
     } catch (e) {
       debugPrint('LocationService saveStopLocation firebase sync notice: $e');
+    }
+
+    return savedLocally;
+  }
+
+  void _reportLocalSaveFailure(Object error) {
+    try {
+      Get.snackbar(
+        'Location not saved on this device',
+        AppException.messageOf(error),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      debugPrint('LocationService could not show the save failure: $e');
     }
   }
 

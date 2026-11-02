@@ -11,6 +11,36 @@ import 'sync_conflict_dao.dart';
 import 'sync_queue_dao.dart';
 import 'workspace_repository.dart';
 
+/// One activity settled by a payment. [buildPatch] receives the activity's
+/// authoritative base inside the repository transaction and returns the
+/// fields to change; it throws to refuse (for example an overpayment), which
+/// rolls the whole payment back. [serverBase] is the server copy used only
+/// when the activity is not stored locally yet.
+class ActivitySettlement {
+  const ActivitySettlement({
+    required this.activityId,
+    required this.buildPatch,
+    this.serverBase,
+  });
+
+  final String activityId;
+  final Map<String, Object?>? serverBase;
+  final Map<String, Object?> Function(Map<String, Object?> base) buildPatch;
+}
+
+/// A brand-new record for [LocalRecordRepository.saveNewRecords].
+class NewLocalRecord {
+  const NewLocalRecord({
+    required this.entityType,
+    required this.recordId,
+    required this.data,
+  });
+
+  final String entityType;
+  final String recordId;
+  final Map<String, Object?> data;
+}
+
 /// Scoped access to pending business records.
 ///
 /// Every public method needs a [WorkspaceScope] and verifies it against the
@@ -217,6 +247,232 @@ class LocalRecordRepository {
         isNew: false,
         baseUpdatedAt: baseUpdatedAt,
       );
+    });
+
+    onQueued?.call();
+    return saved;
+  }
+
+  /// Saves a payment and the balance change of every activity it settles in
+  /// ONE transaction: either the payment and all its activity changes are
+  /// stored and queued, or nothing is (a failure rolls the whole transaction
+  /// back, so a retry can never collect the same money twice).
+  ///
+  /// Each [ActivitySettlement.buildPatch] runs INSIDE the transaction against
+  /// the authoritative base of that activity: the local record when there is
+  /// one (it already carries earlier unsynchronized payments), otherwise the
+  /// server copy in [ActivitySettlement.serverBase] (an activity older than
+  /// the cached window is paid this way and queued as an `update` with that
+  /// copy's `updatedAt` as its base, so the engine can detect a concurrent
+  /// server change). The base must be this customer's own activity - an
+  /// arbitrary activity id is refused - and the same stale-value guard as
+  /// [patchRecord] applies.
+  ///
+  /// A payment id that is already stored is refused, never applied twice.
+  Future<LocalRecord> savePaymentWithSettlements(
+    WorkspaceScope scope, {
+    required String paymentId,
+    required Map<String, Object?> payment,
+    required List<ActivitySettlement> settlements,
+  }) async {
+    _requireText(paymentId, 'paymentId');
+
+    if (settlements.isEmpty) {
+      throw const OfflineDataException.invalid(
+        message: 'A payment must settle at least one activity.',
+      );
+    }
+
+    final cleanedPayment = _validatedData(payment, paymentId);
+    final customerId = cleanedPayment['customerId']?.toString().trim() ?? '';
+    if (customerId.isEmpty) {
+      throw const OfflineDataException.invalid(
+        message: 'A payment must belong to a customer.',
+      );
+    }
+
+    final seen = <String>{};
+    for (final settlement in settlements) {
+      _requireText(settlement.activityId, 'activityId');
+      if (!seen.add(settlement.activityId)) {
+        throw OfflineDataException.invalid(
+          message: 'An activity can only be settled once per payment.',
+          details: settlement.activityId,
+        );
+      }
+    }
+
+    final saved = await _db.transaction((txn) async {
+      await _requireWorkspace(txn, scope, writeType: SyncEntity.payment);
+      await _requireWorkspace(txn, scope, writeType: SyncEntity.activity);
+      await _requireKeyFree(txn, scope, SyncEntity.payment, paymentId);
+
+      final existingPayment = await _records.get(
+        scope.workspaceId,
+        SyncEntity.payment,
+        paymentId,
+        client: txn,
+      );
+      if (existingPayment != null) {
+        throw OfflineDataException.invalid(
+          message: 'This payment was already saved on this device.',
+          details: '${SyncEntity.payment}/$paymentId',
+        );
+      }
+
+      final record = await _store(
+        txn,
+        scope,
+        type: SyncEntity.payment,
+        recordId: paymentId,
+        existing: null,
+        data: cleanedPayment,
+        isNew: true,
+        baseUpdatedAt: null,
+      );
+
+      for (final settlement in settlements) {
+        final activityId = settlement.activityId;
+        await _requireKeyFree(txn, scope, SyncEntity.activity, activityId);
+
+        final existing = await _records.get(
+          scope.workspaceId,
+          SyncEntity.activity,
+          activityId,
+          client: txn,
+        );
+
+        if (existing != null && existing.isDeleted) {
+          throw OfflineDataException.tombstoned(
+            details: '${SyncEntity.activity}/$activityId',
+          );
+        }
+
+        final Map<String, Object?> base;
+        String? baseUpdatedAt;
+        if (existing != null) {
+          base = existing.data;
+        } else {
+          final server = settlement.serverBase;
+          if (server == null) {
+            throw OfflineDataException.missingRecord(
+              details:
+                  '${SyncEntity.activity}/$activityId has no local or server base to settle',
+            );
+          }
+          base = deepCopyMap(server);
+          baseUpdatedAt = base['updatedAt']?.toString();
+        }
+
+        if (base['id']?.toString() != activityId ||
+            base['customerId']?.toString() != customerId) {
+          throw OfflineDataException.invalid(
+            message: 'The activity does not belong to this payment\'s customer.',
+            details: '${SyncEntity.activity}/$activityId',
+          );
+        }
+
+        final patch = _validatedData(
+          settlement.buildPatch(deepCopyMap(base)),
+          null,
+        );
+        if (patch.containsKey('id')) {
+          throw const OfflineDataException.invalid(
+            message: 'The immutable record id cannot be changed.',
+          );
+        }
+        if (patch.keys.any(staleGuardedFields.contains) &&
+            _time(patch['updatedAt']) == null) {
+          throw OfflineDataException.invalid(
+            message: 'A payment or balance change must carry its updatedAt.',
+            details: '${SyncEntity.activity}/$activityId',
+          );
+        }
+        _assertNotStale(base, patch, '${SyncEntity.activity}/$activityId');
+
+        await _store(
+          txn,
+          scope,
+          type: SyncEntity.activity,
+          recordId: activityId,
+          existing: existing,
+          data: {...base, ...patch, 'id': activityId},
+          isNew: false,
+          baseUpdatedAt: baseUpdatedAt,
+        );
+      }
+
+      return record;
+    });
+
+    onQueued?.call();
+    return saved;
+  }
+
+  /// Saves several NEW records (for example a manual activity and its
+  /// payment) in ONE transaction: all are stored and queued, or none is, so
+  /// a failed save never leaves half of a business operation behind for a
+  /// retry to duplicate. An id that already exists locally is refused.
+  Future<List<LocalRecord>> saveNewRecords(
+    WorkspaceScope scope,
+    List<NewLocalRecord> records,
+  ) async {
+    if (records.isEmpty) {
+      throw const OfflineDataException.invalid(
+        message: 'There is nothing to save.',
+      );
+    }
+
+    final prepared = <(String, String, Map<String, Object?>)>[];
+    final seen = <String>{};
+    for (final record in records) {
+      _requireText(record.entityType, 'entityType');
+      _requireText(record.recordId, 'recordId');
+      final type = SyncEntity.canonical(record.entityType);
+      if (!seen.add(LocalRecord.keyOf(type, record.recordId))) {
+        throw OfflineDataException.invalid(
+          message: 'The same record was given twice.',
+          details: '$type/${record.recordId}',
+        );
+      }
+      prepared.add((type, record.recordId, _validatedData(record.data, record.recordId)));
+    }
+
+    final saved = await _db.transaction((txn) async {
+      final stored = <LocalRecord>[];
+
+      for (final (type, recordId, data) in prepared) {
+        await _requireWorkspace(txn, scope, writeType: type);
+        await _requireKeyFree(txn, scope, type, recordId);
+
+        final existing = await _records.get(
+          scope.workspaceId,
+          type,
+          recordId,
+          client: txn,
+        );
+        if (existing != null) {
+          throw OfflineDataException.invalid(
+            message: 'This record was already saved on this device.',
+            details: '$type/$recordId',
+          );
+        }
+
+        stored.add(
+          await _store(
+            txn,
+            scope,
+            type: type,
+            recordId: recordId,
+            existing: null,
+            data: data,
+            isNew: true,
+            baseUpdatedAt: null,
+          ),
+        );
+      }
+
+      return stored;
     });
 
     onQueued?.call();

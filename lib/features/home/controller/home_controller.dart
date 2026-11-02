@@ -132,7 +132,30 @@ class HomeController extends GetxController {
     _activateOfflineWorkspace();
   }
 
+  bool _activatingWorkspace = false;
+  bool _activationRequestedAgain = false;
+
+  /// One activation at a time per controller: a request that arrives while
+  /// one is running (startup, then a vehicle change) is coalesced into a
+  /// single follow-up run instead of overlapping it. Not a permanent lock -
+  /// every call still reaches the repository, which serializes them.
   Future<void> _activateOfflineWorkspace() async {
+    if (_activatingWorkspace) {
+      _activationRequestedAgain = true;
+      return;
+    }
+    _activatingWorkspace = true;
+    try {
+      do {
+        _activationRequestedAgain = false;
+        await _activateOfflineWorkspaceOnce();
+      } while (_activationRequestedAgain);
+    } finally {
+      _activatingWorkspace = false;
+    }
+  }
+
+  Future<void> _activateOfflineWorkspaceOnce() async {
     if (!OfflineStorage.isAvailable) {
       _reportOfflineUnavailable();
       return;
