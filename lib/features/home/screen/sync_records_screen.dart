@@ -173,6 +173,8 @@ class SyncRecordsScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.red.shade700, fontSize: 12),
               ),
             ),
+          _buildFilterBar(controller),
+          const SizedBox(height: 6),
           Expanded(
             child: _buildDataTable(controller, entries),
           ),
