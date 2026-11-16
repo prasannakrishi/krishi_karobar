@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
+import 'package:krishi_karobar/firebase_options.dart';
 
 import '../../services/firebase_service.dart';
 import '../../utils/exceptions/app_exceptions.dart';
@@ -51,10 +53,38 @@ class FirebaseSyncRemoteGateway implements SyncRemoteGateway {
     DatabaseReference? databaseReference,
     this.timeout = const Duration(seconds: 20),
   })  : _service = firebaseService ?? FirebaseService(),
-        _db = databaseReference ?? FirebaseDatabase.instance.ref();
+        _db = databaseReference ?? _defaultDbRef() {
+    _initConnectionListener();
+  }
 
   final FirebaseService _service;
   final DatabaseReference _db;
+  bool _connected = false;
+  StreamSubscription<DatabaseEvent>? _connectionSub;
+
+  static DatabaseReference _defaultDbRef() {
+    try {
+      return FirebaseDatabase.instanceFor(
+        app: FirebaseDatabase.instance.app,
+        databaseURL: DefaultFirebaseOptions.currentPlatform.databaseURL,
+      ).ref();
+    } catch (_) {
+      return FirebaseDatabase.instance.ref();
+    }
+  }
+
+  void _initConnectionListener() {
+    _connectionSub?.cancel();
+    _connectionSub = _db.child('.info/connected').onValue.listen(
+      (event) {
+        _connected = event.snapshot.value == true;
+        debugPrint('[GATEWAY_CONNECTION_STATE_UPDATED] connected=$_connected');
+      },
+      onError: (_) {
+        _connected = false;
+      },
+    );
+  }
 
   /// Transactions wait for the server instead of failing offline, so every
   /// call is bounded; a timeout is reported as a connectivity problem.
@@ -65,17 +95,23 @@ class FirebaseSyncRemoteGateway implements SyncRemoteGateway {
     return _db
         .child('.info/connected')
         .onValue
-        .map((event) => event.snapshot.value == true);
+        .map((event) {
+          final val = event.snapshot.value == true;
+          _connected = val;
+          return val;
+        });
   }
 
   @override
   Future<bool> isConnected() async {
+    if (_connected) return true;
     try {
       final snapshot =
-          await _db.child('.info/connected').get().timeout(timeout);
-      return snapshot.value == true;
+          await _db.child('.info/connected').get().timeout(const Duration(seconds: 3));
+      _connected = snapshot.value == true;
+      return _connected;
     } catch (_) {
-      return false;
+      return _connected;
     }
   }
 

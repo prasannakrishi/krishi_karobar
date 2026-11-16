@@ -1,4 +1,6 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:krishi_karobar/firebase_options.dart';
 
 import '../offline_exceptions.dart';
 
@@ -37,9 +39,20 @@ abstract class ExpenseUidRemote {
 /// its counters are not touched.
 class FirebaseExpenseUidRemote implements ExpenseUidRemote {
   FirebaseExpenseUidRemote({DatabaseReference? databaseReference})
-      : _db = databaseReference ?? FirebaseDatabase.instance.ref();
+      : _db = databaseReference ?? _defaultDbRef();
 
   final DatabaseReference _db;
+
+  static DatabaseReference _defaultDbRef() {
+    try {
+      return FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: DefaultFirebaseOptions.currentPlatform.databaseURL,
+      ).ref();
+    } catch (_) {
+      return FirebaseDatabase.instance.ref();
+    }
+  }
 
   static const String _root = 'sequences';
 

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:krishi_karobar/firebase_options.dart';
 
 import '../offline/offline_storage.dart';
 import '../features/authentication/controllers/login_controllers.dart';
@@ -11,9 +13,20 @@ class SequenceService extends GetxService {
   static SequenceService get instance => Get.find<SequenceService>();
 
   SequenceService({DatabaseReference? databaseReference})
-      : _db = databaseReference ?? FirebaseDatabase.instance.ref();
+      : _db = databaseReference ?? _defaultDbRef();
 
   final DatabaseReference _db;
+
+  static DatabaseReference _defaultDbRef() {
+    try {
+      return FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: DefaultFirebaseOptions.currentPlatform.databaseURL,
+      ).ref();
+    } catch (_) {
+      return FirebaseDatabase.instance.ref();
+    }
+  }
   final GetStorage _storage = GetStorage();
 
   static const String _sequencePath = 'sequences';

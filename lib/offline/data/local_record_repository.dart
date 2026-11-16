@@ -789,6 +789,40 @@ class LocalRecordRepository {
     });
   }
 
+  /// Resolves an open conflict and resets its queue entry back to pending.
+  Future<void> resolveConflict(
+    WorkspaceScope scope, {
+    required String conflictId,
+    required String resolution,
+  }) {
+    return _db.transaction((txn) async {
+      await _requireWorkspace(txn, scope);
+
+      final conflict = await _conflicts.get(
+        scope.workspaceId,
+        conflictId,
+        client: txn,
+      );
+
+      if (conflict == null) return;
+
+      await _conflicts.resolve(
+        scope.workspaceId,
+        conflictId,
+        resolution: resolution,
+        client: txn,
+      );
+
+      await _queue.resetToPending(
+        scope.workspaceId,
+        conflict.entityType,
+        conflict.recordId,
+        resetAttempts: true,
+        client: txn,
+      );
+    });
+  }
+
   /// Builds the stored record (index fields, owner type) and writes it with
   /// its queue entry. Runs inside the caller's transaction.
   Future<LocalRecord> _store(

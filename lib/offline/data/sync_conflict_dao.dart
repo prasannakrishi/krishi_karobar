@@ -15,6 +15,10 @@ class SyncConflictDao {
 
   DatabaseClient _c(DatabaseClient? client) => client ?? _db;
 
+  /// Emits whenever the conflicts store changes (and once on subscription).
+  Stream<void> changes() =>
+      _store.query().onSnapshots(_db).map<void>((_) {});
+
   /// Records a conflict. A record has at most one open conflict; a second
   /// detection updates the existing one instead of adding another.
   Future<SyncConflict> open({

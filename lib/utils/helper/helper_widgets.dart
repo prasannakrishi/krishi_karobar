@@ -322,48 +322,189 @@ import 'nepali_date_time.dart';
     void Function(int index)? onRowLongPress,
     void Function(int index, TapUpDetails details)? onRowSecondaryTap,
   }) {
-    return SingleChildScrollView(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          showCheckboxColumn: false,
-          columnSpacing: 2,
-          horizontalMargin: 0,
-          headingRowHeight: 25,
-          dataRowMaxHeight: 38.0,
-          dataRowMinHeight: 30.0,
-
-          columns: columns.map((c) => DataColumn(label: c)).toList(),
-          rows: List.generate(rowValues.length, (rowIndex) {
-            final selected = selectedIndex == rowIndex;
-            return DataRow(
-              selected: selected,
-              onSelectChanged: (v) {
-                if (onRowSelect != null) {
-                  onRowSelect(selected ? null : rowIndex);
-                }
-              },
-              cells: rowValues[rowIndex].map((widget) => DataCell(
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onLongPress: onRowLongPress != null
-                      ? () => onRowLongPress(rowIndex)
-                      : null,
-                  onSecondaryTapUp: onRowSecondaryTap != null
-                      ? (details) => onRowSecondaryTap(rowIndex, details)
-                      : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 1),
-                    child: widget,
-                  ),
-                ),
-              )).toList(),
-            );
-          }),
-        ),
-      ),
+    return UDataTableWidget(
+      columns: columns,
+      rowValues: rowValues,
+      selectedIndex: selectedIndex,
+      onRowSelect: onRowSelect,
+      onRowLongPress: onRowLongPress,
+      onRowSecondaryTap: onRowSecondaryTap,
     );
   }
+
+class UDataTableWidget extends StatefulWidget {
+  const UDataTableWidget({
+    super.key,
+    required this.columns,
+    required this.rowValues,
+    this.selectedIndex,
+    this.onRowSelect,
+    this.onRowLongPress,
+    this.onRowSecondaryTap,
+  });
+
+  final List<Widget> columns;
+  final List<List<Widget>> rowValues;
+  final int? selectedIndex;
+  final void Function(int? index)? onRowSelect;
+  final void Function(int index)? onRowLongPress;
+  final void Function(int index, TapUpDetails details)? onRowSecondaryTap;
+
+  @override
+  State<UDataTableWidget> createState() => _UDataTableWidgetState();
+}
+
+class _UDataTableWidgetState extends State<UDataTableWidget> {
+  final ScrollController _headerHorizontalController = ScrollController();
+  final ScrollController _bodyHorizontalController = ScrollController();
+  bool _isSyncingScroll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _headerHorizontalController.addListener(_syncHeaderToBody);
+    _bodyHorizontalController.addListener(_syncBodyToHeader);
+  }
+
+  void _syncHeaderToBody() {
+    if (_isSyncingScroll) return;
+    _isSyncingScroll = true;
+    if (_bodyHorizontalController.hasClients) {
+      _bodyHorizontalController.jumpTo(_headerHorizontalController.offset);
+    }
+    _isSyncingScroll = false;
+  }
+
+  void _syncBodyToHeader() {
+    if (_isSyncingScroll) return;
+    _isSyncingScroll = true;
+    if (_headerHorizontalController.hasClients) {
+      _headerHorizontalController.jumpTo(_bodyHorizontalController.offset);
+    }
+    _isSyncingScroll = false;
+  }
+
+  @override
+  void dispose() {
+    _headerHorizontalController.removeListener(_syncHeaderToBody);
+    _bodyHorizontalController.removeListener(_syncBodyToHeader);
+    _headerHorizontalController.dispose();
+    _bodyHorizontalController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final header = SingleChildScrollView(
+          controller: _headerHorizontalController,
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              showCheckboxColumn: false,
+              columnSpacing: 2,
+              horizontalMargin: 0,
+              headingRowHeight: 25,
+              dataRowMaxHeight: 0,
+              dataRowMinHeight: 0,
+              columns: widget.columns.map((c) => DataColumn(label: c)).toList(),
+              rows: const [],
+            ),
+          ),
+        );
+
+        final bodyContent = SingleChildScrollView(
+          controller: _bodyHorizontalController,
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: SingleChildScrollView(
+              child: DataTable(
+                showCheckboxColumn: false,
+                columnSpacing: 2,
+                horizontalMargin: 0,
+                headingRowHeight: 0,
+                dataRowMaxHeight: 38.0,
+                dataRowMinHeight: 30.0,
+                columns: widget.columns
+                    .map((c) => DataColumn(
+                          label: SizedBox(
+                            width: 0,
+                            height: 0,
+                            child: Visibility(
+                              visible: false,
+                              maintainSize: true,
+                              maintainAnimation: true,
+                              maintainState: true,
+                              child: c,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+                rows: List.generate(widget.rowValues.length, (rowIndex) {
+                  final selected = widget.selectedIndex == rowIndex;
+                  return DataRow(
+                    selected: selected,
+                    onSelectChanged: (v) {
+                      if (widget.onRowSelect != null) {
+                        widget.onRowSelect!(selected ? null : rowIndex);
+                      }
+                    },
+                    cells: widget.rowValues[rowIndex]
+                        .map((cellWidget) => DataCell(
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: widget.onRowLongPress != null
+                                    ? () => widget.onRowLongPress!(rowIndex)
+                                    : null,
+                                onSecondaryTapUp: widget.onRowSecondaryTap != null
+                                    ? (details) =>
+                                        widget.onRowSecondaryTap!(rowIndex, details)
+                                    : null,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 2, horizontal: 1),
+                                  child: cellWidget,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                  );
+                }),
+              ),
+            ),
+          ),
+        );
+
+        if (constraints.hasBoundedHeight) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              Expanded(child: bodyContent),
+            ],
+          );
+        } else {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              header,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 260),
+                child: bodyContent,
+              ),
+            ],
+          );
+        }
+      },
+    );
+  }
+}
 
 
 class MarqueeWidget extends StatefulWidget {

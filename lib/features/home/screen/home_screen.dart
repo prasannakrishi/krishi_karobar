@@ -11,7 +11,7 @@ import '../widgets/dashboard_quick_action.dart';
 import '../widgets/dashboard_recent_activity_tile.dart';
 import '../widgets/dashboard_section_header.dart';
 import '../widgets/home_summary_card.dart';
-import '../widgets/sync_status_dialog.dart';
+import 'sync_records_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -70,10 +70,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(
-    HomeController controller,
-    BuildContext context,
-  ) {
+  PreferredSizeWidget _buildAppBar(HomeController controller, BuildContext context,) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(52),
       child: AppBar(
@@ -206,10 +203,7 @@ class _DashboardWelcome extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         GestureDetector(
-          onTap: () => SyncStatusDialog.show(
-            controller.syncStatusKind,
-            onSyncNow: controller.triggerSync,
-          ),
+          onTap: () => Get.to(() => SyncRecordsScreen(kind: controller.syncStatusKind)),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             decoration: BoxDecoration(
@@ -468,13 +462,14 @@ class CustomVehicleDataTable extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
-          // Data Rows
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
-            itemBuilder: (context, index) {
+          // Data Rows (Independently scrollable with fixed header)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+              itemBuilder: (context, index) {
               final item = items[index];
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -526,6 +521,7 @@ class CustomVehicleDataTable extends StatelessWidget {
               );
             },
           ),
+        ),
         ],
       ),
     );

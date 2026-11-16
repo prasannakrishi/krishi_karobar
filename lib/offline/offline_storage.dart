@@ -149,6 +149,20 @@ class OfflineStorage {
     return retried;
   }
 
+  Future<void> resolveConflict(
+    String conflictId, {
+    String resolution = 'keep_local',
+  }) async {
+    final info = await workspaces.current();
+    if (info == null) return;
+    await localRecords.resolveConflict(
+      info.scope,
+      conflictId: conflictId,
+      resolution: resolution,
+    );
+    unawaited(syncEngine.syncNow());
+  }
+
   Database get database => local.database;
 
   static bool get isAvailable => _instance != null;

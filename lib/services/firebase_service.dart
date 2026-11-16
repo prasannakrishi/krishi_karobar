@@ -1,5 +1,7 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:krishi_karobar/firebase_options.dart';
 
 import '../utils/exceptions/app_exceptions.dart';
 
@@ -10,9 +12,20 @@ import '../utils/exceptions/app_exceptions.dart';
 /// calculations, payments, and customer creation function seamlessly.
 class FirebaseService {
   FirebaseService({DatabaseReference? databaseReference})
-    : _db = databaseReference ?? FirebaseDatabase.instance.ref();
+    : _db = databaseReference ?? _defaultDbRef();
 
   final DatabaseReference _db;
+
+  static DatabaseReference _defaultDbRef() {
+    try {
+      return FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: DefaultFirebaseOptions.currentPlatform.databaseURL,
+      ).ref();
+    } catch (_) {
+      return FirebaseDatabase.instance.ref();
+    }
+  }
 
   Future<bool> saveRecord(
     String path,
