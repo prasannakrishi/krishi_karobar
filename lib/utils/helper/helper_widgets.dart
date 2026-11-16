@@ -302,6 +302,18 @@ import 'nepali_date_time.dart';
     );
   }
 
+  /// Fixed-width, single-line marquee cell used by every `uDataTable`
+  /// screen (Recent Activity, sync status).
+  Widget uTableCell(Widget child, double width) {
+    return SizedBox(
+      width: width,
+      height: 30,
+      child: MarqueeWidget(
+        child: child,
+      ),
+    );
+  }
+
   Widget uDataTable({
     required List<Widget> columns,
     required List<List<Widget>> rowValues,

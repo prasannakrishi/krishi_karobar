@@ -183,6 +183,11 @@ class WorkspaceRepository {
     return total;
   }
 
+  /// Every workspace id counted by [ownerCounts]; lets read-only views list
+  /// exactly the records those counts include.
+  Future<Set<String>> ownerWorkspaceIds(WorkspaceInfo info) =>
+      _ownerWorkspaceIds(info, null);
+
   Future<Set<String>> _ownerWorkspaceIds(
     WorkspaceInfo info,
     DatabaseClient? client,

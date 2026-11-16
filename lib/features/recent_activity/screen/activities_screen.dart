@@ -542,15 +542,7 @@ class ActivityScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCell(Widget child,double width) {
-    return SizedBox(
-      width: width,
-      height: 30,
-      child: MarqueeWidget(
-        child: child,
-      ),
-    );
-  }
+  Widget _buildCell(Widget child, double width) => uTableCell(child, width);
 }
 
 class ExpenseDetailsCardForm extends StatefulWidget {

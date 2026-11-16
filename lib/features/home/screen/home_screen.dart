@@ -11,6 +11,7 @@ import '../widgets/dashboard_quick_action.dart';
 import '../widgets/dashboard_recent_activity_tile.dart';
 import '../widgets/dashboard_section_header.dart';
 import '../widgets/home_summary_card.dart';
+import '../widgets/sync_status_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -205,7 +206,10 @@ class _DashboardWelcome extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         GestureDetector(
-          onTap: () => controller.triggerSync(),
+          onTap: () => SyncStatusDialog.show(
+            controller.syncStatusKind,
+            onSyncNow: controller.triggerSync,
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             decoration: BoxDecoration(

@@ -14,6 +14,11 @@ class SyncQueueDao {
 
   DatabaseClient _c(DatabaseClient? client) => client ?? _db;
 
+  /// Emits whenever the queue store changes (and once on subscription).
+  /// Read-only: listeners only re-read; nothing here writes.
+  Stream<void> changes() =>
+      _store.query().onSnapshots(_db).map<void>((_) {});
+
   Future<SyncQueueEntry?> get(
     String workspaceId,
     String entityType,

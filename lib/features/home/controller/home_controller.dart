@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,6 +20,7 @@ import '../../user_setting/screen/profile_screen.dart';
 import '../../recent_activity/controllers/activity_controller.dart';
 import '../../recent_activity/screen/widgets/expense_form_dialog.dart';
 import '../../navigarion/controller/navigation_controller.dart';
+import 'sync_status_controller.dart';
 
 class VehiclePerformanceItem {
   final String vehicleId;
@@ -185,6 +188,25 @@ class HomeController extends GetxController {
       debugPrint('HomeController _activateOfflineWorkspace failed: $e\n$stack');
     }
     await _checkPendingQueue();
+    _watchQueue();
+  }
+
+  StreamSubscription<void>? _queueSubscription;
+
+  /// Keeps the pill's count in step with the queue (read-only listener).
+  void _watchQueue() {
+    if (_queueSubscription != null || !OfflineStorage.isAvailable) return;
+    _queueSubscription = OfflineStorage.instance.queue.changes().listen(
+      (_) => unawaited(_checkPendingQueue()),
+      onError: (Object e) =>
+          debugPrint('HomeController queue watch failed: $e'),
+    );
+  }
+
+  @override
+  void onClose() {
+    unawaited(_queueSubscription?.cancel());
+    super.onClose();
   }
 
   static bool _offlineNoticeShown = false;
@@ -524,6 +546,13 @@ class HomeController extends GetxController {
   bool get isOffline {
     if (!Get.isRegistered<NetworkManager>()) return false;
     return NetworkManager.instance.connectionStatus.value == ConnectivityResult.none;
+  }
+
+  /// Same rules as [syncStatusText]/[syncStatusColor], as a value.
+  SyncStatusKind get syncStatusKind {
+    if (isOffline) return SyncStatusKind.offline;
+    if (pendingQueueCount.value > 0) return SyncStatusKind.waiting;
+    return SyncStatusKind.online;
   }
 
   String get loginUserName {
