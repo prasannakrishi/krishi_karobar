@@ -203,6 +203,9 @@ class CustomerController extends GetxController {
           isNew: true,
         );
 
+        cache.customers[id] = customer;
+        cache.customers.refresh();
+
         Get.back();
         Get.snackbar('Success', 'Customer added successfully.');
       }

@@ -1166,41 +1166,44 @@ class MonitorController extends GetxController {
   }
 
   Future<void> saveActivity() async {
-    debugPrint('[ACTIVITY_FINALIZATION_STARTED] id=${currentActivityId.value}');
     if (_isSavingActivity || _saveConfirmationPending) return;
+    _isSavingActivity = true;
+    debugPrint('[ACTIVITY_FINALIZATION_STARTED] id=${currentActivityId.value}');
 
     var customer = selectedCustomer.value;
 
-    if (selectedVehicle.value == null) {
-      showMessage('Warning', 'Please select a vehicle.');
-      return;
-    }
-
-    if (selectedService.value == null) {
-      showMessage('Warning', 'Please select a service.');
-      return;
-    }
-
-    if (selectedDriver.value == null) {
-      driverWarning.value = true;
-      showMessage('Driver required', 'Please select a driver before saving.');
-      return;
-    }
-
-    if (selectedCustomer.value == null && (customerName.text.trim().isEmpty || address.text.trim().isEmpty)) {
-      customerCollapsed.value = false;
-      showMessage('Customer Required', 'Please enter Customer Name and Address.');
-      return;
-    }
-
-    if (customer == null && !isCustomerEmpty) {
-      try {
-        customer = await saveCustomer();
-      } catch (error) {
-        showMessage('Error', AppException.messageOf(error));
+    try {
+      if (selectedVehicle.value == null) {
+        showMessage('Warning', 'Please select a vehicle.');
         return;
       }
-    }
+
+      if (selectedService.value == null) {
+        showMessage('Warning', 'Please select a service.');
+        return;
+      }
+
+      if (selectedDriver.value == null) {
+        driverWarning.value = true;
+        showMessage('Driver required', 'Please select a driver before saving.');
+        return;
+      }
+
+      if (selectedCustomer.value == null && (customerName.text.trim().isEmpty || address.text.trim().isEmpty)) {
+        customerCollapsed.value = false;
+        showMessage('Customer Required', 'Please enter Customer Name and Address.');
+        return;
+      }
+
+      if (customer == null && !isCustomerEmpty) {
+        try {
+          customer = await saveCustomer();
+        } catch (error, stack) {
+          debugPrint('MonitorController saveCustomer error: $error\n$stack');
+          showMessage('Error', AppException.messageOf(error));
+          return;
+        }
+      }
 
     if (timerController.state.value != TimerState.stopped) {
       showMessage('Warning', 'Please stop the activity before saving.');
@@ -1376,6 +1379,9 @@ class MonitorController extends GetxController {
       preCapturedStopLoc: preCapturedStopLoc,
       rollbackCache: rollbackCache,
     );
+    } finally {
+      _isSavingActivity = false;
+    }
   }
 
   void _saveActivityInBackground({
@@ -1537,12 +1543,25 @@ class MonitorController extends GetxController {
 
     final customerPhone = phone.trim();
 
-    if (customerPhone.isNotEmpty) {
+    final normalizedPhone = _normalizePhone(customerPhone);
+    if (normalizedPhone.isNotEmpty) {
       final existing = cache.getRecordByValue<CustomerModel>(
         'customers',
-        (customer) => customer.phone?.trim() == customerPhone,
+        (customer) {
+          final p = _normalizePhone(customer.phone ?? '');
+          return p.isNotEmpty && p == normalizedPhone;
+        },
       );
       if (existing != null) return existing;
+    }
+
+    final normalizedName = customerNameStr.toLowerCase();
+    if (normalizedName.isNotEmpty && normalizedName != 'customer') {
+      final existingByName = cache.getRecordByValue<CustomerModel>(
+        'customers',
+        (customer) => customer.name.trim().toLowerCase() == normalizedName,
+      );
+      if (existingByName != null) return existingByName;
     }
 
     final now = DateTime.now();
@@ -1586,27 +1605,33 @@ class MonitorController extends GetxController {
     return customer;
   }
 
+  static String _normalizePhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('977') && digits.length > 10) {
+      return digits.substring(3);
+    }
+    return digits;
+  }
+
   Future<CustomerModel> saveCustomer() async {
     final selected = selectedCustomer.value;
     if (selected != null) return selected;
 
     final customerPhone = phone.text.trim();
+    final normalizedPhone = _normalizePhone(customerPhone);
 
-    // Only dedupe by phone when one was actually provided. Phone number is
-    // NOT enforced by the UI (no Form/validate() gates this screen), so
-    // several customers can genuinely have a blank phone - matching on ''
-    // would silently merge every new no-phone customer into whichever
-    // blank-phone customer happens to exist first in the cache.
-    final existing = customerPhone.isEmpty
-        ? null
-        : cache.getRecordByValue<CustomerModel>(
-      'customers',
-          (customer) => customer.phone?.trim() == customerPhone,
-    );
-
-    if (existing != null) {
-      selectedCustomer.value = existing;
-      return existing;
+    if (normalizedPhone.isNotEmpty) {
+      final existing = cache.getRecordByValue<CustomerModel>(
+        'customers',
+        (customer) {
+          final p = _normalizePhone(customer.phone ?? '');
+          return p.isNotEmpty && p == normalizedPhone;
+        },
+      );
+      if (existing != null) {
+        selectedCustomer.value = existing;
+        return existing;
+      }
     }
 
     final now = DateTime.now();

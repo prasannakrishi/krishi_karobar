@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
 import '../../../common/widgets/access_denied_screen.dart';
+import '../../../common/widgets/common_record_table.dart';
 import '../../../services/services.dart';
-import '../../../utils/helper/helper_widgets.dart';
 import '../controller/customer_controller.dart';
 import 'widgets/customer_form.dart';
 
@@ -111,7 +111,9 @@ class CustomerManagementScreen extends StatelessWidget {
           return const Center(child: Text('No customers found'));
         }
 
-        return uDataTable(
+        return CommonRecordTable(
+          isLoading: controller.isLoading.value,
+          emptyMessage: 'No customers found',
           columns: const [
             SizedBox(width: 42, child: Text('')),
             Text('ID'),

@@ -4,6 +4,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../common/widgets/app_scaffold.dart';
 import '../../../common/widgets/appbar.dart';
+import '../../../common/widgets/common_record_table.dart';
 import '../../../offline/sync/unsynced_records_reader.dart';
 import '../../../utils/helper/helpers.dart';
 import '../../../utils/theme/widget_themes/custom_decoration.dart';
@@ -255,7 +256,9 @@ class SyncRecordsScreen extends StatelessWidget {
       );
     }
 
-    return uDataTable(
+    return CommonRecordTable(
+      isLoading: controller.isLoading.value,
+      emptyMessage: 'No records found.',
       columns: [
         headerCell('', 42),
         headerCell('Record Type', 100),

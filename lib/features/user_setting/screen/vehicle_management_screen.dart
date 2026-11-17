@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
 import '../../../common/widgets/access_denied_screen.dart';
+import '../../../common/widgets/common_record_table.dart';
 import '../../../services/services.dart';
-import '../../../utils/helper/helper_widgets.dart';
 import '../controller/vehicle_controller.dart';
 import 'widgets/vehicle_form.dart';
 
@@ -110,7 +110,9 @@ class VehicleManagementScreen extends StatelessWidget {
           return const Center(child: Text('No vehicles found'));
         }
 
-        return uDataTable(
+        return CommonRecordTable(
+          isLoading: controller.isLoading.value,
+          emptyMessage: 'No vehicles found',
           columns: const [
             SizedBox(width: 42, child: Text('')),
             Text('Number'),

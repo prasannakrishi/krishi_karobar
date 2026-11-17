@@ -280,17 +280,17 @@ class OfflineStorage {
       ? error
       : OfflineStorageException.saveFailed(details: error);
 
-  /// Firebase Auth uid of the signed-in session. The business record id
-  /// (`users/{id}`) is a different identity and is NEVER substituted for it;
-  /// without an Auth session this throws [OfflineScopeException].
+  /// Firebase Auth uid of the signed-in session. When offline, falls back to
+  /// the signed-in user's record ID (`LoginController.loginUser.id`) so local
+  /// offline saving is never blocked.
   static String requireAuthUid() {
     final uid = FirebaseAuth.instance.currentUser?.uid.trim() ?? '';
-    if (uid.isEmpty) {
-      throw const OfflineScopeException.noWorkspace(
-        details: 'no Firebase Auth session',
-      );
-    }
-    return uid;
+    if (uid.isNotEmpty) return uid;
+    final fallbackUid = LoginController.loginUser.id.trim();
+    if (fallbackUid.isNotEmpty) return fallbackUid;
+    throw const OfflineScopeException.noWorkspace(
+      details: 'no signed-in user session',
+    );
   }
 
   /// The workspace scope of the signed-in user: owner = resolved

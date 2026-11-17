@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:krishi_karobar/common/widgets/app_scaffold.dart';
-import '../../../utils/helper/helper_widgets.dart';
+import '../../../common/widgets/common_record_table.dart';
 import '../controller/service_controller.dart';
 import 'widgets/service_form.dart';
 
@@ -89,7 +89,9 @@ class ServiceManagementScreen extends StatelessWidget {
           return const Center(child: Text('No services found'));
         }
 
-        return uDataTable(
+        return CommonRecordTable(
+          isLoading: false,
+          emptyMessage: 'No services found',
           columns: const [
             SizedBox(width: 42, child: Text('')),
             Text('Name'),

@@ -8,6 +8,7 @@ import 'package:krishi_karobar/firebase_options.dart';
 
 import '../offline/offline_storage.dart';
 import '../features/authentication/controllers/login_controllers.dart';
+import 'data_cache_service.dart';
 
 class SequenceService extends GetxService {
   static SequenceService get instance => Get.find<SequenceService>();
@@ -34,16 +35,38 @@ class SequenceService extends GetxService {
   Future<String> generateSequence(String prefix) async {
     final year = DateTime.now().year % 10;
     final key = _validatePrefix(prefix);
+    final storageKey = 'seq_$key';
 
+    int maxSequence = _storage.read<int>(storageKey) ?? 0;
+
+    // Scan DataCacheService local cache for highest existing sequence for prefix
+    if (Get.isRegistered<DataCacheService>()) {
+      final cache = DataCacheService.instance;
+      if (prefix == 'C') {
+        for (final cust in cache.customers.values) {
+          final uId = cust.uId;
+          final match = RegExp(r'^.*-(\d+)$').firstMatch(uId);
+          if (match != null) {
+            final seqNum = int.tryParse(match.group(1)!);
+            if (seqNum != null && seqNum > maxSequence) {
+              maxSequence = seqNum;
+            }
+          }
+        }
+      }
+    }
+
+    // Try fast 500ms remote transaction if online, falling back instantly if offline/timeout
     try {
       final ref = _db.child('$_sequencePath/$key');
       final result = await ref.runTransaction((data) {
         if (data == null) {
-          return Transaction.success('$prefix$year-0001');
+          final initial = maxSequence + 1;
+          return Transaction.success('$prefix$year-${initial.toString().padLeft(4, '0')}');
         }
 
-        final current = data.toString().trim();
-        final match = RegExp(r'^(.*-)(\d+)$').firstMatch(current);
+        final currentStr = data.toString().trim();
+        final match = RegExp(r'^(.*-)(\d+)$').firstMatch(currentStr);
 
         if (match == null) return Transaction.abort();
 
@@ -52,25 +75,35 @@ class SequenceService extends GetxService {
 
         if (number == null) return Transaction.abort();
 
-        final nextNumber =
-            (number + 1).toString().padLeft(numberText.length, '0');
+        final nextNumber = (number > maxSequence ? number + 1 : maxSequence + 1)
+            .toString()
+            .padLeft(4, '0');
 
         return Transaction.success('$prefix$year-$nextNumber');
-      }).timeout(const Duration(seconds: 4));
+      }).timeout(const Duration(milliseconds: 500));
 
       if (result.committed && result.snapshot.value != null) {
-        return result.snapshot.value.toString();
+        final resUid = result.snapshot.value.toString().trim();
+        final match = RegExp(r'^.*-(\d+)$').firstMatch(resUid);
+        if (match != null) {
+          final seqNum = int.tryParse(match.group(1)!);
+          if (seqNum != null) {
+            await _storage.write(storageKey, seqNum);
+          }
+        }
+        return resUid;
       }
     } catch (_) {
-      debugPrint('SequenceService: Offline fallback for sequence $prefix');
+      debugPrint('SequenceService: Fast local sequence fallback for $prefix');
     }
 
-    // Local fallback generator
-    final storageKey = 'seq_$key';
-    int current = _storage.read<int>(storageKey) ?? 0;
-    current++;
-    await _storage.write(storageKey, current);
-    return '$prefix$year-${current.toString().padLeft(4, '0')}';
+    maxSequence++;
+    await _storage.write(storageKey, maxSequence);
+    final formattedSeq = maxSequence.toString().padLeft(4, '0');
+    final nextUid = '$prefix$year-$formattedSeq';
+
+    debugPrint('[SEQUENCE_GENERATED] key=$key uId=$nextUid sequence=$maxSequence');
+    return nextUid;
   }
 
   Future<String> generateActivityUid({required String serviceType, required String vehicleUId}) async {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../utils/helper/helper_widgets.dart';
+import 'u_data_table.dart';
 
 /// Configuration for column headers in [CommonRecordTable].
 class TableColumnConfig {
@@ -14,6 +14,68 @@ class TableColumnConfig {
   final double width;
   final Alignment alignment;
   final bool sortable;
+}
+
+/// A reusable table header cell that supports displaying active filter indicators
+/// (blue filter icon + blue downward chevron) when [isFiltered] is true.
+class TableHeaderCell extends StatelessWidget {
+  const TableHeaderCell({
+    super.key,
+    required this.title,
+    this.isFiltered = false,
+    this.onTap,
+    this.alignment = Alignment.centerLeft,
+  });
+
+  final String title;
+  final bool isFiltered;
+  final VoidCallback? onTap;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = TextStyle(
+      fontWeight: FontWeight.bold,
+      fontSize: 12,
+      color: isFiltered ? Colors.blue.shade700 : const Color(0xFF1E293B),
+    );
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            style: textStyle,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (isFiltered) ...[
+          const SizedBox(width: 4),
+          Icon(
+            Icons.filter_list,
+            size: 14,
+            color: Colors.blue.shade700,
+          ),
+          const SizedBox(width: 2),
+          Icon(
+            Icons.keyboard_arrow_down,
+            size: 14,
+            color: Colors.blue.shade700,
+          ),
+        ],
+      ],
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        child: Align(alignment: alignment, child: content),
+      );
+    }
+
+    return Align(alignment: alignment, child: content);
+  }
 }
 
 /// A unified, modular, configurable Record Table component used across all
